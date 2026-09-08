@@ -1,0 +1,38 @@
+{
+  "name": "admin",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "admin:promote": "node scripts/promote-admin.mjs",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.23.1",
+    "@prisma/client": "^6.16.3",
+    "@uploadthing/react": "^7.3.3",
+    "next": "16.3.4",
+    "pusher": "^5.2.0",
+    "pusher-js": "^8.4.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "uploadthing": "^7.7.4",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.4",
+    "prisma": "^6.16.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

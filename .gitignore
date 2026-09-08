@@ -1,0 +1,30 @@
+# Root project
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+admin/node_modules/
+admin/.next/
+admin/out/
+admin/build/
+admin/coverage/
+admin/.vercel/
+admin/*.tsbuildinfo
+admin/next-env.d.ts
+
+# Flutter / Dart
+takka_mobile/.dart_tool/
+takka_mobile/.flutter-plugins-dependencies
+takka_mobile/.pub/
+takka_mobile/build/
+takka_mobile/coverage/
+takka_mobile/.pub-cache/
+
+# IDE / generated
+.idea/
+*.iml

@@ -1,0 +1,348 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  KITCHEN_OWNER
+  ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AvailabilityStatus {
+  OPEN
+  CLOSED
+}
+
+enum DeliveryType {
+  PICKUP
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDING_KITCHEN_APPROVAL
+  ACCEPTED_AWAITING_DEPOSIT
+  DEPOSIT_PROOF_SUBMITTED
+  DEPOSIT_CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  AWAITING_CUSTOMER_ARRIVAL
+  OUT_FOR_DELIVERY
+  DELIVERED_BY_KITCHEN_OR_DRIVER
+  COMPLETED_AWAITING_CUSTOMER_CONFIRM
+  COMPLETED
+  CANCELLED_BEFORE_DEPOSIT
+  CANCELLED_AFTER_DEPOSIT
+  REJECTED_BY_KITCHEN
+}
+
+enum PaymentType {
+  INSTAPAY
+}
+
+enum ReviewVisibility {
+  VISIBLE
+  HIDDEN
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+}
+
+enum DepositReviewStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  ORDER
+  DEPOSIT
+  CHAT
+  SYSTEM
+}
+
+model User {
+  id                String            @id @default(cuid())
+  clerkUserId       String?           @unique
+  role              UserRole
+  fullName          String
+  email             String?           @unique
+  phoneNumber       String?           @unique
+  passwordHash      String?
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  customerAddresses CustomerAddress[]
+  customerOrders    Order[]           @relation("CustomerOrders")
+  kitchens          Kitchen[]         @relation("KitchenOwners")
+  reviews           Review[]
+  messages          OrderMessage[]
+  uploadedDeposits  DepositProof[]    @relation("DepositUploadedBy")
+  reviewedDeposits  DepositProof[]    @relation("DepositReviewedBy")
+  adminActions      AdminAction[]
+  notifications     Notification[]
+}
+
+model Region {
+  id                String            @id @default(cuid())
+  cityName          String
+  regionName        String
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  customerAddresses CustomerAddress[]
+  kitchens          Kitchen[]
+  orders            Order[]
+
+  @@unique([cityName, regionName])
+}
+
+model CustomerAddress {
+  id          String   @id @default(cuid())
+  customerId  String
+  label       String
+  cityName    String
+  regionId    String
+  addressLine String
+  landmark    String?
+  latitude    Float?
+  longitude   Float?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  customer    User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  region      Region   @relation(fields: [regionId], references: [id])
+  orders      Order[]
+}
+
+model Kitchen {
+  id                 String                @id @default(cuid())
+  ownerUserId        String                @unique
+  kitchenName        String
+  slug               String                @unique
+  description        String?
+  logoUrl            String?
+  coverImageUrl      String?
+  phoneNumber        String
+  cityName           String
+  regionId           String
+  addressLine        String
+  latitude           Float?
+  longitude          Float?
+  approvalStatus     ApprovalStatus        @default(PENDING)
+  availabilityStatus AvailabilityStatus    @default(CLOSED)
+  averageRating      Float                 @default(0)
+  reviewsCount       Int                   @default(0)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  owner              User                  @relation("KitchenOwners", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  region             Region                @relation(fields: [regionId], references: [id])
+  documents          KitchenDocument[]
+  gallery            KitchenGalleryImage[]
+  paymentMethods     KitchenPaymentMethod[]
+  menuItems          MenuItem[]
+  orders             Order[]
+  reviews            Review[]
+}
+
+model KitchenDocument {
+  id                 String         @id @default(cuid())
+  kitchenId          String
+  documentType       String
+  fileUrl            String
+  verificationStatus ApprovalStatus @default(PENDING)
+  reviewNotes        String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  kitchen            Kitchen        @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+}
+
+model KitchenGalleryImage {
+  id        String   @id @default(cuid())
+  kitchenId String
+  imageUrl  String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  kitchen   Kitchen  @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+}
+
+model KitchenPaymentMethod {
+  id                    String      @id @default(cuid())
+  kitchenId             String      @unique
+  paymentType           PaymentType @default(INSTAPAY)
+  accountName           String?
+  accountNumberOrHandle String?
+  paymentLink           String?
+  isActive              Boolean     @default(true)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  kitchen               Kitchen     @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+}
+
+model MenuItem {
+  id            String         @id @default(cuid())
+  kitchenId     String
+  name          String
+  description   String?
+  imageUrl      String?
+  basePrice     Decimal        @db.Decimal(10, 2)
+  depositAmount Decimal        @db.Decimal(10, 2)
+  isAvailable   Boolean        @default(true)
+  sortOrder     Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  kitchen       Kitchen        @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  sizes         MenuItemSize[]
+  orderItems    OrderItem[]
+}
+
+model MenuItemSize {
+  id            String    @id @default(cuid())
+  menuItemId    String
+  sizeName      String
+  price         Decimal   @db.Decimal(10, 2)
+  depositAmount Decimal?  @db.Decimal(10, 2)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  menuItem      MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  orderItems    OrderItem[]
+}
+
+model Order {
+  id                     String            @id @default(cuid())
+  orderNumber            String            @unique
+  customerId             String
+  kitchenId              String
+  deliveryType           DeliveryType
+  customerAddressId      String?
+  regionId               String
+  subtotalAmount         Decimal           @db.Decimal(10, 2)
+  deliveryFee            Decimal           @default(0) @db.Decimal(10, 2)
+  totalAmount            Decimal           @db.Decimal(10, 2)
+  depositAmount          Decimal           @db.Decimal(10, 2)
+  currencyCode           String            @default("EGP")
+  status                 OrderStatus       @default(PENDING_KITCHEN_APPROVAL)
+  customerNotes          String?
+  kitchenNotes           String?
+  cancelledBy            UserRole?
+  cancelReason           String?
+  placedAt               DateTime          @default(now())
+  acceptedAt             DateTime?
+  depositSubmittedAt     DateTime?
+  depositConfirmedAt     DateTime?
+  deliveredAt            DateTime?
+  completedAt            DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  customer               User              @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  kitchen                Kitchen           @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  customerAddress        CustomerAddress?  @relation(fields: [customerAddressId], references: [id])
+  region                 Region            @relation(fields: [regionId], references: [id])
+  items                  OrderItem[]
+  depositProofs          DepositProof[]
+  messages               OrderMessage[]
+  review                 Review?
+  notifications          Notification[]
+}
+
+model OrderItem {
+  id               String       @id @default(cuid())
+  orderId          String
+  menuItemId       String
+  menuItemSizeId   String?
+  itemNameSnapshot String
+  sizeNameSnapshot String?
+  unitPrice        Decimal      @db.Decimal(10, 2)
+  depositAmount    Decimal      @db.Decimal(10, 2)
+  quantity         Int
+  lineTotal        Decimal      @db.Decimal(10, 2)
+  customerNote     String?
+  createdAt        DateTime     @default(now())
+  order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem         MenuItem     @relation(fields: [menuItemId], references: [id])
+  menuItemSize     MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
+}
+
+model DepositProof {
+  id               String              @id @default(cuid())
+  orderId          String
+  uploadedByUserId String
+  imageUrl         String
+  submittedAmount  Decimal?            @db.Decimal(10, 2)
+  reviewStatus     DepositReviewStatus @default(PENDING)
+  reviewedByUserId String?
+  reviewNotes      String?
+  submittedAt      DateTime            @default(now())
+  reviewedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  order            Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploadedBy       User                @relation("DepositUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+  reviewedBy       User?               @relation("DepositReviewedBy", fields: [reviewedByUserId], references: [id])
+}
+
+model OrderMessage {
+  id           String      @id @default(cuid())
+  orderId      String
+  senderUserId String
+  messageType  MessageType @default(TEXT)
+  messageText  String?
+  fileUrl      String?
+  sentAt       DateTime    @default(now())
+  createdAt    DateTime    @default(now())
+  order        Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sender       User        @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id         String           @id @default(cuid())
+  orderId    String           @unique
+  customerId String
+  kitchenId  String
+  ratingValue Int
+  comment    String?
+  visibility ReviewVisibility @default(VISIBLE)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  order      Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer   User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  kitchen    Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+}
+
+model AdminAction {
+  id          String   @id @default(cuid())
+  adminUserId String
+  targetType  String
+  targetId    String
+  actionType  String
+  actionNotes String?
+  createdAt   DateTime @default(now())
+  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  orderId   String?
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order     Order?           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
