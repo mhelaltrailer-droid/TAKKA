@@ -118,7 +118,12 @@ export function UploadField({
           onUploadError={(error: Error) => {
             setStatus("error");
             setProgress(0);
-            setErrorMessage(error.message || "فشل رفع الملف.");
+            const message = error.message || "فشل رفع الملف.";
+            setErrorMessage(
+              message.includes("callback") || message.includes("webhook")
+                ? "تعذر إكمال الرفع من الخادم. حدّث الصفحة وحاول مرة أخرى."
+                : message,
+            );
           }}
         />
 
@@ -131,7 +136,9 @@ export function UploadField({
               />
             </div>
             <p className="text-xs text-zinc-600">
-              جارٍ رفع الصورة{progress > 0 ? ` (${progress}%)` : ""}...
+              {progress >= 100
+                ? "اكتمل إرسال الملف، جارٍ تأكيد الحفظ..."
+                : `جارٍ رفع الصورة (${progress}%)...`}
             </p>
           </div>
         ) : null}

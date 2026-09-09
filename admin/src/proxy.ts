@@ -10,16 +10,24 @@ const isAppPublicRoute = createRouteMatcher([
   "/kitchens(.*)",
   "/api/health",
   "/api/discovery(.*)",
+  // UploadThing webhook + client validation must stay public (Clerk cookies are absent).
+  "/api/uploadthing(.*)",
 ]);
 
 const isAdminPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/api/health",
+  "/api/uploadthing(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
   const surface = getTakkaSurface(req.nextUrl.hostname);
   const { pathname } = req.nextUrl;
+
+  // Always skip Clerk protect for UploadThing callbacks/validation.
+  if (pathname.startsWith("/api/uploadthing")) {
+    return;
+  }
 
   if (surface === "admin") {
     // Admin host is control-panel only — never serve customer/kitchen UX.

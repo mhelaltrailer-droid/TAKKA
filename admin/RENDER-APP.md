@@ -19,6 +19,9 @@ CLERK_SECRET_KEY=
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 UPLOADTHING_TOKEN=
+# Optional but recommended so UploadThing callbacks hit the public app URL:
+# UPLOADTHING_CALLBACK_URL=https://takka-app.onrender.com
+
 PUSHER_APP_ID=
 NEXT_PUBLIC_PUSHER_KEY=
 PUSHER_SECRET=
