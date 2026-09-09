@@ -1,6 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireRole } from "@/lib/auth";
 
 const f = createUploadthing();
 
@@ -113,6 +113,26 @@ export const uploadRouter = {
   })
     .middleware(async () => {
       const user = await requireAuth();
+
+      return {
+        userId: user.appUserId,
+      };
+    })
+    .onUploadComplete(async ({ file, metadata }) => {
+      return {
+        uploadedBy: metadata.userId,
+        url: file.ufsUrl,
+      };
+    }),
+
+  promoBannerImage: f({
+    image: {
+      maxFileCount: 1,
+      maxFileSize: "8MB",
+    },
+  })
+    .middleware(async () => {
+      const user = await requireRole(["admin"]);
 
       return {
         userId: user.appUserId,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:clerk_flutter/clerk_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../data/app_role.dart';
+import 'custom_auth_screen.dart';
 
 class AuthFlowScreen extends StatelessWidget {
   const AuthFlowScreen({
@@ -158,29 +158,12 @@ class AuthFlowScreen extends StatelessWidget {
   }
 
   Future<void> _openAuthentication(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const CustomAuthScreen(
+          initialMode: AuthMode.signIn,
+        ),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 12,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            ),
-            child: const SizedBox(
-              height: 520,
-              child: ClerkAuthentication(),
-            ),
-          ),
-        );
-      },
     );
   }
 }

@@ -1,5 +1,20 @@
 import { DeliveryType, OrderStatus } from "@prisma/client";
 
+const PREVIOUS_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.COMPLETED,
+  OrderStatus.CANCELLED_BEFORE_DEPOSIT,
+  OrderStatus.CANCELLED_AFTER_DEPOSIT,
+  OrderStatus.REJECTED_BY_KITCHEN,
+];
+
+export function isPreviousOrderStatus(status: OrderStatus) {
+  return PREVIOUS_ORDER_STATUSES.includes(status);
+}
+
+export function isActiveOrderStatus(status: OrderStatus) {
+  return !isPreviousOrderStatus(status);
+}
+
 export function getOrderStatusLabel(status: OrderStatus) {
   switch (status) {
     case OrderStatus.PENDING_KITCHEN_APPROVAL:
@@ -25,9 +40,9 @@ export function getOrderStatusLabel(status: OrderStatus) {
     case OrderStatus.COMPLETED:
       return "مكتمل";
     case OrderStatus.CANCELLED_BEFORE_DEPOSIT:
-      return "أُلغي قبل دفع العربون";
+      return "تم الإلغاء";
     case OrderStatus.CANCELLED_AFTER_DEPOSIT:
-      return "أُلغي بعد دفع العربون";
+      return "تم الإلغاء";
     case OrderStatus.REJECTED_BY_KITCHEN:
       return "مرفوض من المطبخ";
   }

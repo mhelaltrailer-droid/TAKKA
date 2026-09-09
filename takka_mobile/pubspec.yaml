@@ -35,10 +35,13 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   clerk_flutter: ^0.0.18-beta
+  clerk_auth: ^0.0.18-beta
   http: ^1.6.0
   image_picker: ^1.2.3
   pusher_channels_flutter: ^2.6.0
   google_fonts: ^8.2.1
+  geolocator: ^14.0.3
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
@@ -58,6 +61,8 @@ flutter_launcher_icons:
   image_path: assets/branding/takka_icon.png
   adaptive_icon_background: "#E67E22"
   adaptive_icon_foreground: assets/branding/takka_icon.png
+  adaptive_icon_foreground_inset: 16
+  min_sdk_android: 21
   remove_alpha_ios: true
 
 flutter:

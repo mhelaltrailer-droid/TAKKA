@@ -5,6 +5,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { UploadField } from "@/components/upload-field";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { FOOD_CATEGORIES, getFoodCategoryById } from "@/lib/food-categories";
 import { getApprovalStatusLabel } from "@/lib/status-labels";
 
 import {
@@ -112,6 +113,31 @@ export default async function MenuManagementPage() {
             </div>
 
             <div className="space-y-2">
+              <label htmlFor="categoryId" className="block text-sm font-medium">
+                فئة الوجبة (تاكل ايه؟)
+              </label>
+              <select
+                id="categoryId"
+                name="categoryId"
+                required
+                defaultValue=""
+                className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
+              >
+                <option value="" disabled>
+                  اختر الفئة
+                </option>
+                {FOOD_CATEGORIES.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.thumb} {category.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs leading-6 text-zinc-500">
+                الفئة مطلوبة حتى تظهر الوجبة في البحث وقسم تاكل ايه؟
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <label htmlFor="description" className="block text-sm font-medium">
                 وصف الصنف
               </label>
@@ -215,6 +241,10 @@ export default async function MenuManagementPage() {
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-semibold">{item.name}</h3>
+                          <span className="rounded-full bg-orange-50 px-3 py-1 text-xs text-orange-800">
+                            {getFoodCategoryById(item.categoryId)?.label ??
+                              item.categoryId}
+                          </span>
                           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700">
                             {item.isAvailable ? "متاح" : "غير متاح"}
                           </span>

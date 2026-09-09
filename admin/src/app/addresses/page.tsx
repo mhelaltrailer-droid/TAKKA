@@ -29,8 +29,9 @@ export default async function AddressesPage() {
       mode="customer"
       userId={user.appUserId}
       unreadNotificationsCount={unreadNotificationsCount}
-      title="إدارة العناوين"
+      title="عناوين التوصيل"
       subtitle="أضف عناوينك، اختر الافتراضي، واحذف ما لا تحتاجه لتسهيل الطلبات."
+      activeNav="account"
     >
       <AddressManager
         initialAddresses={addresses.map((address) => ({

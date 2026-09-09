@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isFoodCategoryId } from "@/lib/food-categories";
 
 type MenuPayload = {
   name: string;
   description?: string;
+  categoryId?: string;
   basePrice: number;
   depositAmount: number;
   imageUrl?: string;
@@ -80,6 +82,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "اسم الصنف مطلوب." }, { status: 400 });
     }
 
+    const categoryId = payload.categoryId?.trim() ?? "";
+    if (!categoryId || !isFoodCategoryId(categoryId)) {
+      return NextResponse.json(
+        { error: "اختر فئة الوجبة من قائمة تاكل ايه؟" },
+        { status: 400 },
+      );
+    }
+
     if (payload.depositAmount > payload.basePrice * 0.6) {
       return NextResponse.json(
         { error: "العربون لا يجب أن يتجاوز 60% من سعر الصنف." },
@@ -93,6 +103,7 @@ export async function POST(request: Request) {
         name: payload.name.trim(),
         description: payload.description?.trim() || null,
         imageUrl: payload.imageUrl?.trim() || null,
+        categoryId,
         basePrice: payload.basePrice.toFixed(2),
         depositAmount: payload.depositAmount.toFixed(2),
         isAvailable: true,

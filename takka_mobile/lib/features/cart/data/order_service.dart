@@ -36,6 +36,45 @@ class OrderService {
         .toList();
   }
 
+  Future<CustomerAddress> createAddress({
+    required String sessionToken,
+    required String label,
+    required String cityName,
+    required String regionName,
+    required String addressLine,
+    String? landmark,
+    double? latitude,
+    double? longitude,
+    bool isDefault = false,
+  }) async {
+    final response = await http.post(
+      _buildUri('/api/customer/addresses'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $sessionToken',
+      },
+      body: jsonEncode({
+        'label': label,
+        'cityName': cityName,
+        'regionName': regionName,
+        'addressLine': addressLine,
+        'landmark': landmark,
+        'latitude': latitude,
+        'longitude': longitude,
+        'isDefault': isDefault,
+      }),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to create address: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return CustomerAddress.fromJson(
+      json['address'] as Map<String, dynamic>,
+    );
+  }
+
   Future<OrderCreationResult> createOrder({
     required String sessionToken,
     required String kitchenId,

@@ -11,7 +11,8 @@ type UploadFieldProps = {
     | "kitchenDocument"
     | "menuItemImage"
     | "depositProofImage"
-    | "chatImage";
+    | "chatImage"
+    | "promoBannerImage";
   inputName: string;
   label: string;
   defaultValue?: string | null;

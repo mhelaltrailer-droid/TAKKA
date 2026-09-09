@@ -6,8 +6,8 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/data/app_role.dart';
 import 'features/auth/presentation/auth_flow_screen.dart';
 import 'features/auth/presentation/role_setup_screen.dart';
-import 'features/home/presentation/customer_home_screen.dart';
 import 'features/home/presentation/kitchen_home_screen.dart';
+import 'features/orders/presentation/customer_shell_screen.dart';
 
 class TakkaApp extends StatelessWidget {
   const TakkaApp({super.key});
@@ -107,7 +107,7 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
         }
 
         if (resolvedRole == AppRole.customer) {
-          return CustomerHomeScreen(
+          return CustomerShellScreen(
             displayName: displayName,
             onSignOut: () async {
               await authState.signOut();

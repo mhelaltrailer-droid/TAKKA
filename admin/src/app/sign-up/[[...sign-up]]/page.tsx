@@ -29,7 +29,7 @@ export default async function SignUpPage() {
         <div className="mb-6 space-y-2 text-center">
           <h1 className="text-2xl font-bold">إنشاء حساب</h1>
           <p className="text-sm leading-7 text-[#6b4a3a]">
-            أدخل رقم هاتفك المصري والاسم والإيميل. رمز التأكيد سيصل على البريد
+            أدخل رقم هاتفك والاسم والإيميل. رمز التأكيد سيصل على البريد
             الإلكتروني.
           </p>
         </div>

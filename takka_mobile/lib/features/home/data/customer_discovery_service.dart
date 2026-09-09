@@ -15,7 +15,7 @@ class CustomerDiscoveryService {
     return Uri.parse('$base$path');
   }
 
-  Future<CustomerBootstrapData> loadBootstrap({
+  Future<MobileAppUser> loadMe({
     required String sessionToken,
   }) async {
     final meResponse = await http.get(
@@ -29,26 +29,63 @@ class CustomerDiscoveryService {
       throw Exception('Failed to load user profile: ${meResponse.body}');
     }
 
+    final meJson = jsonDecode(meResponse.body) as Map<String, dynamic>;
+    return MobileAppUser.fromJson(meJson['user'] as Map<String, dynamic>);
+  }
+
+  Future<CustomerBootstrapData> loadBootstrap({
+    required String sessionToken,
+    String? regionName,
+    String? query,
+  }) async {
+    final user = await loadMe(sessionToken: sessionToken);
+
+    final kitchens = await loadNearbyKitchens(
+      sessionToken: sessionToken,
+      regionName: regionName,
+      query: query,
+    );
+
+    return CustomerBootstrapData(
+      user: user,
+      kitchens: kitchens,
+    );
+  }
+
+  /// Nearby kitchens = kitchens that registered in the customer's selected district.
+  Future<List<KitchenSummary>> loadNearbyKitchens({
+    required String sessionToken,
+    String? regionName,
+    String? query,
+  }) async {
+    final params = <String, String>{
+      'cityName': 'مدينة العبور',
+    };
+    if (regionName != null && regionName.trim().isNotEmpty) {
+      params['regionName'] = regionName.trim();
+    }
+    if (query != null && query.trim().isNotEmpty) {
+      params['q'] = query.trim();
+    }
+
     final kitchensResponse = await http.get(
-      _buildUri('/api/discovery/kitchens'),
+      _buildUri('/api/discovery/kitchens').replace(queryParameters: params),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
     );
 
-    if (kitchensResponse.statusCode < 200 || kitchensResponse.statusCode >= 300) {
+    if (kitchensResponse.statusCode < 200 ||
+        kitchensResponse.statusCode >= 300) {
       throw Exception('Failed to load kitchens: ${kitchensResponse.body}');
     }
 
-    final meJson = jsonDecode(meResponse.body) as Map<String, dynamic>;
-    final kitchensJson = jsonDecode(kitchensResponse.body) as Map<String, dynamic>;
+    final kitchensJson =
+        jsonDecode(kitchensResponse.body) as Map<String, dynamic>;
 
-    return CustomerBootstrapData(
-      user: MobileAppUser.fromJson(meJson['user'] as Map<String, dynamic>),
-      kitchens: (kitchensJson['kitchens'] as List<dynamic>)
-          .map((item) => KitchenSummary.fromJson(item as Map<String, dynamic>))
-          .toList(),
-    );
+    return (kitchensJson['kitchens'] as List<dynamic>)
+        .map((item) => KitchenSummary.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<KitchenDetails> loadKitchenDetails({
@@ -84,6 +121,7 @@ class MobileAppUser {
     required this.fullName,
     required this.role,
     required this.email,
+    required this.phoneNumber,
   });
 
   factory MobileAppUser.fromJson(Map<String, dynamic> json) {
@@ -93,6 +131,7 @@ class MobileAppUser {
       fullName: json['fullName']?.toString() ?? 'مستخدم تكة',
       role: json['role']?.toString() ?? 'customer',
       email: json['email']?.toString(),
+      phoneNumber: json['phoneNumber']?.toString(),
     );
   }
 
@@ -101,6 +140,7 @@ class MobileAppUser {
   final String fullName;
   final String role;
   final String? email;
+  final String? phoneNumber;
 }
 
 class KitchenSummary {
@@ -116,10 +156,21 @@ class KitchenSummary {
     required this.averageRating,
     required this.reviewsCount,
     required this.menuItemsCount,
+    required this.menuItemNames,
+    required this.menuItemCategoryIds,
   });
 
   factory KitchenSummary.fromJson(Map<String, dynamic> json) {
     final region = (json['region'] as Map<String, dynamic>?) ?? const {};
+    final menuItemNames = (json['menuItemNames'] as List<dynamic>? ?? const [])
+        .map((item) => item.toString())
+        .where((name) => name.isNotEmpty)
+        .toList();
+    final menuItemCategoryIds =
+        (json['menuItemCategoryIds'] as List<dynamic>? ?? const [])
+            .map((item) => item.toString())
+            .where((id) => id.isNotEmpty)
+            .toList();
 
     return KitchenSummary(
       id: json['id']?.toString() ?? '',
@@ -128,11 +179,15 @@ class KitchenSummary {
       description: json['description']?.toString(),
       logoUrl: json['logoUrl']?.toString(),
       coverImageUrl: json['coverImageUrl']?.toString(),
-      cityName: json['cityName']?.toString() ?? '',
+      cityName: region['cityName']?.toString() ??
+          json['cityName']?.toString() ??
+          '',
       regionName: region['regionName']?.toString() ?? '',
       averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0,
       reviewsCount: (json['reviewsCount'] as num?)?.toInt() ?? 0,
       menuItemsCount: (json['menuItemsCount'] as num?)?.toInt() ?? 0,
+      menuItemNames: menuItemNames,
+      menuItemCategoryIds: menuItemCategoryIds,
     );
   }
 
@@ -147,6 +202,8 @@ class KitchenSummary {
   final double averageRating;
   final int reviewsCount;
   final int menuItemsCount;
+  final List<String> menuItemNames;
+  final List<String> menuItemCategoryIds;
 }
 
 class KitchenDetails {

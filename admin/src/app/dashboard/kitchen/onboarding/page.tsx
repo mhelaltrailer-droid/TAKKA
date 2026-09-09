@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ObourLocationFields } from "@/components/obour-location-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { StatusPill } from "@/components/status-pill";
 import { UploadField } from "@/components/upload-field";
@@ -110,33 +111,15 @@ export default async function KitchenOnboardingPage() {
             />
           </div>
 
-          <section className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="cityName" className="block text-sm font-medium">
-                المدينة
-              </label>
-              <input
-                id="cityName"
-                name="cityName"
-                defaultValue={kitchen?.cityName ?? ""}
-                required
-                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="regionName" className="block text-sm font-medium">
-                الحي / المنطقة
-              </label>
-              <input
-                id="regionName"
-                name="regionName"
-                defaultValue={kitchen?.region.regionName ?? ""}
-                required
-                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-              />
-            </div>
-          </section>
+          <ObourLocationFields
+            defaultRegionName={kitchen?.region.regionName ?? ""}
+            defaultLatitude={kitchen?.latitude}
+            defaultLongitude={kitchen?.longitude}
+          />
+          <p className="text-sm leading-6 text-zinc-500">
+            اختر الحي الذي يعمل فيه المطبخ. العملاء الذين يختارون نفس الحي
+            سيرون المطبخ ضمن «مطابخ قريبة منك».
+          </p>
 
           <div className="space-y-2">
             <label htmlFor="addressLine" className="block text-sm font-medium">

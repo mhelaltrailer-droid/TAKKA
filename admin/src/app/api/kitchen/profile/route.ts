@@ -9,6 +9,8 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { assertObourLocation } from "@/lib/districts";
+import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 import { slugify } from "@/lib/slug";
 
 type KitchenProfilePayload = {
@@ -23,6 +25,8 @@ type KitchenProfilePayload = {
   instapayHandle?: string;
   instapayLink?: string;
   nationalIdImageUrl?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export async function GET() {
@@ -66,11 +70,13 @@ export async function POST(request: Request) {
     const user = await requireAuth();
     const payload = (await request.json()) as KitchenProfilePayload;
 
+    const cityName = (payload.cityName || OBOUR_CITY_NAME).trim();
+    const regionName = payload.regionName?.trim() ?? "";
+
     if (
       !payload.kitchenName ||
       !payload.phoneNumber ||
-      !payload.cityName ||
-      !payload.regionName ||
+      !regionName ||
       !payload.addressLine
     ) {
       return NextResponse.json(
@@ -79,19 +85,29 @@ export async function POST(request: Request) {
       );
     }
 
+    const locationError = await assertObourLocation(cityName, regionName);
+    if (locationError) {
+      return NextResponse.json({ error: locationError }, { status: 400 });
+    }
+
+    const latitude =
+      typeof payload.latitude === "number" ? payload.latitude : null;
+    const longitude =
+      typeof payload.longitude === "number" ? payload.longitude : null;
+
     const region = await db.region.upsert({
       where: {
         cityName_regionName: {
-          cityName: payload.cityName.trim(),
-          regionName: payload.regionName.trim(),
+          cityName,
+          regionName,
         },
       },
       update: {
         isActive: true,
       },
       create: {
-        cityName: payload.cityName.trim(),
-        regionName: payload.regionName.trim(),
+        cityName,
+        regionName,
         isActive: true,
       },
     });
@@ -110,9 +126,11 @@ export async function POST(request: Request) {
         logoUrl: payload.logoUrl?.trim() || null,
         coverImageUrl: payload.coverImageUrl?.trim() || null,
         phoneNumber: payload.phoneNumber.trim(),
-        cityName: payload.cityName.trim(),
+        cityName,
         regionId: region.id,
         addressLine: payload.addressLine.trim(),
+        latitude,
+        longitude,
         approvalStatus: ApprovalStatus.PENDING,
         availabilityStatus: AvailabilityStatus.CLOSED,
       },
@@ -124,9 +142,11 @@ export async function POST(request: Request) {
         logoUrl: payload.logoUrl?.trim() || null,
         coverImageUrl: payload.coverImageUrl?.trim() || null,
         phoneNumber: payload.phoneNumber.trim(),
-        cityName: payload.cityName.trim(),
+        cityName,
         regionId: region.id,
         addressLine: payload.addressLine.trim(),
+        latitude,
+        longitude,
         approvalStatus: ApprovalStatus.PENDING,
         availabilityStatus: AvailabilityStatus.CLOSED,
       },

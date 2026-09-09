@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { ObourLocationFields } from "@/components/obour-location-fields";
+import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
+
 type Address = {
   id: string;
   label: string;
@@ -27,10 +30,12 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     label: "",
-    cityName: "",
+    cityName: OBOUR_CITY_NAME,
     regionName: "",
     addressLine: "",
     landmark: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
     isDefault: addresses.length === 0,
   });
 
@@ -46,7 +51,10 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          cityName: OBOUR_CITY_NAME,
+        }),
       });
 
       const result = await response.json();
@@ -65,10 +73,12 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
       setAddresses(nextAddresses);
       setForm({
         label: "",
-        cityName: "",
+        cityName: OBOUR_CITY_NAME,
         regionName: "",
         addressLine: "",
         landmark: "",
+        latitude: null,
+        longitude: null,
         isDefault: false,
       });
       router.refresh();
@@ -161,25 +171,21 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
             placeholder="اسم العنوان: منزل، عمل..."
             className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
           />
-          <input
-            value={form.cityName}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, cityName: event.target.value }))
+
+          <ObourLocationFields
+            regionName={form.regionName}
+            onRegionChange={(regionName) =>
+              setForm((current) => ({ ...current, regionName }))
             }
-            placeholder="المدينة"
-            className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-          />
-          <input
-            value={form.regionName}
-            onChange={(event) =>
+            onCoordsChange={(coords) =>
               setForm((current) => ({
                 ...current,
-                regionName: event.target.value,
+                latitude: coords?.latitude ?? null,
+                longitude: coords?.longitude ?? null,
               }))
             }
-            placeholder="الحي / المنطقة"
-            className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
           />
+
           <input
             value={form.addressLine}
             onChange={(event) =>

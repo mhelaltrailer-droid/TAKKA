@@ -1,20 +1,20 @@
-/** Egyptian mobile: 01xxxxxxxxx (11 digits), e.g. 01111989094 */
-const EGYPT_MOBILE_REGEX = /^01[0125][0-9]{8}$/;
+/** Mobile: starts with 01 and is exactly 11 digits, e.g. 01********* */
+const MOBILE_REGEX = /^01[0-9]{9}$/;
 
 export function normalizeEgyptianPhone(input: string): string {
   return input.replace(/[\s\-()]/g, "").trim();
 }
 
 export function isValidEgyptianPhone(input: string): boolean {
-  return EGYPT_MOBILE_REGEX.test(normalizeEgyptianPhone(input));
+  return MOBILE_REGEX.test(normalizeEgyptianPhone(input));
 }
 
-/** Convert 01111989094 -> +201111989094 for Clerk E.164 */
+/** Convert 01xxxxxxxxx -> +20xxxxxxxxx for Clerk E.164 */
 export function toClerkPhoneE164(input: string): string {
   const local = normalizeEgyptianPhone(input);
 
   if (!isValidEgyptianPhone(local)) {
-    throw new Error("رقم الهاتف المصري غير صالح.");
+    throw new Error("رقم الهاتف غير صالح.");
   }
 
   return `+20${local.slice(1)}`;
@@ -27,8 +27,12 @@ export function phoneValidationMessage(input: string): string | null {
     return "رقم الهاتف مطلوب.";
   }
 
-  if (!isValidEgyptianPhone(local)) {
-    return "أدخل رقمًا مصريًا صحيحًا مثل 01111989094.";
+  if (!local.startsWith("01")) {
+    return "رقم الهاتف يجب أن يبدأ بـ 01.";
+  }
+
+  if (local.length !== 11 || !MOBILE_REGEX.test(local)) {
+    return "رقم الهاتف يجب أن يكون 11 رقمًا ويبدأ بـ 01.";
   }
 
   return null;

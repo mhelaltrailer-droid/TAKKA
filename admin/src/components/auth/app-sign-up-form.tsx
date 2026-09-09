@@ -141,18 +141,19 @@ export function AppSignUpForm() {
           value={fullName}
           onChange={(event) => setFullName(event.target.value)}
           className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3"
-          placeholder="محمد حسن"
+          placeholder="(الاسم +اللقب)"
           required
         />
       </label>
       <label className="block space-y-2 text-sm font-medium">
-        <span>رقم الهاتف المصري</span>
+        <span>رقم الهاتف</span>
         <input
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3"
-          placeholder="01111989094"
+          placeholder="01*********"
           inputMode="numeric"
+          maxLength={11}
           required
         />
       </label>

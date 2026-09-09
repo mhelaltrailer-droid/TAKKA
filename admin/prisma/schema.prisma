@@ -199,6 +199,8 @@ model MenuItem {
   name          String
   description   String?
   imageUrl      String?
+  /// Matches FOOD_CATEGORIES.id (e.g. bakery, poultry) for "تاكل ايه؟" + search.
+  categoryId    String         @default("meals")
   basePrice     Decimal        @db.Decimal(10, 2)
   depositAmount Decimal        @db.Decimal(10, 2)
   isAvailable   Boolean        @default(true)
@@ -346,4 +348,18 @@ model Notification {
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   order     Order?           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+/// Home carousel slides (food / recipes / offers) — managed by admin.
+model PromoBanner {
+  id            String   @id @default(cuid())
+  title         String
+  subtitle      String?
+  imageUrl      String
+  priceLabel    String?
+  oldPriceLabel String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

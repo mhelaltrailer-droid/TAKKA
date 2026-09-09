@@ -1,7 +1,10 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/location/obour_areas.dart';
+import '../../../core/location/obour_location_picker.dart';
 import '../../../core/network/mobile_upload_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../data/kitchen_management_service.dart';
 
 class KitchenOnboardingScreen extends StatefulWidget {
@@ -18,8 +21,6 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
   final _kitchenNameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _cityController = TextEditingController();
-  final _regionController = TextEditingController();
   final _addressController = TextEditingController();
   final _logoController = TextEditingController();
   final _coverController = TextEditingController();
@@ -27,7 +28,12 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
   final _instapayLinkController = TextEditingController();
   final _nationalIdController = TextEditingController();
 
+  ObourLocationSelection _location = const ObourLocationSelection(
+    cityName: obourCityName,
+    regionName: '',
+  );
   bool _isSaving = false;
+  bool _locationReady = false;
 
   @override
   void initState() {
@@ -40,8 +46,6 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     _kitchenNameController.dispose();
     _descriptionController.dispose();
     _phoneController.dispose();
-    _cityController.dispose();
-    _regionController.dispose();
     _addressController.dispose();
     _logoController.dispose();
     _coverController.dispose();
@@ -58,21 +62,30 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       final profile = await _service.loadProfile(sessionToken: token.jwt);
 
       if (profile == null || !mounted) {
+        setState(() => _locationReady = true);
         return;
       }
 
       _kitchenNameController.text = profile.kitchenName;
       _descriptionController.text = profile.description ?? '';
       _phoneController.text = profile.phoneNumber;
-      _cityController.text = profile.cityName;
-      _regionController.text = profile.regionName;
       _addressController.text = profile.addressLine;
       _logoController.text = profile.logoUrl ?? '';
       _coverController.text = profile.coverImageUrl ?? '';
       _instapayHandleController.text = profile.instapayHandle ?? '';
       _instapayLinkController.text = profile.instapayLink ?? '';
-      setState(() {});
-    } catch (_) {}
+      setState(() {
+        _location = ObourLocationSelection(
+          cityName: obourCityName,
+          regionName: profile.regionName,
+        );
+        _locationReady = true;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _locationReady = true);
+      }
+    }
   }
 
   @override
@@ -89,8 +102,38 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
             _field(_kitchenNameController, 'اسم المطبخ'),
             _field(_descriptionController, 'الوصف', maxLines: 3),
             _field(_phoneController, 'رقم الهاتف'),
-            _field(_cityController, 'المدينة'),
-            _field(_regionController, 'المنطقة'),
+            if (_locationReady)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'موقع المطبخ (يظهر للعملاء في نفس الحي)',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'اختر الحي الذي يعمل فيه المطبخ. العملاء الذين يختارون نفس الحي سيرون مطبخك ضمن «مطابخ قريبة منك».',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: TakkaColors.muted,
+                            height: 1.5,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    ObourLocationPicker(
+                      initialRegionName: _location.regionName,
+                      initialLatitude: _location.latitude,
+                      initialLongitude: _location.longitude,
+                      onChanged: (selection) {
+                        setState(() => _location = selection);
+                      },
+                    ),
+                  ],
+                ),
+              ),
             _field(_addressController, 'العنوان', maxLines: 2),
             _imageField(
               _logoController,
@@ -140,8 +183,6 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
         validator: (value) {
           if ((label == 'اسم المطبخ' ||
                   label == 'رقم الهاتف' ||
-                  label == 'المدينة' ||
-                  label == 'المنطقة' ||
                   label == 'العنوان') &&
               (value == null || value.trim().isEmpty)) {
             return 'هذا الحقل مطلوب';
@@ -181,6 +222,17 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       return;
     }
 
+    final locationError = assertObourLocation(
+      _location.cityName,
+      _location.regionName,
+    );
+    if (locationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(locationError)),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -192,9 +244,11 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
           'kitchenName': _kitchenNameController.text.trim(),
           'description': _descriptionController.text.trim(),
           'phoneNumber': _phoneController.text.trim(),
-          'cityName': _cityController.text.trim(),
-          'regionName': _regionController.text.trim(),
+          'cityName': obourCityName,
+          'regionName': _location.regionName,
           'addressLine': _addressController.text.trim(),
+          'latitude': _location.latitude,
+          'longitude': _location.longitude,
           'logoUrl': _logoController.text.trim(),
           'coverImageUrl': _coverController.text.trim(),
           'instapayHandle': _instapayHandleController.text.trim(),

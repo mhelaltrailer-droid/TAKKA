@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isFoodCategoryId } from "@/lib/food-categories";
 
 function getString(formData: FormData, key: string) {
   return formData.get(key)?.toString().trim() ?? "";
@@ -81,6 +82,7 @@ export async function createMenuItem(formData: FormData) {
 
   const name = getString(formData, "name");
   const description = getString(formData, "description");
+  const categoryId = getString(formData, "categoryId");
   const basePrice = parseCurrency(getString(formData, "basePrice"), "السعر");
   const depositAmount = parseCurrency(getString(formData, "depositAmount"), "العربون");
   const imageUrl = getString(formData, "imageUrl");
@@ -88,6 +90,10 @@ export async function createMenuItem(formData: FormData) {
 
   if (!name) {
     throw new Error("اسم الصنف مطلوب.");
+  }
+
+  if (!categoryId || !isFoodCategoryId(categoryId)) {
+    throw new Error("اختر فئة الوجبة من قائمة تاكل ايه؟");
   }
 
   if (Number(depositAmount) > Number(basePrice) * 0.6) {
@@ -100,6 +106,7 @@ export async function createMenuItem(formData: FormData) {
       name,
       description: description || null,
       imageUrl: imageUrl || null,
+      categoryId,
       basePrice,
       depositAmount,
       isAvailable: true,

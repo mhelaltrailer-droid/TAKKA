@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/location/food_categories.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../data/kitchen_management_service.dart';
 
@@ -22,6 +23,7 @@ class _KitchenMenuManagementScreenState
   final _depositController = TextEditingController();
   final _imageController = TextEditingController();
 
+  String? _categoryId;
   Future<List<KitchenManagedMenuItem>>? _future;
 
   @override
@@ -66,12 +68,44 @@ class _KitchenMenuManagementScreenState
                     children: [
                       const Text(
                         'إضافة صنف جديد',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'اسم الصنف'),
+                        decoration:
+                            const InputDecoration(labelText: 'اسم الصنف'),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: _categoryId,
+                        decoration: const InputDecoration(
+                          labelText: 'فئة الوجبة (تاكل ايه؟)',
+                        ),
+                        items: foodCategories
+                            .map(
+                              (category) => DropdownMenuItem(
+                                value: category.id,
+                                child: Text(
+                                  '${category.thumb} ${category.label}',
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() => _categoryId = value);
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'الفئة مطلوبة حتى تظهر الوجبة في البحث وقسم تاكل ايه؟',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF7A5644),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       TextField(
@@ -82,22 +116,25 @@ class _KitchenMenuManagementScreenState
                       const SizedBox(height: 10),
                       TextField(
                         controller: _priceController,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: const InputDecoration(labelText: 'السعر'),
                       ),
                       const SizedBox(height: 10),
                       TextField(
                         controller: _depositController,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: const InputDecoration(labelText: 'العربون'),
                       ),
                       const SizedBox(height: 10),
                       TextField(
                         controller: _imageController,
-                        decoration:
-                            const InputDecoration(labelText: 'رابط صورة الصنف'),
+                        decoration: const InputDecoration(
+                          labelText: 'رابط صورة الصنف',
+                        ),
                       ),
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
@@ -120,7 +157,10 @@ class _KitchenMenuManagementScreenState
               else if (snapshot.hasError)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(snapshot.error.toString(), textAlign: TextAlign.center),
+                  child: Text(
+                    snapshot.error.toString(),
+                    textAlign: TextAlign.center,
+                  ),
                 )
               else if ((snapshot.data ?? const []).isEmpty)
                 const Card(
@@ -130,38 +170,38 @@ class _KitchenMenuManagementScreenState
                   ),
                 )
               else
-                ...(snapshot.data ?? const [])
-                    .map(
-                      (item) => Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(18),
-                          title: Text(
-                            item.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              'السعر: ${item.basePrice.toStringAsFixed(0)} ج.م | العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م',
-                            ),
-                          ),
-                          trailing: Wrap(
-                            spacing: 8,
-                            children: [
-                              Switch(
-                                value: item.isAvailable,
-                                onChanged: (value) => _toggleItem(item.id, value),
-                              ),
-                              IconButton(
-                                onPressed: () => _deleteItem(item.id),
-                                icon: const Icon(Icons.delete_outline_rounded),
-                              ),
-                            ],
-                          ),
+                ...(snapshot.data ?? const []).map(
+                  (item) => Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(18),
+                      title: Text(
+                        item.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          '${_categoryLabel(item.categoryId)} · السعر: ${item.basePrice.toStringAsFixed(0)} ج.م | العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م',
                         ),
                       ),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          Switch(
+                            value: item.isAvailable,
+                            onChanged: (value) =>
+                                _toggleItem(item.id, value),
+                          ),
+                          IconButton(
+                            onPressed: () => _deleteItem(item.id),
+                            icon: const Icon(Icons.delete_outline_rounded),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
+                ),
             ],
           );
         },
@@ -169,7 +209,23 @@ class _KitchenMenuManagementScreenState
     );
   }
 
+  String _categoryLabel(String categoryId) {
+    for (final category in foodCategories) {
+      if (category.id == categoryId) {
+        return category.label;
+      }
+    }
+    return categoryId;
+  }
+
   Future<void> _createItem() async {
+    if (_categoryId == null || _categoryId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اختر فئة الوجبة قبل الإضافة.')),
+      );
+      return;
+    }
+
     try {
       final authState = ClerkAuth.of(context, listen: false);
       final token = await authState.sessionToken();
@@ -178,8 +234,10 @@ class _KitchenMenuManagementScreenState
         payload: {
           'name': _nameController.text.trim(),
           'description': _descriptionController.text.trim(),
+          'categoryId': _categoryId,
           'basePrice': double.tryParse(_priceController.text.trim()) ?? 0,
-          'depositAmount': double.tryParse(_depositController.text.trim()) ?? 0,
+          'depositAmount':
+              double.tryParse(_depositController.text.trim()) ?? 0,
           'imageUrl': _imageController.text.trim(),
           'sizes': <Map<String, dynamic>>[],
         },
@@ -190,7 +248,10 @@ class _KitchenMenuManagementScreenState
       _priceController.clear();
       _depositController.clear();
       _imageController.clear();
-      setState(() => _future = _load());
+      setState(() {
+        _categoryId = null;
+        _future = _load();
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -246,7 +307,7 @@ class _KitchenMenuManagementScreenState
       final token = await authState.sessionToken();
       final url = await _uploadService.pickAndUploadImage(
         sessionToken: token.jwt,
-        purpose: 'menuItemImage',
+        purpose: 'menuItem',
       );
 
       if (url != null && mounted) {

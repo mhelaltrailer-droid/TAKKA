@@ -24,11 +24,17 @@ export async function GET() {
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
     clerkUser.username ||
     "مستخدم جديد";
+  const metadataPhone =
+    typeof clerkUser.publicMetadata?.egyptianPhone === "string"
+      ? clerkUser.publicMetadata.egyptianPhone
+      : typeof clerkUser.unsafeMetadata?.egyptianPhone === "string"
+        ? clerkUser.unsafeMetadata.egyptianPhone
+        : null;
   const user = await syncAppUserFromClerkData({
     clerkUserId: userId,
     fullName,
     email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
-    phoneNumber: clerkUser.primaryPhoneNumber?.phoneNumber ?? null,
+    phoneNumber: clerkUser.primaryPhoneNumber?.phoneNumber ?? metadataPhone,
     roleFromMetadata: isAppRole(rawRole) ? rawRole : null,
   });
 

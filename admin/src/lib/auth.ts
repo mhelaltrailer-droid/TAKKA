@@ -83,8 +83,9 @@ export async function syncAppUserFromClerkData({
   return {
     userId: clerkUserId,
     appUserId: appUser.id,
-    email,
-    fullName,
+    email: appUser.email,
+    fullName: appUser.fullName,
+    phoneNumber: appUser.phoneNumber,
     role: resolvedRole,
     roleFromMetadata,
     needsRoleSetup,

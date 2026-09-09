@@ -6,10 +6,21 @@ import { revalidatePath } from "next/cache";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { assertObourLocation } from "@/lib/districts";
+import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 import { slugify } from "@/lib/slug";
 
 function getString(formData: FormData, key: string) {
   return formData.get(key)?.toString().trim() ?? "";
+}
+
+function getOptionalNumber(formData: FormData, key: string): number | null {
+  const raw = getString(formData, key);
+  if (!raw) {
+    return null;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
 }
 
 export async function saveKitchenOnboarding(formData: FormData) {
@@ -18,7 +29,7 @@ export async function saveKitchenOnboarding(formData: FormData) {
   const kitchenName = getString(formData, "kitchenName");
   const description = getString(formData, "description");
   const phoneNumber = getString(formData, "phoneNumber");
-  const cityName = getString(formData, "cityName");
+  const cityName = getString(formData, "cityName") || OBOUR_CITY_NAME;
   const regionName = getString(formData, "regionName");
   const addressLine = getString(formData, "addressLine");
   const logoUrl = getString(formData, "logoUrl");
@@ -26,9 +37,16 @@ export async function saveKitchenOnboarding(formData: FormData) {
   const instapayHandle = getString(formData, "instapayHandle");
   const instapayLink = getString(formData, "instapayLink");
   const nationalIdImageUrl = getString(formData, "nationalIdImageUrl");
+  const latitude = getOptionalNumber(formData, "latitude");
+  const longitude = getOptionalNumber(formData, "longitude");
 
   if (!kitchenName || !phoneNumber || !cityName || !regionName || !addressLine) {
     throw new Error("يرجى استكمال الحقول الأساسية للمطبخ قبل الحفظ.");
+  }
+
+  const locationError = await assertObourLocation(cityName, regionName);
+  if (locationError) {
+    throw new Error(locationError);
   }
 
   const region = await db.region.upsert({
@@ -65,6 +83,8 @@ export async function saveKitchenOnboarding(formData: FormData) {
       cityName,
       regionId: region.id,
       addressLine,
+      latitude,
+      longitude,
       approvalStatus: ApprovalStatus.PENDING,
       availabilityStatus: AvailabilityStatus.CLOSED,
     },
@@ -79,6 +99,8 @@ export async function saveKitchenOnboarding(formData: FormData) {
       cityName,
       regionId: region.id,
       addressLine,
+      latitude,
+      longitude,
       approvalStatus: ApprovalStatus.PENDING,
       availabilityStatus: AvailabilityStatus.CLOSED,
     },

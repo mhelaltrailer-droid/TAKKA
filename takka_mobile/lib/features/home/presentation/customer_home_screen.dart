@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:clerk_flutter/clerk_flutter.dart';
 
+import '../../../core/location/delivery_location_header.dart';
+import '../../../core/location/food_categories.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../auth/data/app_role.dart';
+import '../../../core/widgets/food_categories_strip.dart';
+import '../../../core/widgets/promo_carousel.dart';
+import '../../cart/presentation/addresses_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/my_orders_screen.dart';
 import '../data/customer_discovery_service.dart';
@@ -14,11 +18,13 @@ class CustomerHomeScreen extends StatefulWidget {
     required this.displayName,
     required this.onSignOut,
     required this.onSwitchRole,
+    this.embeddedInShell = false,
   });
 
   final String displayName;
   final VoidCallback onSignOut;
   final VoidCallback onSwitchRole;
+  final bool embeddedInShell;
 
   @override
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
@@ -26,49 +32,129 @@ class CustomerHomeScreen extends StatefulWidget {
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   final _service = const CustomerDiscoveryService();
+  final _searchController = TextEditingController();
   Future<CustomerBootstrapData>? _bootstrapFuture;
+  Future<List<PromoSlide>>? _promosFuture;
+  String _selectedDistrict = '';
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _bootstrapFuture = _loadBootstrap();
+    _promosFuture = loadPromoSlides();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<CustomerBootstrapData> _loadBootstrap() async {
     final authState = ClerkAuth.of(context, listen: false);
     final token = await authState.sessionToken();
-    return _service.loadBootstrap(sessionToken: token.jwt);
+    return _service.loadBootstrap(
+      sessionToken: token.jwt,
+      regionName: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+    );
+  }
+
+  void _onDistrictChanged(String district) {
+    setState(() {
+      _selectedDistrict = district;
+      _bootstrapFuture = _loadBootstrap();
+    });
+  }
+
+  List<KitchenSummary> _filterKitchens(List<KitchenSummary> kitchens) {
+    final query = _searchQuery.trim();
+    if (query.isEmpty) {
+      return kitchens;
+    }
+
+    FoodCategory? category;
+    for (final item in foodCategories) {
+      if (item.label == query) {
+        category = item;
+        break;
+      }
+    }
+
+    if (category != null) {
+      return kitchens
+          .where(
+            (kitchen) => kitchen.menuItemCategoryIds.contains(category!.id),
+          )
+          .toList();
+    }
+
+    final needle = query.toLowerCase();
+    return kitchens.where((kitchen) {
+      if (kitchen.kitchenName.toLowerCase().contains(needle)) {
+        return true;
+      }
+      if ((kitchen.description ?? '').toLowerCase().contains(needle)) {
+        return true;
+      }
+      return kitchen.menuItemNames.any(
+        (name) => name.toLowerCase().contains(needle),
+      );
+    }).toList();
+  }
+
+  void _onCategorySelected(String label) {
+    final next = _searchQuery.trim() == label ? '' : label;
+    _searchController.text = next;
+    setState(() => _searchQuery = next);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('تكة - العميل'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const NotificationsScreen(),
+      appBar: widget.embeddedInShell
+          ? AppBar(
+              title: const Text('تكة'),
+              actions: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.notifications_none_rounded),
+                  tooltip: 'الإشعارات',
                 ),
-              );
-            },
-            icon: const Icon(Icons.notifications_none_rounded),
-            tooltip: 'الإشعارات',
-          ),
-          IconButton(
-            onPressed: widget.onSwitchRole,
-            icon: const Icon(Icons.swap_horiz_rounded),
-            tooltip: 'التحول إلى مسار المطبخ',
-          ),
-          IconButton(
-            onPressed: widget.onSignOut,
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'تسجيل الخروج',
-          ),
-        ],
-      ),
+              ],
+            )
+          : AppBar(
+              title: const Text('تكة - العميل'),
+              actions: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.notifications_none_rounded),
+                  tooltip: 'الإشعارات',
+                ),
+                IconButton(
+                  onPressed: widget.onSwitchRole,
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  tooltip: 'التحول إلى مسار المطبخ',
+                ),
+                IconButton(
+                  onPressed: widget.onSignOut,
+                  icon: const Icon(Icons.logout_rounded),
+                  tooltip: 'تسجيل الخروج',
+                ),
+              ],
+            ),
       body: FutureBuilder<CustomerBootstrapData>(
         future: _bootstrapFuture,
         builder: (context, snapshot) {
@@ -90,52 +176,135 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           }
 
           final data = snapshot.data!;
+          final kitchens = _filterKitchens(data.kitchens);
 
           return RefreshIndicator(
             onRefresh: () async {
               final future = _loadBootstrap();
+              final promos = loadPromoSlides();
               setState(() {
                 _bootstrapFuture = future;
+                _promosFuture = promos;
               });
-              await future;
+              await Future.wait([future, promos]);
             },
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                DeliveryLocationHeader(
+                  onDistrictChanged: _onDistrictChanged,
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'ابحث عن مطبخ أو وجبة',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searchQuery.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: const BorderSide(color: TakkaColors.softLine),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: const BorderSide(color: TakkaColors.softLine),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: const BorderSide(
+                        color: TakkaColors.primary,
+                        width: 1.4,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FutureBuilder<List<PromoSlide>>(
+                  future: _promosFuture,
+                  builder: (context, promoSnapshot) {
+                    final slides =
+                        promoSnapshot.data ?? defaultPromoSlides;
+                    return PromoCarousel(slides: slides);
+                  },
+                ),
+                const SizedBox(height: 16),
+                FoodCategoriesStrip(
+                  selectedLabel: foodCategories.any(
+                    (item) => item.label == _searchQuery.trim(),
+                  )
+                      ? _searchQuery.trim()
+                      : null,
+                  onSelect: _onCategorySelected,
+                ),
+                const SizedBox(height: 16),
                 _WelcomeCard(
                   title: 'أهلًا ${data.user.fullName}',
                   description:
-                      'اكتشف المطابخ القريبة، اطلب أكلًا بيتيًا، وتابع طلبك حتى الاستلام.',
+                      'اختر الحي لعرض المطابخ القريبة منك في مدينة العبور.',
                 ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const MyOrdersScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.receipt_long_outlined),
-                  label: const Text('طلباتي'),
-                ),
-                const SizedBox(height: 16),
-                _QuickStatsCard(
-                  kitchensCount: data.kitchens.length,
-                  userRole: data.user.role,
-                ),
+                if (!widget.embeddedInShell) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const MyOrdersScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: const Text('طلباتي'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const AddressesScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.location_on_outlined),
+                    label: const Text('عناوين التوصيل'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Text(
-                  'المطابخ المتاحة',
+                  _selectedDistrict.isEmpty
+                      ? 'مطابخ قريبة منك'
+                      : 'مطابخ قريبة منك · $_selectedDistrict',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 const SizedBox(height: 12),
-                if (data.kitchens.isEmpty)
-                  const _EmptyKitchensState()
+                if (_selectedDistrict.isEmpty)
+                  const _SelectDistrictHint()
+                else if (kitchens.isEmpty)
+                  _EmptyKitchensState(
+                    district: _selectedDistrict,
+                    searchQuery: _searchQuery,
+                  )
                 else
-                  ...data.kitchens.map(
+                  ...kitchens.map(
                     (kitchen) => _KitchenCard(kitchen: kitchen),
                   ),
               ],
@@ -227,74 +396,6 @@ class _WelcomeCard extends StatelessWidget {
   }
 }
 
-class _QuickStatsCard extends StatelessWidget {
-  const _QuickStatsCard({
-    required this.kitchensCount,
-    required this.userRole,
-  });
-
-  final int kitchensCount;
-  final String userRole;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Expanded(
-              child: _StatBlock(
-                label: 'الدور الحالي',
-                value: AppRoleX.fromApiValue(userRole)?.label ?? 'عميل',
-              ),
-            ),
-            Expanded(
-              child: _StatBlock(
-                label: 'مطابخ متاحة',
-                value: kitchensCount.toString(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatBlock extends StatelessWidget {
-  const _StatBlock({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey.shade700,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _KitchenCard extends StatelessWidget {
   const _KitchenCard({
     required this.kitchen,
@@ -357,6 +458,18 @@ class _KitchenCard extends StatelessWidget {
                           '${kitchen.cityName} - ${kitchen.regionName}',
                           style: TextStyle(color: Colors.grey.shade700),
                         ),
+                        if (kitchen.menuItemNames.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            kitchen.menuItemNames.take(4).join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -417,8 +530,8 @@ class _KitchenCard extends StatelessWidget {
   }
 }
 
-class _EmptyKitchensState extends StatelessWidget {
-  const _EmptyKitchensState();
+class _SelectDistrictHint extends StatelessWidget {
+  const _SelectDistrictHint();
 
   @override
   Widget build(BuildContext context) {
@@ -427,15 +540,63 @@ class _EmptyKitchensState extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Icon(Icons.store_mall_directory_outlined, size: 40),
+            const Icon(Icons.place_outlined, size: 40),
             const SizedBox(height: 12),
             const Text(
-              'لا توجد مطابخ متاحة حاليًا',
+              'اختر الحي أولًا',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              'لا توجد مطابخ مفتوحة الآن في نطاقك. اسحب للأسفل للتحديث لاحقًا.',
+              'من أعلى الصفحة اختر الحي الذي تتواجد فيه لعرض المطابخ المسجّلة في نفس الحي.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyKitchensState extends StatelessWidget {
+  const _EmptyKitchensState({
+    required this.district,
+    this.searchQuery = '',
+  });
+
+  final String district;
+  final String searchQuery;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSearch = searchQuery.trim().isNotEmpty;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Icon(
+              hasSearch ? Icons.search_off_rounded : Icons.store_mall_directory_outlined,
+              size: 40,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              hasSearch
+                  ? 'لا توجد نتائج لـ «${searchQuery.trim()}»'
+                  : 'لا توجد مطابخ في $district',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hasSearch
+                  ? 'جرّب اسم مطبخ أو وجبة أخرى داخل $district.'
+                  : 'لم يسجّل أي مطبخ مفتوح موقعه في هذا الحي بعد. جرّب حيًا آخر أو اسحب للتحديث لاحقًا.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey.shade700,

@@ -182,6 +182,7 @@ class KitchenManagedMenuItem {
   const KitchenManagedMenuItem({
     required this.id,
     required this.name,
+    required this.categoryId,
     required this.basePrice,
     required this.depositAmount,
     required this.isAvailable,
@@ -191,6 +192,7 @@ class KitchenManagedMenuItem {
     return KitchenManagedMenuItem(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      categoryId: json['categoryId']?.toString() ?? 'meals',
       basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
@@ -200,6 +202,7 @@ class KitchenManagedMenuItem {
 
   final String id;
   final String name;
+  final String categoryId;
   final double basePrice;
   final double depositAmount;
   final bool isAvailable;
