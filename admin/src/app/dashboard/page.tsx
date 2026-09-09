@@ -78,7 +78,12 @@ export default async function DashboardPage() {
             where: {
               customerId: user.appUserId,
               status: {
-                notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+                notIn: [
+                  OrderStatus.COMPLETED,
+                  OrderStatus.CANCELLED_BEFORE_DEPOSIT,
+                  OrderStatus.CANCELLED_AFTER_DEPOSIT,
+                  OrderStatus.REJECTED_BY_KITCHEN,
+                ],
               },
             },
           }),
