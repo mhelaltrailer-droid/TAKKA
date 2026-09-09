@@ -18,12 +18,14 @@ class CustomerDiscoveryService {
   Future<MobileAppUser> loadMe({
     required String sessionToken,
   }) async {
-    final meResponse = await http.get(
-      _buildUri('/api/mobile/me'),
-      headers: {
-        'Authorization': 'Bearer $sessionToken',
-      },
-    );
+    final meResponse = await http
+        .get(
+          _buildUri('/api/mobile/me'),
+          headers: {
+            'Authorization': 'Bearer $sessionToken',
+          },
+        )
+        .timeout(const Duration(seconds: 25));
 
     if (meResponse.statusCode < 200 || meResponse.statusCode >= 300) {
       throw Exception('Failed to load user profile: ${meResponse.body}');
@@ -38,7 +40,20 @@ class CustomerDiscoveryService {
     String? regionName,
     String? query,
   }) async {
-    final user = await loadMe(sessionToken: sessionToken);
+    MobileAppUser user = const MobileAppUser(
+      userId: '',
+      appUserId: '',
+      fullName: 'مستخدم تكة',
+      role: 'customer',
+      email: null,
+      phoneNumber: null,
+    );
+
+    try {
+      user = await loadMe(sessionToken: sessionToken);
+    } catch (_) {
+      // Keep browsing kitchens even if profile sync is slow/unavailable.
+    }
 
     final kitchens = await loadNearbyKitchens(
       sessionToken: sessionToken,
@@ -68,12 +83,14 @@ class CustomerDiscoveryService {
       params['q'] = query.trim();
     }
 
-    final kitchensResponse = await http.get(
-      _buildUri('/api/discovery/kitchens').replace(queryParameters: params),
-      headers: {
-        'Authorization': 'Bearer $sessionToken',
-      },
-    );
+    final kitchensResponse = await http
+        .get(
+          _buildUri('/api/discovery/kitchens').replace(queryParameters: params),
+          headers: {
+            'Authorization': 'Bearer $sessionToken',
+          },
+        )
+        .timeout(const Duration(seconds: 25));
 
     if (kitchensResponse.statusCode < 200 ||
         kitchensResponse.statusCode >= 300) {

@@ -10,6 +10,7 @@ const isAppPublicRoute = createRouteMatcher([
   "/kitchens(.*)",
   "/api/health",
   "/api/discovery(.*)",
+  "/api/mobile(.*)",
   // UploadThing webhook + client validation must stay public (Clerk cookies are absent).
   "/api/uploadthing(.*)",
 ]);
@@ -17,6 +18,7 @@ const isAppPublicRoute = createRouteMatcher([
 const isAdminPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/api/health",
+  "/api/mobile(.*)",
   "/api/uploadthing(.*)",
 ]);
 
@@ -26,6 +28,11 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Always skip Clerk protect for UploadThing callbacks/validation.
   if (pathname.startsWith("/api/uploadthing")) {
+    return;
+  }
+
+  // Mobile APIs authenticate with Bearer session tokens inside the route.
+  if (pathname.startsWith("/api/mobile")) {
     return;
   }
 

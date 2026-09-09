@@ -53,24 +53,35 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Future<CustomerBootstrapData> _loadBootstrap() async {
     final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken();
+    final token = await authState.sessionToken().timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => throw Exception('انتهت مهلة جلب جلسة الدخول.'),
+    );
+    // Load city-wide kitchens once; district is filtered locally (same as web).
     return _service.loadBootstrap(
       sessionToken: token.jwt,
-      regionName: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+      regionName: null,
     );
   }
 
   void _onDistrictChanged(String district) {
-    setState(() {
-      _selectedDistrict = district;
-      _bootstrapFuture = _loadBootstrap();
-    });
+    if (_selectedDistrict == district) {
+      return;
+    }
+    setState(() => _selectedDistrict = district);
   }
 
   List<KitchenSummary> _filterKitchens(List<KitchenSummary> kitchens) {
+    var result = kitchens;
+    if (_selectedDistrict.isNotEmpty) {
+      result = result
+          .where((kitchen) => kitchen.regionName == _selectedDistrict)
+          .toList();
+    }
+
     final query = _searchQuery.trim();
     if (query.isEmpty) {
-      return kitchens;
+      return result;
     }
 
     FoodCategory? category;
@@ -82,7 +93,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
 
     if (category != null) {
-      return kitchens
+      return result
           .where(
             (kitchen) => kitchen.menuItemCategoryIds.contains(category!.id),
           )
@@ -90,7 +101,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
 
     final needle = query.toLowerCase();
-    return kitchens.where((kitchen) {
+    return result.where((kitchen) {
       if (kitchen.kitchenName.toLowerCase().contains(needle)) {
         return true;
       }
