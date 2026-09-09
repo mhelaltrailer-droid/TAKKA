@@ -23,7 +23,7 @@ export default function SignUpPage() {
         <div className="mb-6 space-y-2 text-center">
           <h1 className="text-2xl font-bold">إنشاء حساب</h1>
           <p className="text-sm text-zinc-600">
-            أنشئ حسابًا لتبدأ إدارة منصة تكة.
+            أنشئ حسابًا لتطلب من المطابخ أو تدير مطبخك داخل تكة.
           </p>
         </div>
         <div className="flex justify-center">

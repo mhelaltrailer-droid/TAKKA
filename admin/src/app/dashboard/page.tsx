@@ -12,6 +12,29 @@ import {
   getAvailabilityStatusLabel,
 } from "@/lib/status-labels";
 
+function ActionLink({
+  href,
+  label,
+  primary = false,
+}: {
+  href: string;
+  label: string;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={
+        primary
+          ? "inline-flex bg-[var(--brand-primary)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--brand-secondary)]"
+          : "inline-flex border border-[#e8d5c4] bg-white px-5 py-3 text-sm font-semibold text-[#4a2e22] transition hover:border-[var(--brand-primary)] hover:text-[var(--brand-secondary)]"
+      }
+    >
+      {label}
+    </Link>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await requireAuth();
   const unreadNotificationsCount = await db.notification.count({
@@ -20,6 +43,7 @@ export default async function DashboardPage() {
       isRead: false,
     },
   });
+
   const kitchen =
     user.role === "kitchen_owner"
       ? await db.kitchen.findUnique({
@@ -36,6 +60,7 @@ export default async function DashboardPage() {
           },
         })
       : null;
+
   const customerStats =
     user.role === "customer"
       ? await Promise.all([
@@ -49,8 +74,17 @@ export default async function DashboardPage() {
               customerId: user.appUserId,
             },
           }),
+          db.order.count({
+            where: {
+              customerId: user.appUserId,
+              status: {
+                notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+              },
+            },
+          }),
         ])
       : null;
+
   const adminStats =
     user.role === "admin"
       ? await Promise.all([
@@ -64,182 +98,204 @@ export default async function DashboardPage() {
               status: OrderStatus.PENDING_KITCHEN_APPROVAL,
             },
           }),
+          db.kitchen.count({
+            where: {
+              approvalStatus: "APPROVED",
+            },
+          }),
+          db.user.count(),
         ])
       : null;
 
+  const roleTitle =
+    user.role === "admin"
+      ? "لوحة الإدارة"
+      : user.role === "kitchen_owner"
+        ? "لوحة المطبخ"
+        : "لوحتي";
+
+  const roleSubtitle =
+    user.role === "admin"
+      ? "راجع اعتماد المطابخ، راقب الطلبات، وتابع تشغيل المنصة."
+      : user.role === "kitchen_owner"
+        ? "أدِر ملف مطبخك، المنيو، والطلبات من مكان واحد."
+        : "اطلب من المطابخ القريبة، وتابع طلباتك وعناوينك بسهولة.";
+
   return (
-    <main className="min-h-screen bg-[var(--background)] px-6 py-10">
+    <main className="min-h-screen bg-[var(--background)] px-6 py-10 text-[var(--foreground)]">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
-        <header className="flex flex-col gap-4 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <header className="flex flex-col gap-6 border border-[#ead9c8] bg-white p-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-[var(--brand-secondary)]">
-              لوحة التحكم
+            <p className="font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--brand-secondary)]">
+              تكة
             </p>
-            <h1 className="text-3xl font-bold">مرحبًا بك في تكة</h1>
-            <p className="text-zinc-600">
-              تم تفعيل المصادقة الأساسية بنجاح، وهذه أول لوحة محمية داخل النظام.
+            <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold md:text-4xl">
+              {roleTitle}
+            </h1>
+            <p className="max-w-2xl text-sm leading-7 text-[#6b4a3a] md:text-base">
+              مرحبًا {user.fullName ?? "بك"} — {roleSubtitle}
             </p>
           </div>
-          <div className="flex items-center gap-4 self-start rounded-2xl bg-zinc-50 px-4 py-3">
-            <div className="text-sm">
-              <p className="font-semibold">{user.fullName ?? "مستخدم"}</p>
-              <p className="text-zinc-600">
-                {user.role ? getRoleLabel(user.role) : "بدون دور محدد بعد"}
-              </p>
+
+          <div className="flex items-center gap-4 self-start">
+            <LiveNotificationBell
+              userId={user.appUserId}
+              initialUnreadCount={unreadNotificationsCount}
+            />
+            <div className="flex items-center gap-3 border border-[#ead9c8] bg-[#fff8f1] px-4 py-3">
+              <div className="text-sm">
+                <p className="font-semibold">{user.fullName ?? "مستخدم"}</p>
+                <p className="text-[#6b4a3a]">
+                  {user.role ? getRoleLabel(user.role) : "بدون دور"}
+                </p>
+              </div>
+              <UserButton afterSignOutUrl="/" />
             </div>
-            <UserButton afterSignOutUrl="/" />
           </div>
         </header>
 
-        <div className="flex justify-end">
-          <LiveNotificationBell
-            userId={user.appUserId}
-            initialUnreadCount={unreadNotificationsCount}
-          />
-        </div>
-
-        <section className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">المصادقة</h2>
-            <p className="mt-3 text-sm leading-7 text-zinc-600">
-              المصادقة تعمل عبر Clerk، مع حماية المسارات غير العامة من خلال
-              `middleware`.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">الأدوار</h2>
-            <p className="mt-3 text-sm leading-7 text-zinc-600">
-              تم تأسيس أدوار `customer` و`kitchen_owner` و`admin` لتستخدم لاحقًا
-              في حماية الصفحات والـ APIs.
-            </p>
-          </div>
-
-          {user.role === "customer" && customerStats ? (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold">ملخص العميل</h2>
-              <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                <p>العناوين المحفوظة: {customerStats[0]}</p>
-                <p>إجمالي الطلبات: {customerStats[1]}</p>
+        {user.role === "admin" && adminStats ? (
+          <>
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">مطابخ بانتظار الاعتماد</p>
+                <p className="mt-2 text-3xl font-bold">{adminStats[0]}</p>
               </div>
-            </div>
-          ) : null}
-
-          {user.role === "kitchen_owner" && kitchen ? (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold">ملخص المطبخ</h2>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <StatusPill
-                  label={getApprovalStatusLabel(kitchen.approvalStatus)}
-                  tone={
-                    kitchen.approvalStatus === "APPROVED"
-                      ? "success"
-                      : kitchen.approvalStatus === "PENDING"
-                        ? "warning"
-                        : "danger"
-                  }
-                />
-                <StatusPill
-                  label={getAvailabilityStatusLabel(kitchen.availabilityStatus)}
-                  tone={kitchen.availabilityStatus === "OPEN" ? "success" : "neutral"}
-                />
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">طلبات بانتظار المطبخ</p>
+                <p className="mt-2 text-3xl font-bold">{adminStats[1]}</p>
               </div>
-              <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                <p>الأصناف: {kitchen._count.menuItems}</p>
-                <p>الطلبات: {kitchen._count.orders}</p>
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">مطابخ معتمدة</p>
+                <p className="mt-2 text-3xl font-bold">{adminStats[2]}</p>
               </div>
-            </div>
-          ) : null}
-
-          {user.role === "admin" && adminStats ? (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold">ملخص الإدارة</h2>
-              <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                <p>مطابخ بانتظار الاعتماد: {adminStats[0]}</p>
-                <p>طلبات بانتظار مراجعة المطبخ: {adminStats[1]}</p>
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">إجمالي المستخدمين</p>
+                <p className="mt-2 text-3xl font-bold">{adminStats[3]}</p>
               </div>
-            </div>
-          ) : null}
+            </section>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">الخطوة التالية</h2>
-            <p className="mt-3 text-sm leading-7 text-zinc-600">
-              الروابط والإجراءات الظاهرة هنا تتغير الآن بحسب الدور الحالي
-              للمستخدم داخل النظام.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {user.role === "customer" ? (
-                <>
-                  <Link
-                    href="/kitchens"
-                    className="inline-flex rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                  >
-                    استعراض المطابخ
-                  </Link>
-                  <Link
+            <section className="border border-[#ead9c8] bg-white p-6">
+              <h2 className="text-xl font-bold">إجراءات سريعة</h2>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <ActionLink href="/dashboard/admin" label="عمليات الإدارة" primary />
+                <ActionLink href="/dashboard/orders" label="متابعة الطلبات" />
+                <ActionLink href="/kitchens" label="عرض المطابخ" />
+                <ActionLink href="/notifications" label="الإشعارات" />
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {user.role === "kitchen_owner" ? (
+          <>
+            <section className="grid gap-4 md:grid-cols-3">
+              <div className="border border-[#ead9c8] bg-white p-5 md:col-span-2">
+                <h2 className="text-xl font-bold">
+                  {kitchen?.kitchenName ?? "ملف المطبخ"}
+                </h2>
+                {kitchen ? (
+                  <>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <StatusPill
+                        label={getApprovalStatusLabel(kitchen.approvalStatus)}
+                        tone={
+                          kitchen.approvalStatus === "APPROVED"
+                            ? "success"
+                            : kitchen.approvalStatus === "PENDING"
+                              ? "warning"
+                              : "danger"
+                        }
+                      />
+                      <StatusPill
+                        label={getAvailabilityStatusLabel(
+                          kitchen.availabilityStatus,
+                        )}
+                        tone={
+                          kitchen.availabilityStatus === "OPEN"
+                            ? "success"
+                            : "neutral"
+                        }
+                      />
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-[#6b4a3a]">
+                      <p>أصناف المنيو: {kitchen._count.menuItems}</p>
+                      <p>إجمالي الطلبات: {kitchen._count.orders}</p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-3 text-sm leading-7 text-[#6b4a3a]">
+                    لم يكتمل إعداد المطبخ بعد. ابدأ بتعبئة بيانات المطبخ الآن.
+                  </p>
+                )}
+              </div>
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <h2 className="text-lg font-bold">ابدأ من هنا</h2>
+                <div className="mt-4 flex flex-col gap-3">
+                  <ActionLink
                     href="/dashboard/kitchen/onboarding"
-                    className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    التحول إلى صاحب مطبخ
-                  </Link>
-                  <Link
-                    href="/addresses"
-                    className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    إدارة العناوين
-                  </Link>
-                </>
-              ) : null}
+                    label="إعداد المطبخ"
+                    primary
+                  />
+                  <ActionLink href="/dashboard/menu" label="إدارة المنيو" />
+                  <ActionLink href="/dashboard/orders" label="إدارة الطلبات" />
+                  <ActionLink href="/notifications" label="الإشعارات" />
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
 
-              {user.role === "kitchen_owner" ? (
-                <>
-                  <Link
-                    href="/dashboard/kitchen/onboarding"
-                    className="inline-flex rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                  >
-                    إعداد المطبخ
-                  </Link>
-                  <Link
-                    href="/dashboard/menu"
-                    className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    إدارة المنيو
-                  </Link>
-                  <Link
-                    href="/dashboard/orders"
-                    className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    إدارة الطلبات
-                  </Link>
-                </>
-              ) : null}
+        {user.role === "customer" && customerStats ? (
+          <>
+            <section className="grid gap-4 sm:grid-cols-3">
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">عناويني</p>
+                <p className="mt-2 text-3xl font-bold">{customerStats[0]}</p>
+              </div>
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">كل الطلبات</p>
+                <p className="mt-2 text-3xl font-bold">{customerStats[1]}</p>
+              </div>
+              <div className="border border-[#ead9c8] bg-white p-5">
+                <p className="text-sm text-[#6b4a3a]">طلبات قيد المتابعة</p>
+                <p className="mt-2 text-3xl font-bold">{customerStats[2]}</p>
+              </div>
+            </section>
 
-              {user.role === "admin" ? (
-                <>
-                  <Link
-                    href="/dashboard/admin"
-                    className="inline-flex rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                  >
-                    عمليات الإدارة
-                  </Link>
-                  <Link
-                    href="/dashboard/orders"
-                    className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    متابعة الطلبات
-                  </Link>
-                </>
-              ) : null}
+            <section className="border border-[#ead9c8] bg-white p-6">
+              <h2 className="text-xl font-bold">إجراءات سريعة</h2>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <ActionLink href="/kitchens" label="استعراض المطابخ" primary />
+                <ActionLink href="/addresses" label="إدارة العناوين" />
+                <ActionLink href="/notifications" label="الإشعارات" />
+                <ActionLink
+                  href="/dashboard/kitchen/onboarding"
+                  label="سجّل كمطبخ"
+                />
+              </div>
+            </section>
+          </>
+        ) : null}
 
-              <Link
-                href="/notifications"
-                className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-              >
-                الإشعارات
-              </Link>
+        {!user.role ||
+        (user.role !== "admin" &&
+          user.role !== "kitchen_owner" &&
+          user.role !== "customer") ? (
+          <section className="border border-[#ead9c8] bg-white p-6">
+            <h2 className="text-xl font-bold">أكمل إعداد حسابك</h2>
+            <p className="mt-3 text-sm leading-7 text-[#6b4a3a]">
+              لم يتم تحديد دور واضح بعد. يمكنك البدء كعميل أو كمطبخ.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <ActionLink href="/kitchens" label="استعراض المطابخ" primary />
+              <ActionLink
+                href="/dashboard/kitchen/onboarding"
+                label="التسجيل كمطبخ"
+              />
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
       </div>
     </main>
   );

@@ -23,7 +23,7 @@ export default function SignInPage() {
         <div className="mb-6 space-y-2 text-center">
           <h1 className="text-2xl font-bold">تسجيل الدخول</h1>
           <p className="text-sm text-zinc-600">
-            ادخل إلى لوحة تكة لإدارة الحسابات والطلبات.
+            سجّل دخولك لمتابعة طلباتك أو إدارة مطبخك.
           </p>
         </div>
         <div className="flex justify-center">
