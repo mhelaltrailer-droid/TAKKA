@@ -1,12 +1,19 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Cairo, Geist_Mono } from "next/font/google";
 import { isClerkConfigured } from "@/lib/clerk";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const cairo = Cairo({
+  variable: "--font-body",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const display = Cairo({
+  variable: "--font-display",
+  subsets: ["arabic", "latin"],
+  weight: ["700", "800"],
 });
 
 const geistMono = Geist_Mono({
@@ -15,8 +22,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "تكة | Admin",
-  description: "لوحة الإدارة والباك إند الأساسية لتطبيق تكة",
+  title: "تكة | كله على تكة",
+  description:
+    "تكة منصة تربط العملاء بالمطابخ المنزلية لطلب الأكل البيتي بسهولة وسرعة داخل نطاقهم القريب.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -24,9 +32,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="ar"
       dir="rtl"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${cairo.variable} ${display.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col font-[family-name:var(--font-body)]">
+        {children}
+      </body>
     </html>
   );
 
@@ -34,9 +44,5 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     return content;
   }
 
-  return (
-    <ClerkProvider>
-      {content}
-    </ClerkProvider>
-  );
+  return <ClerkProvider>{content}</ClerkProvider>;
 }

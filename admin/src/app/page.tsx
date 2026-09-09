@@ -5,116 +5,158 @@ import { isClerkConfigured } from "@/lib/clerk";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16 md:px-10">
-        <div className="flex flex-col gap-4">
-          <span className="inline-flex w-fit rounded-full bg-orange-100 px-4 py-1 text-sm font-medium text-orange-700">
-            تكة | Admin Foundation
-          </span>
-          <div className="space-y-3">
-            <h1 className="text-4xl font-bold tracking-tight text-balance md:text-5xl">
-              بداية التنفيذ الفعلي لمشروع تكة
-            </h1>
-            <p className="max-w-3xl text-lg leading-8 text-zinc-600">
-              تم تأسيس مشروع <code>Next.js</code> ليكون قاعدة لوحة الإدارة
-              والباك إند الأولية، مع تجهيز الربط لـ <code>Neon</code> عبر{" "}
-              <code>Prisma</code> وإضافة الأساسات اللازمة للمصادقة والملفات
-              والتحديثات اللحظية.
+    <main className="min-h-screen bg-[#1a120e] text-[#fff8f1]">
+      <section className="relative isolate min-h-[100svh] overflow-hidden">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/takka-hero.jpg')" }}
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-l from-[#1a120e]/92 via-[#1a120e]/72 to-[#1a120e]/35"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_20%_20%,rgba(230,126,34,0.35),transparent_40%),radial-gradient(circle_at_80%_70%,rgba(198,93,46,0.25),transparent_35%)]"
+          aria-hidden
+        />
+
+        <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-6xl flex-col justify-between px-6 py-8 md:px-10 md:py-10">
+          <header className="flex items-center justify-between gap-4">
+            <p className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-white md:text-4xl">
+              تكة
             </p>
-          </div>
-          {isClerkConfigured ? (
-            <div className="flex flex-wrap gap-3 pt-2">
-              <SignedOut>
-                <Link
-                  href="/sign-in"
-                  className="rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white transition hover:opacity-90"
-                >
-                  تسجيل الدخول
-                </Link>
-                <Link
-                  href="/sign-up"
-                  className="rounded-full border border-[var(--brand-secondary)] px-5 py-3 font-medium text-[var(--brand-secondary)] transition hover:bg-orange-50"
-                >
-                  إنشاء حساب
-                </Link>
-                <Link
-                  href="/kitchens"
-                  className="rounded-full border border-zinc-300 px-5 py-3 font-medium text-zinc-800 transition hover:bg-white"
-                >
-                  استعراض المطابخ
-                </Link>
-              </SignedOut>
-              <SignedIn>
-                <Link
-                  href="/dashboard"
-                  className="rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white transition hover:opacity-90"
-                >
-                  دخول اللوحة
-                </Link>
-                <div className="flex items-center rounded-full border border-zinc-200 bg-white px-4 py-2">
+            {isClerkConfigured ? (
+              <div className="flex items-center gap-3">
+                <SignedOut>
+                  <Link
+                    href="/sign-in"
+                    className="text-sm font-medium text-white/85 transition hover:text-white"
+                  >
+                    دخول
+                  </Link>
+                </SignedOut>
+                <SignedIn>
                   <UserButton afterSignOutUrl="/" />
-                </div>
+                </SignedIn>
+              </div>
+            ) : null}
+          </header>
+
+          <div className="max-w-2xl space-y-7 pb-10 pt-16 md:pb-16 md:pt-8">
+            <h1 className="animate-[fadeRise_0.9s_ease-out] font-[family-name:var(--font-display)] text-5xl leading-[1.15] font-bold text-balance text-white md:text-7xl">
+              تكة
+            </h1>
+            <p className="animate-[fadeRise_1.05s_ease-out] text-2xl font-medium text-[#ffd7b0] md:text-3xl">
+              كله على تكة
+            </p>
+            <p className="animate-[fadeRise_1.2s_ease-out] max-w-xl text-base leading-8 text-white/80 md:text-lg">
+              اطلب الأكل البيتي من مطابخ قريبة منك، وتابع طلبك من التأكيد حتى
+              الاستلام.
+            </p>
+
+            <div className="animate-[fadeRise_1.35s_ease-out] flex flex-wrap gap-3 pt-2">
+              {isClerkConfigured ? (
+                <>
+                  <SignedOut>
+                    <Link
+                      href="/sign-up"
+                      className="bg-[var(--brand-primary)] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[var(--brand-secondary)]"
+                    >
+                      ابدأ الآن
+                    </Link>
+                    <Link
+                      href="/kitchens"
+                      className="border border-white/35 bg-white/10 px-6 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+                    >
+                      استكشف المطابخ
+                    </Link>
+                  </SignedOut>
+                  <SignedIn>
+                    <Link
+                      href="/dashboard"
+                      className="bg-[var(--brand-primary)] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[var(--brand-secondary)]"
+                    >
+                      دخول لوحتي
+                    </Link>
+                    <Link
+                      href="/kitchens"
+                      className="border border-white/35 bg-white/10 px-6 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+                    >
+                      استكشف المطابخ
+                    </Link>
+                  </SignedIn>
+                </>
+              ) : (
                 <Link
                   href="/kitchens"
-                  className="rounded-full border border-zinc-300 bg-white px-5 py-3 font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  className="bg-[var(--brand-primary)] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[var(--brand-secondary)]"
                 >
-                  عرض المطابخ
+                  استكشف المطابخ
                 </Link>
-              </SignedIn>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              مرحلة المصادقة جاهزة برمجيًا، وتنتظر فقط مفاتيح `Clerk` الحقيقية
-              لتفعيل تسجيل الدخول وإنشاء الحساب.
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">ما تم تأسيسه</h2>
-            <ul className="space-y-3 text-zinc-700">
-              <li>مشروع `Next.js` بنمط `App Router`.</li>
-              <li>تهيئة أولية لـ `Prisma` مع نموذج بيانات يعكس وثائق المشروع.</li>
-              <li>ملف `.env.example` لخدمات `Neon`, `Clerk`, `UploadThing`, `Pusher`.</li>
-              <li>مكتبات تأسيسية داخل `src/lib` للبيئة وقاعدة البيانات والـ realtime.</li>
-              <li>مسار فحص جاهزية عند `api/health`.</li>
-            </ul>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">الخطوة التنفيذية التالية</h2>
-            <ol className="space-y-3 text-zinc-700">
-              <li>إدخال قيم البيئة الفعلية وربط قاعدة `Neon`.</li>
-              <li>تشغيل `Prisma generate` ثم `db push`.</li>
-              <li>إنشاء نظام التوثيق والأدوار.</li>
-              <li>بناء مسارات اعتماد المطابخ والطلبات.</li>
-            </ol>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-xl font-semibold">معمارية التنفيذ الحالية</h2>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl bg-zinc-50 p-4">
-              <h3 className="font-semibold">Database</h3>
-              <p className="mt-2 text-sm text-zinc-600">Neon PostgreSQL</p>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 p-4">
-              <h3 className="font-semibold">Backend</h3>
-              <p className="mt-2 text-sm text-zinc-600">Next.js Route Handlers</p>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 p-4">
-              <h3 className="font-semibold">ORM</h3>
-              <p className="mt-2 text-sm text-zinc-600">Prisma</p>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 p-4">
-              <h3 className="font-semibold">Realtime</h3>
-              <p className="mt-2 text-sm text-zinc-600">Pusher</p>
+              )}
             </div>
           </div>
         </div>
       </section>
+
+      <section className="bg-[#fff8f1] px-6 py-20 text-[#4a2e22] md:px-10">
+        <div className="mx-auto grid w-full max-w-6xl gap-12 md:grid-cols-[1.1fr_0.9fr] md:items-end">
+          <div className="space-y-4">
+            <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold md:text-4xl">
+              أكل بيتي… أقرب مما تتخيل
+            </h2>
+            <p className="max-w-xl text-base leading-8 text-[#6b4a3a] md:text-lg">
+              تكة تربطك بمطابخ منزلية وسحابية في نطاقك، بطلب واضح وعربون مضمون
+              ومتابعة حية حتى يصل طلبك.
+            </p>
+          </div>
+          <div className="space-y-5 text-base leading-8 text-[#6b4a3a]">
+            <p className="border-r-4 border-[var(--brand-primary)] pr-4">
+              اختر مطبخًا قريبًا وشوف المنيو.
+            </p>
+            <p className="border-r-4 border-[var(--brand-secondary)] pr-4">
+              اطلب وادفع العربون بخطوات بسيطة.
+            </p>
+            <p className="border-r-4 border-[#8b5e3c] pr-4">
+              تابع الحالة والشات لحظة بلحظة.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden bg-[#2a1a14] px-6 py-20 md:px-10">
+        <div
+          className="pointer-events-none absolute -left-20 top-10 h-56 w-56 rounded-full bg-[var(--brand-primary)]/20 blur-3xl"
+          aria-hidden
+        />
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 md:flex-row md:items-center md:justify-between">
+          <div className="max-w-xl space-y-4">
+            <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold text-white md:text-4xl">
+              عندك مطبخ؟ انضم لتكة
+            </h2>
+            <p className="text-base leading-8 text-white/75 md:text-lg">
+              اعرض أصنافك، استقبل الطلبات، راجع العربون، وحدّث حالة التحضير
+              والتسليم من مكان واحد.
+            </p>
+          </div>
+          <Link
+            href={isClerkConfigured ? "/sign-up" : "/dashboard/kitchen/onboarding"}
+            className="inline-flex w-fit bg-white px-6 py-3.5 text-base font-semibold text-[#2a1a14] transition hover:bg-[#ffd7b0]"
+          >
+            سجّل كمطبخ
+          </Link>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/10 bg-[#140e0b] px-6 py-8 text-sm text-white/55 md:px-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-white">
+            تكة
+          </p>
+          <p>كله على تكة — منصة الأكل البيتي القريب منك.</p>
+        </div>
+      </footer>
     </main>
   );
 }
