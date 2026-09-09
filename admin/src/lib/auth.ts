@@ -65,6 +65,7 @@ export async function syncAppUserFromClerkData({
       fullName,
       role: toDatabaseRole(effectiveRole),
       email,
+      phoneNumber,
     },
     create: {
       clerkUserId,
@@ -75,12 +76,18 @@ export async function syncAppUserFromClerkData({
     },
   });
 
+  const resolvedRole = fromDatabaseRole(appUser.role);
+  const needsRoleSetup =
+    roleFromMetadata == null && resolvedRole !== "admin";
+
   return {
     userId: clerkUserId,
     appUserId: appUser.id,
     email,
     fullName,
-    role: effectiveRole,
+    role: resolvedRole,
+    roleFromMetadata,
+    needsRoleSetup,
   };
 }
 
@@ -104,12 +111,18 @@ export async function getCurrentAppUser() {
     user.username ||
     "مستخدم جديد";
   const email = user.primaryEmailAddress?.emailAddress ?? null;
+  const metadataPhone =
+    typeof user.publicMetadata?.egyptianPhone === "string"
+      ? user.publicMetadata.egyptianPhone
+      : typeof user.unsafeMetadata?.egyptianPhone === "string"
+        ? user.unsafeMetadata.egyptianPhone
+        : null;
 
   return syncAppUserFromClerkData({
     clerkUserId: userId,
     fullName,
     email,
-    phoneNumber: user.primaryPhoneNumber?.phoneNumber ?? null,
+    phoneNumber: user.primaryPhoneNumber?.phoneNumber ?? metadataPhone,
     roleFromMetadata,
   });
 }

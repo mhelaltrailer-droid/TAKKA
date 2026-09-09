@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../kitchen_management/presentation/kitchen_menu_management_screen.dart';
 import '../../kitchen_management/presentation/kitchen_onboarding_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
@@ -122,12 +123,49 @@ class _KitchenIntroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1F2937),
-        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [
+            TakkaColors.deep,
+            Color(0xFF3A2419),
+            TakkaColors.secondary,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: TakkaColors.secondary.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  'assets/branding/takka_icon.png',
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'تكة',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
           Text(
             'مرحبًا $displayName',
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -137,7 +175,7 @@ class _KitchenIntroCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'هذا هو مسار صاحب المطبخ داخل التطبيق الموحد. بعد ربط المصادقة الحقيقية، سيكون اختيار "مطبخ" هو بوابة إعداد المطبخ والمنيو والطلبات.',
+            'من هنا تكمل بيانات مطبخك، تدير المنيو، وتستقبل الطلبات وتحدّث حالتها.',
             style: theme.textTheme.bodyLarge?.copyWith(
               color: Colors.white.withValues(alpha: 0.90),
               height: 1.6,

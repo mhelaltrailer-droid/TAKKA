@@ -164,7 +164,7 @@ class _CartScreenState extends State<CartScreen> {
                             final addresses = snapshot.data ?? const [];
                             if (addresses.isEmpty) {
                               return const Text(
-                                'لا توجد عناوين محفوظة. أضف عنوانًا من الويب أو API أولًا قبل طلب التوصيل.',
+                                'لا توجد عناوين محفوظة بعد. أضف عنوانًا أولًا قبل طلب التوصيل.',
                               );
                             }
 

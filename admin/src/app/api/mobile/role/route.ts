@@ -3,8 +3,8 @@ import { UserRole } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
 import { syncAppUserFromClerkData } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 const bodySchema = z.object({
   role: z.enum(["customer", "kitchen_owner"]),
@@ -15,7 +15,11 @@ function toDatabaseRole(role: "customer" | "kitchen_owner") {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth({ acceptsToken: "session_token" });
+  const cookieAuth = await auth();
+  const tokenAuth = cookieAuth.userId
+    ? cookieAuth
+    : await auth({ acceptsToken: "session_token" });
+  const userId = tokenAuth.userId;
 
   if (!userId) {
     return NextResponse.json(
@@ -46,11 +50,18 @@ export async function POST(request: NextRequest) {
     [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
     clerkUser.username ||
     "مستخدم جديد";
+  const metadataPhone =
+    typeof clerkUser.publicMetadata?.egyptianPhone === "string"
+      ? clerkUser.publicMetadata.egyptianPhone
+      : typeof clerkUser.unsafeMetadata?.egyptianPhone === "string"
+        ? clerkUser.unsafeMetadata.egyptianPhone
+        : null;
+
   const syncedUser = await syncAppUserFromClerkData({
     clerkUserId: userId,
     fullName,
     email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
-    phoneNumber: clerkUser.primaryPhoneNumber?.phoneNumber ?? null,
+    phoneNumber: clerkUser.primaryPhoneNumber?.phoneNumber ?? metadataPhone,
     roleFromMetadata: role,
   });
 
@@ -60,12 +71,14 @@ export async function POST(request: NextRequest) {
     },
     data: {
       role: toDatabaseRole(role),
+      ...(metadataPhone ? { phoneNumber: metadataPhone } : {}),
     },
   });
 
   await clerk.users.updateUserMetadata(userId, {
     publicMetadata: {
       role,
+      ...(metadataPhone ? { egyptianPhone: metadataPhone } : {}),
     },
   });
 

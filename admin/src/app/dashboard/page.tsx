@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { OrderStatus } from "@prisma/client";
 
@@ -7,6 +9,7 @@ import { StatusPill } from "@/components/status-pill";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getRoleLabel } from "@/lib/roles";
+import { getTakkaSurface } from "@/lib/surface";
 import {
   getApprovalStatusLabel,
   getAvailabilityStatusLabel,
@@ -36,7 +39,23 @@ function ActionLink({
 }
 
 export default async function DashboardPage() {
+  const headerStore = await headers();
+  const surface = getTakkaSurface(headerStore.get("host"));
+
+  if (surface === "admin") {
+    redirect("/dashboard/admin");
+  }
+
   const user = await requireAuth();
+
+  if (user.needsRoleSetup) {
+    redirect("/role-setup");
+  }
+
+  if (user.role === "admin") {
+    redirect("/");
+  }
+
   const unreadNotificationsCount = await db.notification.count({
     where: {
       userId: user.appUserId,
@@ -90,41 +109,13 @@ export default async function DashboardPage() {
         ])
       : null;
 
-  const adminStats =
-    user.role === "admin"
-      ? await Promise.all([
-          db.kitchen.count({
-            where: {
-              approvalStatus: "PENDING",
-            },
-          }),
-          db.order.count({
-            where: {
-              status: OrderStatus.PENDING_KITCHEN_APPROVAL,
-            },
-          }),
-          db.kitchen.count({
-            where: {
-              approvalStatus: "APPROVED",
-            },
-          }),
-          db.user.count(),
-        ])
-      : null;
-
   const roleTitle =
-    user.role === "admin"
-      ? "لوحة الإدارة"
-      : user.role === "kitchen_owner"
-        ? "لوحة المطبخ"
-        : "لوحتي";
+    user.role === "kitchen_owner" ? "لوحة المطبخ" : "لوحتي";
 
   const roleSubtitle =
-    user.role === "admin"
-      ? "راجع اعتماد المطابخ، راقب الطلبات، وتابع تشغيل المنصة."
-      : user.role === "kitchen_owner"
-        ? "أدِر ملف مطبخك، المنيو، والطلبات من مكان واحد."
-        : "اطلب من المطابخ القريبة، وتابع طلباتك وعناوينك بسهولة.";
+    user.role === "kitchen_owner"
+      ? "أدِر ملف مطبخك، المنيو، والطلبات من مكان واحد."
+      : "اطلب من المطابخ القريبة، وتابع طلباتك وعناوينك بسهولة.";
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10 text-[var(--foreground)]">
@@ -158,39 +149,6 @@ export default async function DashboardPage() {
             </div>
           </div>
         </header>
-
-        {user.role === "admin" && adminStats ? (
-          <>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="border border-[#ead9c8] bg-white p-5">
-                <p className="text-sm text-[#6b4a3a]">مطابخ بانتظار الاعتماد</p>
-                <p className="mt-2 text-3xl font-bold">{adminStats[0]}</p>
-              </div>
-              <div className="border border-[#ead9c8] bg-white p-5">
-                <p className="text-sm text-[#6b4a3a]">طلبات بانتظار المطبخ</p>
-                <p className="mt-2 text-3xl font-bold">{adminStats[1]}</p>
-              </div>
-              <div className="border border-[#ead9c8] bg-white p-5">
-                <p className="text-sm text-[#6b4a3a]">مطابخ معتمدة</p>
-                <p className="mt-2 text-3xl font-bold">{adminStats[2]}</p>
-              </div>
-              <div className="border border-[#ead9c8] bg-white p-5">
-                <p className="text-sm text-[#6b4a3a]">إجمالي المستخدمين</p>
-                <p className="mt-2 text-3xl font-bold">{adminStats[3]}</p>
-              </div>
-            </section>
-
-            <section className="border border-[#ead9c8] bg-white p-6">
-              <h2 className="text-xl font-bold">إجراءات سريعة</h2>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <ActionLink href="/dashboard/admin" label="عمليات الإدارة" primary />
-                <ActionLink href="/dashboard/orders" label="متابعة الطلبات" />
-                <ActionLink href="/kitchens" label="عرض المطابخ" />
-                <ActionLink href="/notifications" label="الإشعارات" />
-              </div>
-            </section>
-          </>
-        ) : null}
 
         {user.role === "kitchen_owner" ? (
           <>
@@ -245,6 +203,7 @@ export default async function DashboardPage() {
                   <ActionLink href="/dashboard/menu" label="إدارة المنيو" />
                   <ActionLink href="/dashboard/orders" label="إدارة الطلبات" />
                   <ActionLink href="/notifications" label="الإشعارات" />
+                  <ActionLink href="/role-setup" label="تبديل الدور" />
                 </div>
               </div>
             </section>
@@ -272,34 +231,13 @@ export default async function DashboardPage() {
               <h2 className="text-xl font-bold">إجراءات سريعة</h2>
               <div className="mt-5 flex flex-wrap gap-3">
                 <ActionLink href="/kitchens" label="استعراض المطابخ" primary />
+                <ActionLink href="/orders" label="طلباتي" />
                 <ActionLink href="/addresses" label="إدارة العناوين" />
                 <ActionLink href="/notifications" label="الإشعارات" />
-                <ActionLink
-                  href="/dashboard/kitchen/onboarding"
-                  label="سجّل كمطبخ"
-                />
+                <ActionLink href="/role-setup" label="تبديل الدور" />
               </div>
             </section>
           </>
-        ) : null}
-
-        {!user.role ||
-        (user.role !== "admin" &&
-          user.role !== "kitchen_owner" &&
-          user.role !== "customer") ? (
-          <section className="border border-[#ead9c8] bg-white p-6">
-            <h2 className="text-xl font-bold">أكمل إعداد حسابك</h2>
-            <p className="mt-3 text-sm leading-7 text-[#6b4a3a]">
-              لم يتم تحديد دور واضح بعد. يمكنك البدء كعميل أو كمطبخ.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <ActionLink href="/kitchens" label="استعراض المطابخ" primary />
-              <ActionLink
-                href="/dashboard/kitchen/onboarding"
-                label="التسجيل كمطبخ"
-              />
-            </div>
-          </section>
         ) : null}
       </div>
     </main>

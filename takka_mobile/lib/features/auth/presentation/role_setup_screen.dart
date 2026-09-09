@@ -1,7 +1,6 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_config.dart';
 import '../data/app_role.dart';
 import '../data/mobile_role_service.dart';
 
@@ -50,7 +49,7 @@ class _RoleSetupScreenState extends State<RoleSetupScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'سيتم حفظ الدور في Clerk والـ backend حتى يفتح التطبيق نفس التجربة المناسبة لك في كل مرة.',
+                    'سنحفظ اختيارك ليفتح التطبيق نفس التجربة المناسبة لك في كل مرة.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.grey.shade700,
                       height: 1.6,
@@ -84,13 +83,6 @@ class _RoleSetupScreenState extends State<RoleSetupScreen> {
                     ),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'عنوان الـ API الحالي: ${AppConfig.apiBaseUrl}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.grey.shade700,
                     ),
                   ),
                   if (_errorMessage != null) ...[
@@ -145,8 +137,7 @@ class _RoleSetupScreenState extends State<RoleSetupScreen> {
 
       setState(() {
         _isSaving = false;
-        _errorMessage =
-            'تعذر حفظ الدور الآن. تأكد أن خادم Next.js يعمل وأن عنوان `TAKKA_API_BASE_URL` صحيح. التفاصيل: $error';
+        _errorMessage = 'تعذر حفظ الدور الآن. حاول مرة أخرى خلال لحظات.';
       });
     }
   }

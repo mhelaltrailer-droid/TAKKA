@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:clerk_flutter/clerk_flutter.dart';
 
+import '../../../core/theme/app_theme.dart';
+import '../../auth/data/app_role.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/my_orders_screen.dart';
 import '../data/customer_discovery_service.dart';
@@ -103,7 +105,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 _WelcomeCard(
                   title: 'أهلًا ${data.user.fullName}',
                   description:
-                      'هذه أول شاشة عميل حقيقية بعد تسجيل الدخول. تم ربطها بجلسة الموبايل وباكتشاف المطابخ المتاحة مباشرة من الـ backend.',
+                      'اكتشف المطابخ القريبة، اطلب أكلًا بيتيًا، وتابع طلبك حتى الاستلام.',
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -161,17 +163,49 @@ class _WelcomeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
           colors: [
-            theme.colorScheme.primary,
-            const Color(0xFF1F2937),
+            TakkaColors.deep,
+            Color(0xFF3A2419),
+            TakkaColors.secondary,
           ],
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: TakkaColors.secondary.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  'assets/branding/takka_icon.png',
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'تكة',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
           Text(
             title,
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -179,11 +213,11 @@ class _WelcomeCard extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             description,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.90),
+              color: Colors.white.withValues(alpha: 0.9),
               height: 1.6,
             ),
           ),
@@ -212,7 +246,7 @@ class _QuickStatsCard extends StatelessWidget {
             Expanded(
               child: _StatBlock(
                 label: 'الدور الحالي',
-                value: userRole,
+                value: AppRoleX.fromApiValue(userRole)?.label ?? 'عميل',
               ),
             ),
             Expanded(
@@ -401,7 +435,7 @@ class _EmptyKitchensState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'تأكد من وجود مطابخ معتمدة ومفتوحة داخل لوحة الويب، ثم اسحب للتحديث.',
+              'لا توجد مطابخ مفتوحة الآن في نطاقك. اسحب للأسفل للتحديث لاحقًا.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey.shade700,

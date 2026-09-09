@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:clerk_flutter/clerk_flutter.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../data/app_role.dart';
 
 class AuthFlowScreen extends StatelessWidget {
@@ -19,104 +20,165 @@ class AuthFlowScreen extends StatelessWidget {
     final effectiveRole = selectedRole ?? AppRole.customer;
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1F2937),
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'تكة',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFFFE8D2),
+              TakkaColors.cream,
+              Color(0xFFFFFDF9),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(26),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                      colors: [
+                        TakkaColors.deep,
+                        Color(0xFF3A2419),
+                        TakkaColors.secondary,
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'تطبيق واحد للعملاء والمطابخ. اختر دورك أثناء الدخول أو إنشاء الحساب.',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        height: 1.6,
+                    boxShadow: [
+                      BoxShadow(
+                        color: TakkaColors.secondary.withValues(alpha: 0.28),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
+                    ],
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset(
+                              'assets/branding/takka_icon.png',
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'تكة',
+                              style: theme.textTheme.displaySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
                       Text(
-                        'اختر كيف ستستخدم تكة',
+                        'كله على تكة',
                         style: theme.textTheme.titleLarge?.copyWith(
+                          color: const Color(0xFFFFD7B0),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      _RoleCard(
-                        role: AppRole.customer,
-                        isSelected: effectiveRole == AppRole.customer,
-                        onTap: () => onRoleSelected(AppRole.customer),
-                      ),
-                      const SizedBox(height: 12),
-                      _RoleCard(
-                        role: AppRole.kitchenOwner,
-                        isSelected: effectiveRole == AppRole.kitchenOwner,
-                        onTap: () => onRoleSelected(AppRole.kitchenOwner),
-                      ),
-                      const SizedBox(height: 20),
-                      FilledButton.icon(
-                        onPressed: () => _openAuthentication(context),
-                        icon: const Icon(Icons.login_rounded),
-                        label: const Text('متابعة إلى تسجيل الدخول أو إنشاء الحساب'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Text(
-                        effectiveRole == AppRole.customer
-                            ? 'بعد المصادقة سنثبت حسابك كعميل ونوجهك إلى مسار الطلبات والاستكشاف.'
-                            : 'بعد المصادقة سنثبت حسابك كمطبخ ونوجهك إلى استكمال الملف والمنيو والطلبات.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.grey.shade700,
-                          height: 1.6,
+                        'اطلب الأكل البيتي من مطابخ قريبة، أو أدِر مطبخك من نفس التطبيق.',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          height: 1.65,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 22),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'اختر كيف ستستخدم تكة',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _RoleCard(
+                          role: AppRole.customer,
+                          isSelected: effectiveRole == AppRole.customer,
+                          onTap: () => onRoleSelected(AppRole.customer),
+                        ),
+                        const SizedBox(height: 12),
+                        _RoleCard(
+                          role: AppRole.kitchenOwner,
+                          isSelected: effectiveRole == AppRole.kitchenOwner,
+                          onTap: () => onRoleSelected(AppRole.kitchenOwner),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          onPressed: () => _openAuthentication(context),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          label: const Text('متابعة لتسجيل الدخول'),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          effectiveRole == AppRole.customer
+                              ? 'بعد الدخول ستنتقل لاستكشاف المطابخ ومتابعة طلباتك.'
+                              : 'بعد الدخول ستنتقل لإعداد المطبخ والمنيو واستقبال الطلبات.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: TakkaColors.muted,
+                            height: 1.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _openAuthentication(BuildContext context) {
-    showModalBottomSheet<void>(
+  Future<void> _openAuthentication(BuildContext context) async {
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (context) {
-        return const Padding(
-          padding: EdgeInsets.all(16),
-          child: ClerkAuthentication(),
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: const SizedBox(
+              height: 520,
+              child: ClerkAuthentication(),
+            ),
+          ),
         );
       },
     );
@@ -136,66 +198,65 @@ class _RoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return InkWell(
-      borderRadius: BorderRadius.circular(22),
       onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: const Duration(milliseconds: 220),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isSelected
-              ? theme.colorScheme.primary.withValues(alpha: 0.10)
-              : Colors.white,
+              ? TakkaColors.primary.withValues(alpha: 0.08)
+              : const Color(0xFFFFFCF8),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: isSelected
-                ? theme.colorScheme.primary
-                : Colors.grey.shade300,
+            color: isSelected ? TakkaColors.primary : TakkaColors.softLine,
             width: isSelected ? 1.6 : 1,
           ),
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: isSelected
-                  ? theme.colorScheme.primary
-                  : Colors.grey.shade200,
-              foregroundColor: isSelected ? Colors.white : Colors.black87,
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? TakkaColors.primary.withValues(alpha: 0.14)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Icon(
                 role == AppRole.customer
                     ? Icons.shopping_bag_outlined
                     : Icons.storefront_outlined,
+                color: isSelected ? TakkaColors.primary : TakkaColors.ink,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     role.label,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     role.subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      height: 1.5,
-                      color: Colors.grey.shade700,
+                    style: const TextStyle(
+                      color: TakkaColors.muted,
+                      height: 1.45,
                     ),
                   ),
                 ],
               ),
             ),
             if (isSelected)
-              Icon(
-                Icons.check_circle_rounded,
-                color: theme.colorScheme.primary,
-              ),
+              const Icon(Icons.check_circle_rounded, color: TakkaColors.primary),
           ],
         ),
       ),
