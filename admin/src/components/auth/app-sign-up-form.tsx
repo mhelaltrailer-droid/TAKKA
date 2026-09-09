@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSignUp } from "@clerk/nextjs";
 import { FormEvent, useState } from "react";
 
+import { PasswordField } from "@/components/auth/password-field";
 import {
   normalizeEgyptianPhone,
   phoneValidationMessage,
@@ -168,17 +169,13 @@ export function AppSignUpForm() {
           required
         />
       </label>
-      <label className="block space-y-2 text-sm font-medium">
-        <span>كلمة المرور</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3"
-          placeholder="15 حرفًا على الأقل"
-          required
-        />
-      </label>
+      <PasswordField
+        label="كلمة المرور"
+        value={password}
+        onChange={setPassword}
+        placeholder="15 حرفًا على الأقل"
+        autoComplete="new-password"
+      />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <button
         type="submit"

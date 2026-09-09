@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useSignIn } from "@clerk/nextjs";
 import { FormEvent, useState } from "react";
 
+import { PasswordField } from "@/components/auth/password-field";
+
 type View = "signin" | "forgot" | "reset";
 
 export function AppSignInForm() {
@@ -185,27 +187,19 @@ export function AppSignInForm() {
             required
           />
         </label>
-        <label className="block space-y-2 text-sm font-medium">
-          <span>كلمة المرور الجديدة</span>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3"
-            placeholder="15 حرفًا على الأقل"
-            required
-          />
-        </label>
-        <label className="block space-y-2 text-sm font-medium">
-          <span>تأكيد كلمة المرور</span>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3"
-            required
-          />
-        </label>
+        <PasswordField
+          label="كلمة المرور الجديدة"
+          value={newPassword}
+          onChange={setNewPassword}
+          placeholder="15 حرفًا على الأقل"
+          autoComplete="new-password"
+        />
+        <PasswordField
+          label="تأكيد كلمة المرور"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          autoComplete="new-password"
+        />
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
         <button
@@ -256,9 +250,11 @@ export function AppSignInForm() {
           required
         />
       </label>
-      <label className="block space-y-2 text-sm font-medium">
-        <div className="flex items-center justify-between gap-3">
-          <span>كلمة المرور</span>
+      <PasswordField
+        label="كلمة المرور"
+        value={password}
+        onChange={setPassword}
+        labelExtra={
           <button
             type="button"
             className="text-xs font-semibold text-[var(--brand-secondary)]"
@@ -270,15 +266,8 @@ export function AppSignInForm() {
           >
             نسيت كلمة المرور؟
           </button>
-        </div>
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3"
-          required
-        />
-      </label>
+        }
+      />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <button
         type="submit"

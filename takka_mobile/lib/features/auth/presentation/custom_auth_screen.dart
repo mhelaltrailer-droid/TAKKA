@@ -36,6 +36,8 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
   String? _error;
   String? _info;
   var _isSubmitting = false;
+  var _obscurePassword = true;
+  var _obscureConfirmPassword = true;
 
   @override
   void initState() {
@@ -551,12 +553,24 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         label: 'كلمة المرور',
         child: TextField(
           controller: _passwordController,
-          obscureText: true,
+          obscureText: _obscurePassword,
           textInputAction: TextInputAction.done,
           onSubmitted: (_) {
             if (!_isSubmitting) _submitSignIn();
           },
-          decoration: const InputDecoration(),
+          decoration: InputDecoration(
+            suffixIcon: IconButton(
+              tooltip: _obscurePassword ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
         ),
       ),
       Align(
@@ -614,9 +628,23 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         label: 'كلمة المرور الجديدة',
         child: TextField(
           controller: _passwordController,
-          obscureText: true,
+          obscureText: _obscurePassword,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(hintText: '15 حرفًا على الأقل'),
+          decoration: InputDecoration(
+            hintText: '15 حرفًا على الأقل',
+            suffixIcon: IconButton(
+              tooltip:
+                  _obscurePassword ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
         ),
       ),
       const SizedBox(height: 14),
@@ -624,9 +652,25 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         label: 'تأكيد كلمة المرور',
         child: TextField(
           controller: _confirmPasswordController,
-          obscureText: true,
+          obscureText: _obscureConfirmPassword,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(),
+          decoration: InputDecoration(
+            suffixIcon: IconButton(
+              tooltip: _obscureConfirmPassword
+                  ? 'إظهار كلمة المرور'
+                  : 'إخفاء كلمة المرور',
+              onPressed: () {
+                setState(
+                  () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                );
+              },
+              icon: Icon(
+                _obscureConfirmPassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
           onSubmitted: (_) {
             if (!_isSubmitting) _submitForgotReset();
           },
@@ -674,10 +718,21 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         label: 'كلمة المرور',
         child: TextField(
           controller: _passwordController,
-          obscureText: true,
+          obscureText: _obscurePassword,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: '15 حرفًا على الأقل',
+            suffixIcon: IconButton(
+              tooltip: _obscurePassword ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
           ),
         ),
       ),
