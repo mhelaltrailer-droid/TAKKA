@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { UploadButton } from "@/lib/uploadthing";
+import { UploadField } from "@/components/upload-field";
 
 type CustomerChatFormProps = {
   orderId: string;
@@ -68,31 +68,13 @@ export function CustomerChatForm({ orderId }: CustomerChatFormProps) {
           className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
         />
 
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4">
-          <UploadButton
-            endpoint="chatImage"
-            appearance={{
-              button:
-                "ut-ready:bg-[var(--brand-primary)] ut-uploading:bg-zinc-400 ut-ready:text-white ut-label:text-sm ut-allowed-content:text-xs",
-              container: "w-full items-start",
-            }}
-            content={{
-              button({ ready }) {
-                return ready ? "إرفاق صورة" : "جاري التحضير...";
-              },
-            }}
-            onClientUploadComplete={(res) => {
-              const uploaded = res?.[0];
-
-              if (uploaded?.ufsUrl) {
-                setImageUrl(uploaded.ufsUrl);
-              }
-            }}
-            onUploadError={(uploadError: Error) => {
-              window.alert(`فشل رفع الصورة: ${uploadError.message}`);
-            }}
-          />
-        </div>
+        <UploadField
+          endpoint="chatImage"
+          label="إرفاق صورة"
+          buttonLabel="إرفاق صورة"
+          includeHiddenInput={false}
+          onUploaded={setImageUrl}
+        />
 
         {imageUrl ? (
           <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">

@@ -8,7 +8,6 @@ import {
 
 export const runtime = "nodejs";
 
-/** Mobile-compatible alias of /api/uploads */
 export async function POST(request: Request) {
   try {
     const user = await requireUploadApiUser();

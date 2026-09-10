@@ -41,14 +41,27 @@ class MobileUploadService {
       ..fields['purpose'] = purpose
       ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    final streamed = await request.send().timeout(const Duration(seconds: 90));
+    final response = await http.Response.fromStream(streamed).timeout(
+      const Duration(seconds: 30),
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Upload failed: ${response.body}');
+      String message = 'فشل رفع الصورة.';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        message = body['error']?.toString() ?? message;
+      } catch (_) {
+        message = 'فشل رفع الصورة (${response.statusCode}).';
+      }
+      throw Exception(message);
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return json['url']?.toString();
+    final url = json['url']?.toString();
+    if (url == null || url.isEmpty) {
+      throw Exception('اكتمل الرفع لكن لم يُرجع رابط الصورة.');
+    }
+    return url;
   }
 }

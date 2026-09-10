@@ -162,7 +162,9 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
-              label: Text(_isSaving ? 'جارٍ الحفظ...' : 'حفظ بيانات المطبخ'),
+              label: Text(
+                _isSaving ? 'جارٍ الحفظ...' : 'حفظ وإرسال للاعتماد',
+              ),
             ),
           ],
         ),
@@ -261,9 +263,7 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم حفظ بيانات المطبخ بنجاح.')),
-      );
+      await _showSubmittedAndGoHome();
     } catch (error) {
       if (!mounted) {
         return;
@@ -271,11 +271,74 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString())),
       );
-    } finally {
       if (mounted) {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  Future<void> _showSubmittedAndGoHome() async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return const AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(24)),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 8),
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: Color(0xFF059669),
+                size: 48,
+              ),
+              SizedBox(height: 16),
+              Text(
+                'تم إرسال بيانات المطبخ',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'سوف يتم مراجعة بياناتك من التطبيق',
+                textAlign: TextAlign.center,
+                style: TextStyle(height: 1.6),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'جاري تحويلك إلى لوحة التحكم',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: TakkaColors.secondary,
+                ),
+              ),
+              SizedBox(height: 18),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 2800));
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pop(); // close dialog
+    Navigator.of(context).pop(); // back to kitchen dashboard
   }
 
   Future<void> _uploadImage(

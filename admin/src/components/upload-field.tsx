@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
-
-import { UploadButton } from "@/lib/uploadthing";
+import { useId, useRef, useState } from "react";
 
 type UploadFieldProps = {
   endpoint:
@@ -13,18 +11,75 @@ type UploadFieldProps = {
     | "depositProofImage"
     | "chatImage"
     | "promoBannerImage";
-  inputName: string;
+  inputName?: string;
   label: string;
   defaultValue?: string | null;
   helpText?: string;
+  buttonLabel?: string;
+  onUploaded?: (url: string) => void;
+  /** When false, no hidden form input is rendered (controlled usage). */
+  includeHiddenInput?: boolean;
 };
 
-function resolveUploadedUrl(file: {
-  ufsUrl?: string | null;
-  url?: string | null;
-  appUrl?: string | null;
-}) {
-  return file.ufsUrl || file.url || file.appUrl || "";
+function uploadWithProgress(
+  file: File,
+  purpose: string,
+  onProgress: (value: number) => void,
+): Promise<{ url: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("purpose", purpose);
+
+    xhr.open("POST", "/api/uploads");
+    xhr.responseType = "json";
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+
+    xhr.onload = () => {
+      const payload =
+        typeof xhr.response === "object" && xhr.response
+          ? xhr.response
+          : (() => {
+              try {
+                return JSON.parse(xhr.responseText) as {
+                  url?: string;
+                  error?: string;
+                };
+              } catch {
+                return { error: "تعذر قراءة رد الخادم." };
+              }
+            })();
+
+      if (xhr.status >= 200 && xhr.status < 300 && payload.url) {
+        resolve({ url: String(payload.url) });
+        return;
+      }
+
+      reject(
+        new Error(
+          payload.error || `فشل رفع الصورة (${xhr.status || "شبكة"}).`,
+        ),
+      );
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("تعذر الاتصال بخادم الرفع."));
+    };
+
+    xhr.ontimeout = () => {
+      reject(new Error("انتهت مهلة رفع الصورة."));
+    };
+
+    xhr.timeout = 120_000;
+    xhr.send(formData);
+  });
 }
 
 export function UploadField({
@@ -33,7 +88,12 @@ export function UploadField({
   label,
   defaultValue,
   helpText,
+  buttonLabel,
+  onUploaded,
+  includeHiddenInput = true,
 }: UploadFieldProps) {
+  const inputId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState(defaultValue ?? "");
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">(
     defaultValue ? "done" : "idle",
@@ -41,15 +101,43 @@ export function UploadField({
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setStatus("uploading");
+    setProgress(0);
+    setErrorMessage(null);
+
+    try {
+      const result = await uploadWithProgress(file, endpoint, setProgress);
+      setFileUrl(result.url);
+      setStatus("done");
+      setProgress(100);
+      onUploaded?.(result.url);
+    } catch (error) {
+      setStatus("error");
+      setProgress(0);
+      setErrorMessage(
+        error instanceof Error ? error.message : "فشل رفع الملف.",
+      );
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-medium">{label}</label>
-      <input type="hidden" name={inputName} value={fileUrl} />
+      <label className="block text-sm font-medium" htmlFor={inputId}>
+        {label}
+      </label>
+      {includeHiddenInput && inputName ? (
+        <input type="hidden" name={inputName} value={fileUrl} />
+      ) : null}
 
-      <div
-        className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4">
         {fileUrl ? (
           <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -61,71 +149,34 @@ export function UploadField({
           </div>
         ) : null}
 
-        <UploadButton
-          endpoint={endpoint}
-          appearance={{
-            button:
-              "ut-ready:bg-[var(--brand-primary)] ut-uploading:cursor-not-allowed ut-uploading:bg-zinc-400 ut-ready:text-white ut-label:text-sm ut-allowed-content:text-xs after:bg-[var(--brand-primary)]",
-            container: "w-full items-start",
-            allowedContent: "text-xs text-zinc-500",
-          }}
-          content={{
-            button({ ready, isUploading }) {
-              if (isUploading) {
-                return progress > 0
-                  ? `جارٍ الرفع... ${progress}%`
-                  : "جارٍ الرفع...";
-              }
-              if (!ready) {
-                return "جاري التحضير...";
-              }
-              return fileUrl ? "استبدال الصورة" : "اختيار ورفع الملف";
-            },
-            allowedContent({ ready, isUploading }) {
-              if (isUploading) {
-                return "لا تغلق الصفحة حتى يكتمل الرفع";
-              }
-              if (!ready) {
-                return "انتظر لحظة...";
-              }
-              return "صورة فقط · بحد أقصى الحجم المسموح";
-            },
-          }}
-          onUploadBegin={() => {
-            setStatus("uploading");
-            setProgress(0);
-            setErrorMessage(null);
-          }}
-          onUploadProgress={(value) => {
-            setProgress(Math.round(value));
-            setStatus("uploading");
-          }}
-          onClientUploadComplete={(res) => {
-            const uploaded = res?.[0];
-            const url = uploaded ? resolveUploadedUrl(uploaded) : "";
-
-            if (!url) {
-              setStatus("error");
-              setErrorMessage("اكتمل الرفع لكن لم يُرجع رابط الصورة.");
-              return;
-            }
-
-            setFileUrl(url);
-            setStatus("done");
-            setProgress(100);
-            setErrorMessage(null);
-          }}
-          onUploadError={(error: Error) => {
-            setStatus("error");
-            setProgress(0);
-            const message = error.message || "فشل رفع الملف.";
-            setErrorMessage(
-              message.includes("callback") || message.includes("webhook")
-                ? "تعذر إكمال الرفع من الخادم. حدّث الصفحة وحاول مرة أخرى."
-                : message,
-            );
-          }}
+        <input
+          id={inputId}
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={handleFileChange}
+          disabled={status === "uploading"}
         />
+
+        <button
+          type="button"
+          disabled={status === "uploading"}
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-secondary)] disabled:cursor-not-allowed disabled:bg-zinc-400"
+        >
+          {status === "uploading"
+            ? progress > 0
+              ? `جارٍ الرفع... ${progress}%`
+              : "جارٍ الرفع..."
+            : fileUrl
+              ? "استبدال الصورة"
+              : buttonLabel || "اختيار ورفع الملف"}
+        </button>
+
+        <p className="mt-2 text-xs text-zinc-500">
+          صورة فقط · بحد أقصى الحجم المسموح
+        </p>
 
         {status === "uploading" ? (
           <div className="mt-3 space-y-2">
@@ -136,9 +187,7 @@ export function UploadField({
               />
             </div>
             <p className="text-xs text-zinc-600">
-              {progress >= 100
-                ? "اكتمل إرسال الملف، جارٍ تأكيد الحفظ..."
-                : `جارٍ رفع الصورة (${progress}%)...`}
+              جارٍ رفع الصورة{progress > 0 ? ` (${progress}%)` : ""}...
             </p>
           </div>
         ) : null}

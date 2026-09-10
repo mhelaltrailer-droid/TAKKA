@@ -1,0 +1,41 @@
+---
+description: Keep Takka web and Flutter mobile UI/copy/validation in sync
+alwaysApply: true
+---
+
+# Web ↔ Mobile UI parity
+
+Any user-facing change (layout, copy, placeholders, colors, validation, auth flow steps) must be applied to **both**:
+
+1. **Web (customer app):** `admin/` — especially `src/app/sign-*`, `src/components/auth/`, and related customer screens
+2. **Mobile APK:** `takka_mobile/` — especially `lib/features/auth/` and matching feature screens
+
+## Rules
+
+- Do not ship a web-only or mobile-only UI tweak for shared flows (auth, discovery, orders, kitchen).
+- Reuse the same Arabic strings, placeholders, and validation rules on both platforms.
+- Prefer matching structure first (fields, steps, CTAs), then visual styling with each platform’s design tokens (`TakkaColors` / CSS vars).
+- If a change cannot be mirrored yet, say so explicitly and implement the counterpart in the same task when possible.
+
+## Auth example
+
+Phone rule: starts with `01`, exactly 11 digits. Placeholders and labels must match on web signup and Flutter signup.
+
+## Location / areas
+
+Service area is **مدينة العبور**. District catalog is stored in DB (`Region`) and managed at `/dashboard/admin/districts`.
+
+- Defaults seed: `admin/src/lib/obour-areas.ts` / `takka_mobile/lib/core/location/obour_areas.dart`
+- Public list API: `GET /api/discovery/districts`
+- Pickers load from API (fallback to defaults)
+
+Customer and kitchen pick district via dropdown + optional Detect location (GPS coords).
+
+## Home food categories
+
+"تاكل ايه؟" strip categories live in:
+
+- Web: `admin/src/lib/food-categories.ts`
+- Mobile: `takka_mobile/lib/core/location/food_categories.dart`
+
+Keep labels/order aligned. Tapping a category filters kitchens/meals.

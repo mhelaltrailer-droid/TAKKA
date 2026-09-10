@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { UploadButton } from "@/lib/uploadthing";
+import { UploadField } from "@/components/upload-field";
 
 type DepositProofFormProps = {
   orderId: string;
@@ -59,31 +59,18 @@ export function DepositProofForm({ orderId }: DepositProofFormProps) {
   return (
     <div className="space-y-4 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
       <h2 className="text-xl font-semibold">إرسال إثبات العربون</h2>
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4">
-        <UploadButton
-          endpoint="depositProofImage"
-          appearance={{
-            button:
-              "ut-ready:bg-[var(--brand-primary)] ut-uploading:bg-zinc-400 ut-ready:text-white ut-label:text-sm ut-allowed-content:text-xs",
-            container: "w-full items-start",
-          }}
-          content={{
-            button({ ready }) {
-              return ready ? "رفع صورة التحويل" : "جاري التحضير...";
-            },
-          }}
-          onClientUploadComplete={(res) => {
-            const uploaded = res?.[0];
-
-            if (uploaded?.ufsUrl) {
-              setImageUrl(uploaded.ufsUrl);
-            }
-          }}
-          onUploadError={(uploadError: Error) => {
-            window.alert(`فشل رفع الصورة: ${uploadError.message}`);
-          }}
-        />
-      </div>
+      <UploadField
+        endpoint="depositProofImage"
+        label="صورة إثبات التحويل"
+        buttonLabel="رفع صورة التحويل"
+        includeHiddenInput={false}
+        onUploaded={setImageUrl}
+      />
+      {imageUrl ? (
+        <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          تم رفع صورة الإثبات بنجاح.
+        </p>
+      ) : null}
 
       <div className="space-y-2">
         <label className="block text-sm font-medium">المبلغ المحول</label>

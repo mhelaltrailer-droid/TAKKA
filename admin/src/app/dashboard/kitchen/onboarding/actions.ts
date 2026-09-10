@@ -3,6 +3,7 @@
 import { ApprovalStatus, AvailabilityStatus, PaymentType, UserRole } from "@prisma/client";
 import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -177,4 +178,5 @@ export async function saveKitchenOnboarding(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/kitchen/onboarding");
+  redirect("/dashboard/kitchen/submitted");
 }
