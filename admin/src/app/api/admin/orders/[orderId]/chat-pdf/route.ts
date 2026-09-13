@@ -170,7 +170,7 @@ export async function GET(
             if (y > 680) {
               doc.addPage();
             }
-            doc.image(image, { fit: [maxWidth, 220], align: "left" });
+            doc.image(image, { fit: [maxWidth, 220] });
             doc.moveDown();
           } catch {
             doc.text("  (image could not be embedded)");
@@ -208,7 +208,7 @@ export async function GET(
               if (doc.y > 680) {
                 doc.addPage();
               }
-              doc.image(image, { fit: [420, 240], align: "left" });
+              doc.image(image, { fit: [420, 240] });
               doc.moveDown();
             } catch {
               doc.text("(image could not be embedded)");
