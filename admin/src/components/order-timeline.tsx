@@ -1,5 +1,7 @@
 import { DeliveryType, OrderStatus } from "@prisma/client";
 
+import { getCustomerOrderStage } from "@/lib/customer-order-status";
+
 type OrderTimelineProps = {
   status: OrderStatus;
   deliveryType: DeliveryType;
@@ -30,89 +32,105 @@ export function OrderTimeline({
   deliveredAt,
   completedAt,
 }: OrderTimelineProps) {
+  const stage = getCustomerOrderStage(status);
+  const isRejected = stage === "REJECTED";
+  const isCancelled = stage === "CANCELLED";
+  const isTerminalFail = isRejected || isCancelled;
+
+  const pastKitchen =
+    stage !== "AWAITING_KITCHEN" && !isRejected;
+  const pastDeposit =
+    stage === "PREPARING" ||
+    stage === "ON_THE_WAY" ||
+    stage === "CONFIRM_RECEIPT" ||
+    stage === "COMPLETED";
+  const pastPreparing =
+    stage === "ON_THE_WAY" ||
+    stage === "CONFIRM_RECEIPT" ||
+    stage === "COMPLETED";
+  const pastDelivery =
+    stage === "CONFIRM_RECEIPT" || stage === "COMPLETED";
+
   const steps: TimelineStep[] = [
     {
       key: "placed",
-      title: "تم إنشاء الطلب",
-      description: "تم إرسال الطلب إلى المطبخ وبانتظار مراجعته.",
+      title: "تم إرسال الطلب",
+      description: "وصل الطلب للمطبخ وبانتظار مراجعته.",
       completed: true,
-      active: status === OrderStatus.PENDING_KITCHEN_APPROVAL,
+      active: stage === "AWAITING_KITCHEN",
       timestamp: placedAt,
     },
     {
       key: "accepted",
-      title: "تم قبول الطلب",
-      description: "راجع المطبخ الطلب وحدد إمكانية تنفيذه.",
-      completed:
-        status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&
-        status !== OrderStatus.REJECTED_BY_KITCHEN,
-      active: status === OrderStatus.ACCEPTED_AWAITING_DEPOSIT,
+      title: "موافقة المطبخ",
+      description: isRejected
+        ? "المطبخ رفض الطلب."
+        : "المطبخ قبل الطلب وحدّد إمكانية التنفيذ.",
+      completed: pastKitchen && !isCancelled,
+      active: false,
       timestamp: acceptedAt,
     },
     {
       key: "deposit",
       title: "العربون",
       description:
-        status === OrderStatus.DEPOSIT_PROOF_SUBMITTED
-          ? "تم إرسال إثبات العربون وبانتظار مراجعته."
-          : "العربون مطلوب قبل بدء التحضير.",
-      completed:
-        status === OrderStatus.DEPOSIT_CONFIRMED ||
-        status === OrderStatus.PREPARING ||
-        status === OrderStatus.READY_FOR_PICKUP ||
-        status === OrderStatus.AWAITING_CUSTOMER_ARRIVAL ||
-        status === OrderStatus.OUT_FOR_DELIVERY ||
-        status === OrderStatus.DELIVERED_BY_KITCHEN_OR_DRIVER ||
-        status === OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM ||
-        status === OrderStatus.COMPLETED,
-      active:
-        status === OrderStatus.ACCEPTED_AWAITING_DEPOSIT ||
-        status === OrderStatus.DEPOSIT_PROOF_SUBMITTED,
-      timestamp: depositSubmittedAt ?? depositConfirmedAt,
+        stage === "DEPOSIT_REVIEW"
+          ? "تم إرسال الإثبات وبانتظار مراجعة المطبخ."
+          : stage === "PAY_DEPOSIT"
+            ? "حوّل العربون وأرسل صورة الإثبات."
+            : "تم تأكيد العربون.",
+      completed: pastDeposit,
+      active: stage === "PAY_DEPOSIT" || stage === "DEPOSIT_REVIEW",
+      timestamp: depositConfirmedAt ?? depositSubmittedAt,
     },
     {
       key: "preparing",
-      title: "جاري التحضير",
-      description: "بدأ المطبخ تجهيز الطلب.",
-      completed:
-        status === OrderStatus.READY_FOR_PICKUP ||
-        status === OrderStatus.AWAITING_CUSTOMER_ARRIVAL ||
-        status === OrderStatus.OUT_FOR_DELIVERY ||
-        status === OrderStatus.DELIVERED_BY_KITCHEN_OR_DRIVER ||
-        status === OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM ||
-        status === OrderStatus.COMPLETED,
-      active: status === OrderStatus.PREPARING,
+      title: "التحضير",
+      description: "المطبخ بيجهّز طلبك.",
+      completed: pastPreparing,
+      active: stage === "PREPARING",
       timestamp: depositConfirmedAt,
     },
     {
       key: "delivery",
       title:
-        deliveryType === DeliveryType.PICKUP
-          ? "جاهز للاستلام"
-          : "خرج للتوصيل / تم التسليم",
+        deliveryType === DeliveryType.PICKUP ? "الاستلام" : "التوصيل",
       description:
         deliveryType === DeliveryType.PICKUP
-          ? "الطلب جاهز ويمكنك التوجه لاستلامه."
-          : "الطلب خرج للتوصيل أو تم تسليمه لجهة التوصيل.",
-      completed:
-        status === OrderStatus.DELIVERED_BY_KITCHEN_OR_DRIVER ||
-        status === OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM ||
-        status === OrderStatus.COMPLETED,
-      active:
-        status === OrderStatus.READY_FOR_PICKUP ||
-        status === OrderStatus.AWAITING_CUSTOMER_ARRIVAL ||
-        status === OrderStatus.OUT_FOR_DELIVERY,
+          ? "الطلب جاهز للاستلام من المطبخ."
+          : "الطلب في الطريق إليك.",
+      completed: pastDelivery,
+      active: stage === "ON_THE_WAY",
       timestamp: deliveredAt,
     },
     {
-      key: "completed",
-      title: "اكتمل الطلب",
-      description: "تم التسليم النهائي أو بانتظار تأكيد الاستلام.",
-      completed: status === OrderStatus.COMPLETED,
-      active: status === OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM,
+      key: "done",
+      title: stage === "COMPLETED" ? "مكتمل" : "تأكيد الاستلام",
+      description:
+        stage === "COMPLETED"
+          ? "تم إنهاء الطلب."
+          : "ادفع الباقي عند الاستلام ثم أكّد إنك استلمت.",
+      completed: stage === "COMPLETED",
+      active: stage === "CONFIRM_RECEIPT",
       timestamp: completedAt,
     },
   ];
+
+  if (isTerminalFail) {
+    return (
+      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold">مراحل الطلب</h2>
+        <p className="mt-4 text-sm leading-7 text-zinc-600">
+          {isRejected
+            ? "انتهى هذا الطلب بالرفض من المطبخ."
+            : "تم إلغاء هذا الطلب."}
+        </p>
+        <p className="mt-2 text-xs text-zinc-500">
+          {placedAt.toLocaleString("ar-EG")}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

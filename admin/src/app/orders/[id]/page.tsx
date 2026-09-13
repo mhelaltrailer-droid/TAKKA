@@ -2,14 +2,19 @@ import Link from "next/link";
 import { OrderStatus } from "@prisma/client";
 
 import { ConfirmReceiptButton } from "@/components/confirm-receipt-button";
+import { CancelOrderButton } from "@/components/cancel-order-button";
 import { CustomerChatForm } from "@/components/customer-chat-form";
 import { DepositProofForm } from "@/components/deposit-proof-form";
 import { LiveRefreshListener } from "@/components/live-refresh-listener";
 import { OrderTimeline } from "@/components/order-timeline";
 import { ReviewForm } from "@/components/review-form";
 import { requireAuth } from "@/lib/auth";
+import {
+  canCustomerCancelOrder,
+  getCustomerOrderStatusHint,
+  getCustomerOrderStatusLabel,
+} from "@/lib/customer-order-status";
 import { db } from "@/lib/db";
-import { getOrderStatusLabel } from "@/lib/order-status";
 
 export default async function CustomerOrderDetailsPage({
   params,
@@ -90,9 +95,14 @@ export default async function CustomerOrderDetailsPage({
             متابعة التصفح
           </Link>
           <h1 className="mt-3 text-3xl font-bold">تفاصيل الطلب {order.orderNumber}</h1>
-          <p className="mt-3 text-sm leading-7 text-zinc-600">
-            المطبخ: {order.kitchen.kitchenName} | الحالة الحالية:{" "}
-            {getOrderStatusLabel(order.status)}
+          <p className="mt-3 text-base font-semibold text-[#3b2418]">
+            {getCustomerOrderStatusLabel(order.status, order.deliveryType)}
+          </p>
+          <p className="mt-1 text-sm leading-7 text-zinc-600">
+            المطبخ: {order.kitchen.kitchenName}
+          </p>
+          <p className="mt-1 text-sm leading-7 text-zinc-600">
+            {getCustomerOrderStatusHint(order.status, order.deliveryType)}
           </p>
         </header>
 
@@ -207,6 +217,15 @@ export default async function CustomerOrderDetailsPage({
                   </a>
                 </div>
               </div>
+            ) : null}
+
+            {canCustomerCancelOrder(order.status) ? (
+              <CancelOrderButton
+                orderId={order.id}
+                hadDepositProofSubmitted={
+                  order.status === OrderStatus.DEPOSIT_PROOF_SUBMITTED
+                }
+              />
             ) : null}
 
             {order.status === OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM ? (

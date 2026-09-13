@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/orders/customer_order_status.dart';
 import '../../../core/orders/order_status.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../cart/data/order_service.dart';
@@ -226,9 +227,10 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusLabel = orderStatusLabelAr(order.status);
-    final isCancelled = order.status.startsWith('CANCELLED') ||
-        order.status == 'REJECTED_BY_KITCHEN';
+    final statusLabel = customerOrderStatusLabel(
+      order.status,
+      deliveryType: order.deliveryType,
+    );
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -286,7 +288,7 @@ class _OrderCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isCancelled ? 'تم الإلغاء' : statusLabel,
+                  statusLabel,
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,

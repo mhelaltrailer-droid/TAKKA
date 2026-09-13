@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useState, useSyncExternalStore } from "react";
 
 import { CheckoutPricingSummary } from "@/components/checkout-pricing-summary";
 import type { DeliveryCoords } from "@/components/delivery-location-picker";
@@ -11,6 +11,14 @@ import {
   ORDER_READINESS_CUSTOMER_QUESTION,
   getOrderReadinessLabel,
 } from "@/lib/order-readiness";
+import {
+  clearWebCart,
+  getWebCart,
+  subscribeWebCart,
+  updateWebCartQuantity,
+  webCartTotals,
+  type WebCartState,
+} from "@/lib/web-cart";
 
 const DeliveryLocationPicker = dynamic(
   () =>
@@ -25,23 +33,6 @@ const DeliveryLocationPicker = dynamic(
   },
 );
 
-type MenuItemSize = {
-  id: string;
-  sizeName: string;
-  price: string;
-  depositAmount: string | null;
-};
-
-type MenuItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  basePrice: string;
-  depositAmount: string;
-  orderReadiness: string;
-  sizes: MenuItemSize[];
-};
-
 type CustomerAddress = {
   id: string;
   label: string;
@@ -54,11 +45,16 @@ type CustomerAddress = {
   };
 };
 
-type CustomerOrderFormProps = {
-  kitchenId: string;
-  menuItems: MenuItem[];
+type WebCartCheckoutProps = {
   addresses: CustomerAddress[];
   registeredPhone: string | null;
+};
+
+const emptyCart: WebCartState = {
+  kitchenId: null,
+  kitchenName: null,
+  kitchenSlug: null,
+  items: [],
 };
 
 function coordsFromAddress(
@@ -73,14 +69,19 @@ function coordsFromAddress(
   };
 }
 
-export function CustomerOrderForm({
-  kitchenId,
-  menuItems,
+export function WebCartCheckout({
   addresses,
   registeredPhone,
-}: CustomerOrderFormProps) {
+}: WebCartCheckoutProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const cart = useSyncExternalStore(
+    subscribeWebCart,
+    getWebCart,
+    () => emptyCart,
+  );
+  const totals = webCartTotals(cart.items);
+
   const initialAddress = addresses[0];
   const initialCoords = coordsFromAddress(initialAddress);
 
@@ -100,15 +101,10 @@ export function CustomerOrderForm({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>(
-    {},
-  );
 
   const selectedAddress = addresses.find(
     (address) => address.id === selectedAddressId,
   );
-
   const locationHint = coordsFromAddress(selectedAddress);
   const addressesReturnHref = `/addresses?returnTo=${encodeURIComponent(pathname)}`;
 
@@ -120,68 +116,13 @@ export function CustomerOrderForm({
     setDeliveryConfirmed(Boolean(nextCoords));
   }
 
-  const orderSummary = useMemo(() => {
-    let subtotal = 0;
-    let deposit = 0;
-
-    for (const item of menuItems) {
-      const quantity = quantities[item.id] ?? 0;
-
-      if (!quantity) {
-        continue;
-      }
-
-      const chosenSize = item.sizes.find(
-        (size) => size.id === selectedSizes[item.id],
-      );
-
-      const price = Number(chosenSize?.price ?? item.basePrice);
-      const depositAmount = Number(
-        chosenSize?.depositAmount ?? item.depositAmount,
-      );
-
-      subtotal += price * quantity;
-      deposit += depositAmount * quantity;
-    }
-
-    return {
-      subtotal,
-      deposit,
-    };
-  }, [menuItems, quantities, selectedSizes]);
-
   async function submitOrder() {
     setLoading(true);
     setError(null);
 
     try {
-      const items = menuItems
-        .map((item) => {
-          const quantity = quantities[item.id] ?? 0;
-
-          if (!quantity) {
-            return null;
-          }
-
-          const payload: {
-            menuItemId: string;
-            quantity: number;
-            menuItemSizeId?: string;
-          } = {
-            menuItemId: item.id,
-            quantity,
-          };
-
-          if (selectedSizes[item.id]) {
-            payload.menuItemSizeId = selectedSizes[item.id];
-          }
-
-          return payload;
-        })
-        .filter(Boolean);
-
-      if (!items.length) {
-        throw new Error("اختر صنفًا واحدًا على الأقل قبل إرسال الطلب.");
+      if (!cart.kitchenId || !cart.items.length) {
+        throw new Error("السلة فارغة.");
       }
 
       if (deliveryType === "delivery" && !selectedAddressId) {
@@ -208,7 +149,7 @@ export function CustomerOrderForm({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          kitchenId,
+          kitchenId: cart.kitchenId,
           deliveryType,
           customerAddressId:
             deliveryType === "delivery" ? selectedAddressId : undefined,
@@ -218,7 +159,13 @@ export function CustomerOrderForm({
             deliveryType === "delivery" ? deliveryCoords?.latitude : undefined,
           deliveryLongitude:
             deliveryType === "delivery" ? deliveryCoords?.longitude : undefined,
-          items,
+          items: cart.items.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            ...(item.menuItemSizeId
+              ? { menuItemSizeId: item.menuItemSizeId }
+              : {}),
+          })),
         }),
       });
 
@@ -228,6 +175,7 @@ export function CustomerOrderForm({
         throw new Error(result.error || "تعذر إنشاء الطلب.");
       }
 
+      clearWebCart();
       router.push(`/orders/${result.orderId}`);
       router.refresh();
     } catch (caughtError) {
@@ -241,92 +189,128 @@ export function CustomerOrderForm({
     }
   }
 
+  if (!cart.items.length) {
+    return (
+      <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="text-xl font-semibold">السلة فارغة</h2>
+        <p className="mt-2 text-sm leading-7 text-zinc-600">
+          ارجع إلى المنيو وأضف بعض الأصناف أولًا.
+        </p>
+        <Link
+          href="/kitchens"
+          className="mt-6 inline-flex rounded-full bg-[var(--brand-primary)] px-5 py-2.5 text-sm font-medium text-white"
+        >
+          تصفح المطابخ
+        </Link>
+      </section>
+    );
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-      <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold">اختيار الأصناف</h2>
-        <div className="mt-5 space-y-4">
-          {menuItems.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-2xl border border-zinc-200 p-4"
+      <div className="space-y-6">
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">
+            {cart.kitchenName ?? "مطبخ الطلب"}
+          </h2>
+          <p className="mt-2 text-sm leading-7 text-zinc-600">
+            كل الطلبات في هذه السلة يجب أن تكون من نفس المطبخ.
+          </p>
+          {cart.kitchenSlug ? (
+            <Link
+              href={`/kitchens/${cart.kitchenSlug}`}
+              className="mt-3 inline-flex text-sm font-medium text-[var(--brand-secondary)] underline underline-offset-4"
             >
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-lg font-semibold">{item.name}</h3>
-                  <p className="mt-1 text-sm leading-7 text-zinc-600">
-                    {item.description || "لا يوجد وصف للصنف."}
+              العودة للمنيو
+            </Link>
+          ) : null}
+          <div className="mt-4">
+            <CheckoutPricingSummary />
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">أصناف السلة</h2>
+            <button
+              type="button"
+              onClick={() => clearWebCart()}
+              className="text-sm font-medium text-red-600"
+            >
+              تفريغ السلة
+            </button>
+          </div>
+          <div className="mt-5 space-y-4">
+            {cart.items.map((item) => (
+              <article
+                key={item.id}
+                className="rounded-2xl border border-zinc-200 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      {item.menuItemName}
+                    </h3>
+                    {item.sizeName ? (
+                      <p className="mt-1 text-sm text-zinc-600">
+                        الحجم: {item.sizeName}
+                      </p>
+                    ) : null}
+                    <span className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                      {ORDER_READINESS_CUSTOMER_QUESTION}{" "}
+                      {getOrderReadinessLabel(item.orderReadiness)}
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-800">
+                    {(item.unitPrice * item.quantity).toFixed(2)} جنيه
                   </p>
                 </div>
 
-                <div className="text-sm text-zinc-700">
-                  <p>السعر الأساسي: {item.basePrice} جنيه</p>
-                  <p>العربون: {item.depositAmount} جنيه</p>
-                  <span className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
-                    {ORDER_READINESS_CUSTOMER_QUESTION}{" "}
-                    {getOrderReadinessLabel(item.orderReadiness)}
-                  </span>
-                </div>
-
-                {item.sizes.length ? (
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium">
-                      اختر الحجم
-                    </label>
-                    <select
-                      value={selectedSizes[item.id] ?? ""}
-                      onChange={(event) =>
-                        setSelectedSizes((current) => ({
-                          ...current,
-                          [item.id]: event.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 outline-none"
-                    >
-                      <option value="">السعر الأساسي</option>
-                      {item.sizes.map((size) => (
-                        <option key={size.id} value={size.id}>
-                          {size.sizeName} - {size.price} جنيه
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">الكمية</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={quantities[item.id] ?? 0}
-                    onChange={(event) =>
-                      setQuantities((current) => ({
-                        ...current,
-                        [item.id]: Number(event.target.value || 0),
-                      }))
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateWebCartQuantity(item.id, item.quantity - 1)
                     }
-                    className="w-32 rounded-xl border border-zinc-300 px-3 py-2 outline-none"
-                  />
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-lg leading-none"
+                    aria-label="تقليل الكمية"
+                  >
+                    −
+                  </button>
+                  <span className="min-w-8 text-center text-base font-semibold">
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateWebCartQuantity(item.id, item.quantity + 1)
+                    }
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-lg leading-none"
+                    aria-label="زيادة الكمية"
+                  >
+                    +
+                  </button>
+                  <p className="ms-auto text-xs text-zinc-500">
+                    العربون: {(item.depositAmount * item.quantity).toFixed(2)}{" "}
+                    جنيه
+                  </p>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
 
       <aside className="space-y-6">
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">مراجعة الطلب</h2>
           <div className="mt-4 space-y-3 text-sm text-zinc-700">
-            <p>المجموع المبدئي: {orderSummary.subtotal.toFixed(2)} جنيه</p>
-            <p>العربون المتوقع: {orderSummary.deposit.toFixed(2)} جنيه</p>
+            <p>عدد العناصر: {totals.count}</p>
+            <p>المجموع المبدئي: {totals.subtotal.toFixed(2)} جنيه</p>
+            <p>العربون المتوقع: {totals.deposit.toFixed(2)} جنيه</p>
             <p className="text-xs text-zinc-500">
               رسوم التوصيل يحددها المطبخ عند القبول، وتظهر منفصلة في ملخص الطلب.
             </p>
-          </div>
-          <div className="mt-4">
-            <CheckoutPricingSummary />
           </div>
         </section>
 
@@ -456,11 +440,11 @@ export function CustomerOrderForm({
               </p>
             </div>
             <div className="space-y-2">
-              <label className="block font-medium" htmlFor="contactPhone">
+              <label className="block font-medium" htmlFor="cartContactPhone">
                 رقم هاتف تواصل آخر (اختياري)
               </label>
               <input
-                id="contactPhone"
+                id="cartContactPhone"
                 type="tel"
                 inputMode="numeric"
                 placeholder="01*********"

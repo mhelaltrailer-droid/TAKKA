@@ -479,6 +479,23 @@ class _CartScreenState extends State<CartScreen> {
                         label: 'إجمالي العربون',
                         value: '${_cart.depositTotal.toStringAsFixed(0)} ج.م',
                       ),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: const Text(
+                          'قبل إرسال الطلب\nالعربون الآن · التوصيل بعد القبول · الباقي عند الاستلام',
+                          style: TextStyle(
+                            height: 1.45,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,

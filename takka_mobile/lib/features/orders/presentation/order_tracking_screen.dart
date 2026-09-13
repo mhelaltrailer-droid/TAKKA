@@ -2,6 +2,7 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/network/mobile_upload_service.dart';
+import '../../../core/orders/customer_order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
 import '../../cart/data/order_service.dart';
 
@@ -108,7 +109,29 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text('المطبخ: ${order.kitchenName}'),
-                        Text('الحالة الحالية: ${order.status}'),
+                        const SizedBox(height: 6),
+                        Text(
+                          customerOrderStatusLabel(
+                            order.status,
+                            deliveryType: order.deliveryType,
+                          ),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          customerOrderStatusHint(
+                            order.status,
+                            deliveryType: order.deliveryType,
+                          ),
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
                           'طريقة الاستلام: ${order.deliveryType == 'DELIVERY' ? 'توصيل' : 'استلام'}',
                         ),
@@ -188,36 +211,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        _TimelineRow(
-                          label: 'تم إنشاء الطلب',
-                          date: order.placedAt,
-                          isDone: order.placedAt != null,
-                        ),
-                        _TimelineRow(
-                          label: 'تم قبول الطلب',
-                          date: order.acceptedAt,
-                          isDone: order.acceptedAt != null,
-                        ),
-                        _TimelineRow(
-                          label: 'تم إرسال إثبات العربون',
-                          date: order.depositSubmittedAt,
-                          isDone: order.depositSubmittedAt != null,
-                        ),
-                        _TimelineRow(
-                          label: 'تم تأكيد العربون',
-                          date: order.depositConfirmedAt,
-                          isDone: order.depositConfirmedAt != null,
-                        ),
-                        _TimelineRow(
-                          label: 'تم التسليم',
-                          date: order.deliveredAt,
-                          isDone: order.deliveredAt != null,
-                        ),
-                        _TimelineRow(
-                          label: 'اكتمل الطلب',
-                          date: order.completedAt,
-                          isDone: order.completedAt != null,
-                        ),
+                        ..._customerTimelineRows(order),
                       ],
                     ),
                   ),
@@ -387,6 +381,47 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                   ),
                 ),
+                if (canCustomerCancelOrder(order.status)) ...[
+                  const SizedBox(height: 14),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'إلغاء الطلب',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'يمكنك الإلغاء فقط قبل تأكيد المطبخ للعربون.',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              height: 1.45,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            onPressed: () => _confirmCancelOrder(
+                              order.id,
+                              hadDepositProofSubmitted:
+                                  order.status == 'DEPOSIT_PROOF_SUBMITTED',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red.shade700,
+                              side: BorderSide(color: Colors.red.shade200),
+                            ),
+                            child: const Text('إلغاء الطلب'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 if (order.status == 'COMPLETED_AWAITING_CUSTOMER_CONFIRM') ...[
                   const SizedBox(height: 14),
                   Card(
@@ -577,6 +612,52 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
+  Future<void> _confirmCancelOrder(
+    String orderId, {
+    required bool hadDepositProofSubmitted,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تأكيد الإلغاء'),
+          content: Text(
+            hadDepositProofSubmitted
+                ? 'هل أنت متأكد من إلغاء هذا الطلب؟\n\nلو حوّلت العربون بالفعل، تواصل مع المطبخ بخصوص المبلغ — الاسترداد يتم يدويًا خارج التطبيق.'
+                : 'هل أنت متأكد من إلغاء هذا الطلب؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('رجوع'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('نعم، ألغِ الطلب'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      await _orderService.cancelOrder(
+        sessionToken: token.jwt,
+        orderId: orderId,
+      );
+      setState(() => _future = _load());
+    } catch (error) {
+      _showError(error);
+    }
+  }
+
   Future<void> _submitReview(String orderId, int ratingValue) async {
     try {
       final authState = ClerkAuth.of(context, listen: false);
@@ -595,6 +676,71 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       _showError(error);
     }
   }
+}
+
+List<Widget> _customerTimelineRows(CustomerOrderDetails order) {
+  final stage = customerOrderStage(order.status);
+  if (stage == CustomerOrderStage.rejected ||
+      stage == CustomerOrderStage.cancelled) {
+    return [
+      _TimelineRow(
+        label: stage == CustomerOrderStage.rejected
+            ? 'مرفوض من المطبخ'
+            : 'تم إلغاء الطلب',
+        date: order.placedAt,
+        isDone: true,
+      ),
+    ];
+  }
+
+  final pastDeposit = stage == CustomerOrderStage.preparing ||
+      stage == CustomerOrderStage.onTheWay ||
+      stage == CustomerOrderStage.confirmReceipt ||
+      stage == CustomerOrderStage.completed;
+  final pastPreparing = stage == CustomerOrderStage.onTheWay ||
+      stage == CustomerOrderStage.confirmReceipt ||
+      stage == CustomerOrderStage.completed;
+  final pastDelivery = stage == CustomerOrderStage.confirmReceipt ||
+      stage == CustomerOrderStage.completed;
+
+  return [
+    _TimelineRow(
+      label: 'تم إرسال الطلب',
+      date: order.placedAt,
+      isDone: true,
+    ),
+    _TimelineRow(
+      label: 'موافقة المطبخ',
+      date: order.acceptedAt,
+      isDone: stage != CustomerOrderStage.awaitingKitchen,
+    ),
+    _TimelineRow(
+      label: stage == CustomerOrderStage.depositReview
+          ? 'بانتظار تأكيد العربون'
+          : stage == CustomerOrderStage.payDeposit
+              ? 'ادفع العربون'
+              : 'تم تأكيد العربون',
+      date: order.depositConfirmedAt ?? order.depositSubmittedAt,
+      isDone: pastDeposit,
+    ),
+    _TimelineRow(
+      label: 'التحضير',
+      date: order.depositConfirmedAt,
+      isDone: pastPreparing,
+    ),
+    _TimelineRow(
+      label: order.deliveryType == 'PICKUP' ? 'الاستلام' : 'التوصيل',
+      date: order.deliveredAt,
+      isDone: pastDelivery,
+    ),
+    _TimelineRow(
+      label: stage == CustomerOrderStage.completed
+          ? 'مكتمل'
+          : 'تأكيد الاستلام',
+      date: order.completedAt,
+      isDone: stage == CustomerOrderStage.completed,
+    ),
+  ];
 }
 
 class _TimelineRow extends StatelessWidget {

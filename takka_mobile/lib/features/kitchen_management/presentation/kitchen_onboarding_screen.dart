@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/kitchen/kitchen_onboarding_copy.dart';
 import '../../../core/location/obour_areas.dart';
 import '../../../core/location/obour_location_picker.dart';
 import '../../../core/network/mobile_upload_service.dart';
@@ -11,7 +15,8 @@ class KitchenOnboardingScreen extends StatefulWidget {
   const KitchenOnboardingScreen({super.key});
 
   @override
-  State<KitchenOnboardingScreen> createState() => _KitchenOnboardingScreenState();
+  State<KitchenOnboardingScreen> createState() =>
+      _KitchenOnboardingScreenState();
 }
 
 class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
@@ -33,9 +38,12 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     regionName: '',
   );
   bool _isSaving = false;
-  bool _locationReady = false;
+  bool _isLoading = true;
+  bool _showWizard = false;
+  int _step = 1;
   String? _approvalStatus;
   String? _rejectionReason;
+  bool _hasServerProfile = false;
 
   @override
   void initState() {
@@ -63,138 +71,512 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       final token = await authState.sessionToken();
       final profile = await _service.loadProfile(sessionToken: token.jwt);
 
-      if (profile == null || !mounted) {
-        setState(() => _locationReady = true);
+      if (!mounted) {
         return;
       }
 
-      _kitchenNameController.text = profile.kitchenName;
-      _descriptionController.text = profile.description ?? '';
-      _phoneController.text = profile.phoneNumber;
-      _addressController.text = profile.addressLine;
-      _logoController.text = profile.logoUrl ?? '';
-      _coverController.text = profile.coverImageUrl ?? '';
-      _instapayHandleController.text = profile.instapayHandle ?? '';
-      _instapayLinkController.text = profile.instapayLink ?? '';
+      if (profile == null) {
+        await _loadDraft();
+        setState(() {
+          _hasServerProfile = false;
+          _showWizard = true;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _applyProfile(profile);
+      final status = profile.approvalStatus;
+
       setState(() {
-        _location = ObourLocationSelection(
-          cityName: obourCityName,
-          regionName: profile.regionName,
-        );
-        _approvalStatus = profile.approvalStatus;
+        _hasServerProfile = true;
+        _approvalStatus = status;
         _rejectionReason = profile.rejectionReason;
-        _locationReady = true;
+        // PENDING / APPROVED / REJECTED → status gate; wizard opens after
+        // reject via «عدّل وأعد الإرسال», or immediately if no kitchen.
+        _showWizard = false;
+        _isLoading = false;
       });
     } catch (_) {
-      if (mounted) {
-        setState(() => _locationReady = true);
+      if (!mounted) {
+        return;
+      }
+      await _loadDraft();
+      setState(() {
+        _showWizard = true;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _applyProfile(KitchenProfileData profile) {
+    _kitchenNameController.text = profile.kitchenName;
+    _descriptionController.text = profile.description ?? '';
+    _phoneController.text = profile.phoneNumber;
+    _addressController.text = profile.addressLine;
+    _logoController.text = profile.logoUrl ?? '';
+    _coverController.text = profile.coverImageUrl ?? '';
+    _instapayHandleController.text = profile.instapayHandle ?? '';
+    _instapayLinkController.text = profile.instapayLink ?? '';
+    _nationalIdController.text = profile.nationalIdImageUrl ?? '';
+    _location = ObourLocationSelection(
+      cityName: obourCityName,
+      regionName: profile.regionName,
+    );
+  }
+
+  Future<void> _loadDraft({bool mergeWithProfile = false}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(kitchenOnboardingDraftKey);
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      void apply(TextEditingController c, String key) {
+        final value = data[key]?.toString();
+        if (value == null) {
+          return;
+        }
+        if (!mergeWithProfile || c.text.trim().isEmpty) {
+          c.text = value;
+        }
+      }
+
+      apply(_kitchenNameController, 'kitchenName');
+      apply(_descriptionController, 'description');
+      apply(_phoneController, 'phoneNumber');
+      apply(_addressController, 'addressLine');
+      apply(_logoController, 'logoUrl');
+      apply(_coverController, 'coverImageUrl');
+      apply(_instapayHandleController, 'instapayHandle');
+      apply(_instapayLinkController, 'instapayLink');
+      apply(_nationalIdController, 'nationalIdImageUrl');
+
+      final region = data['regionName']?.toString();
+      if (region != null &&
+          region.isNotEmpty &&
+          (!mergeWithProfile || _location.regionName.isEmpty)) {
+        _location = ObourLocationSelection(
+          cityName: obourCityName,
+          regionName: region,
+          latitude: (data['latitude'] as num?)?.toDouble() ?? _location.latitude,
+          longitude:
+              (data['longitude'] as num?)?.toDouble() ?? _location.longitude,
+        );
+      } else if (data['latitude'] != null || data['longitude'] != null) {
+        _location = ObourLocationSelection(
+          cityName: obourCityName,
+          regionName: _location.regionName,
+          latitude: (data['latitude'] as num?)?.toDouble(),
+          longitude: (data['longitude'] as num?)?.toDouble(),
+        );
+      }
+
+      final step = data['step'];
+      if (step is int && step >= 1 && step <= 4) {
+        _step = step;
+      }
+    } catch (_) {
+      // Ignore corrupt drafts.
+    }
+  }
+
+  Future<void> _saveDraft({bool showSnack = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = <String, dynamic>{
+      'step': _step,
+      'kitchenName': _kitchenNameController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'phoneNumber': _phoneController.text.trim(),
+      'addressLine': _addressController.text.trim(),
+      'regionName': _location.regionName,
+      'latitude': _location.latitude,
+      'longitude': _location.longitude,
+      'logoUrl': _logoController.text.trim(),
+      'coverImageUrl': _coverController.text.trim(),
+      'instapayHandle': _instapayHandleController.text.trim(),
+      'instapayLink': _instapayLinkController.text.trim(),
+      'nationalIdImageUrl': _nationalIdController.text.trim(),
+    };
+    await prefs.setString(kitchenOnboardingDraftKey, jsonEncode(payload));
+    if (showSnack && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حفظ المسودة')),
+      );
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(kitchenOnboardingDraftKey);
+  }
+
+  Future<void> _openWizardAfterReject() async {
+    await _loadDraft(mergeWithProfile: true);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _showWizard = true;
+      _step = 1;
+    });
+  }
+
+  Future<void> _goToStep(int next) async {
+    await _saveDraft();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _step = next.clamp(1, 4));
+  }
+
+  bool _validateCurrentStep() {
+    if (_step == 1) {
+      if (_kitchenNameController.text.trim().isEmpty ||
+          _phoneController.text.trim().isEmpty ||
+          _addressController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('يرجى استكمال الحقول المطلوبة')),
+        );
+        return false;
+      }
+      final locationError = assertObourLocation(
+        _location.cityName,
+        _location.regionName,
+      );
+      if (locationError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(locationError)),
+        );
+        return false;
       }
     }
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إعداد المطبخ'),
+        title: const Text(kitchenOnboardingScreenTitle),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : (!_showWizard && _hasServerProfile)
+              ? _buildStatusGate()
+              : Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      _buildProgress(),
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.all(20),
+                          children: [
+                            Text(
+                              kitchenOnboardingSteps[_step - 1].title,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 16),
+                            if (_step == 1) ..._buildStep1(),
+                            if (_step == 2) ..._buildStep2(),
+                            if (_step == 3) ..._buildStep3(),
+                            if (_step == 4) ..._buildStep4(),
+                          ],
+                        ),
+                      ),
+                      _buildBottomBar(),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _buildStatusGate() {
+    final status = _approvalStatus;
+    if (status == 'PENDING') {
+      return _statusCard(
+        color: const Color(0xFFFFF8E1),
+        title: kitchenStatusPending,
+        body: kitchenStatusPendingBody,
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(kitchenOnboardingReturn),
+          ),
+        ],
+      );
+    }
+    if (status == 'APPROVED') {
+      return _statusCard(
+        color: const Color(0xFFE8F5E9),
+        title: kitchenStatusApproved,
+        body: kitchenStatusApprovedBody,
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(kitchenOnboardingReturn),
+          ),
+        ],
+      );
+    }
+    // REJECTED
+    return _statusCard(
+      color: const Color(0xFFFFEBEE),
+      title: kitchenStatusRejected,
+      body: (_rejectionReason?.isNotEmpty ?? false)
+          ? 'سبب الرفض: $_rejectionReason'
+          : 'تم رفض اعتماد المطبخ. عدّل البيانات وأعد الإرسال.',
+      titleColor: const Color(0xFFC62828),
+      actions: [
+        FilledButton(
+          onPressed: _openWizardAfterReject,
+          child: const Text(kitchenOnboardingEditResubmit),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusCard({
+    required Color color,
+    required String title,
+    required String body,
+    required List<Widget> actions,
+    Color? titleColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Card(
+        color: color,
+        child: Padding(
           padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: titleColor ?? TakkaColors.ink,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: const TextStyle(height: 1.6, fontSize: 15),
+              ),
+              const SizedBox(height: 20),
+              ...actions,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgress() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$_step / 4',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: TakkaColors.muted,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: _step / 4,
+              minHeight: 8,
+              backgroundColor: TakkaColors.softLine,
+              color: TakkaColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildStep1() {
+    return [
+      _field(_kitchenNameController, 'اسم المطبخ', required: true),
+      _field(_descriptionController, 'الوصف', maxLines: 3),
+      _field(_phoneController, 'رقم الهاتف', required: true),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_approvalStatus == 'REJECTED' &&
-                (_rejectionReason?.isNotEmpty ?? false))
-              Card(
-                color: const Color(0xFFFFEBEE),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'تم رفض اعتماد المطبخ.\nالسبب: $_rejectionReason\nعدّل البيانات وأعد الإرسال للمراجعة.',
-                    style: const TextStyle(
-                      color: Color(0xFFC62828),
-                      height: 1.5,
+            Text(
+              'موقع المطبخ (يظهر للعملاء في نفس الحي)',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'اختر الحي الذي يعمل فيه المطبخ. العملاء الذين يختارون نفس الحي سيرون مطبخك ضمن «مطابخ قريبة منك».',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: TakkaColors.muted,
+                    height: 1.5,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            ObourLocationPicker(
+              initialRegionName: _location.regionName,
+              initialLatitude: _location.latitude,
+              initialLongitude: _location.longitude,
+              onChanged: (selection) {
+                setState(() => _location = selection);
+                _saveDraft();
+              },
+            ),
+          ],
+        ),
+      ),
+      _field(_addressController, 'العنوان', maxLines: 2, required: true),
+    ];
+  }
+
+  List<Widget> _buildStep2() {
+    return [
+      _imageField(
+        _logoController,
+        'لوجو المطبخ',
+        'kitchenLogo',
+        kitchenUploadCriteriaLogo,
+      ),
+      _imageField(
+        _coverController,
+        'صورة الغلاف',
+        'kitchenCover',
+        kitchenUploadCriteriaCover,
+      ),
+    ];
+  }
+
+  List<Widget> _buildStep3() {
+    return [
+      _field(_instapayHandleController, 'معرّف InstaPay'),
+      _field(_instapayLinkController, 'رابط الدفع'),
+      _imageField(
+        _nationalIdController,
+        'صورة البطاقة الشخصية',
+        'kitchenDocument',
+        kitchenUploadCriteriaNationalId,
+      ),
+    ];
+  }
+
+  List<Widget> _buildStep4() {
+    return [
+      _summaryRow('اسم المطبخ', _kitchenNameController.text),
+      _summaryRow('الوصف', _descriptionController.text),
+      _summaryRow('رقم الهاتف', _phoneController.text),
+      _summaryRow('الحي', _location.regionName),
+      _summaryRow('العنوان', _addressController.text),
+      _summaryRow('اللوجو', _logoController.text),
+      _summaryRow('الغلاف', _coverController.text),
+      _summaryRow('معرّف InstaPay', _instapayHandleController.text),
+      _summaryRow('رابط الدفع', _instapayLinkController.text),
+      _summaryRow('صورة البطاقة', _nationalIdController.text),
+    ];
+  }
+
+  Widget _summaryRow(String label, String value) {
+    final display = value.trim().isEmpty ? '—' : value.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: TakkaColors.muted,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            display,
+            style: const TextStyle(height: 1.45, fontSize: 15),
+          ),
+          const Divider(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OutlinedButton(
+              onPressed: _isSaving ? null : () => _saveDraft(showSnack: true),
+              child: const Text(kitchenOnboardingSaveDraft),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (_step > 1)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () => _goToStep(_step - 1),
+                      child: const Text(kitchenOnboardingBack),
                     ),
                   ),
-                ),
-              ),
-            if (_approvalStatus == 'PENDING')
-              const Card(
-                color: Color(0xFFFFF8E1),
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'المطبخ قيد مراجعة الإدارة. بعد الاعتماد يمكنك إضافة الأصناف.',
-                    style: TextStyle(height: 1.5),
+                if (_step > 1) const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: _isSaving
+                        ? null
+                        : () async {
+                            if (_step < 4) {
+                              if (!_validateCurrentStep()) {
+                                return;
+                              }
+                              await _goToStep(_step + 1);
+                              return;
+                            }
+                            await _save();
+                          },
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _step < 4
+                                ? kitchenOnboardingNext
+                                : kitchenOnboardingSubmit,
+                          ),
                   ),
                 ),
-              ),
-            _field(_kitchenNameController, 'اسم المطبخ'),
-            _field(_descriptionController, 'الوصف', maxLines: 3),
-            _field(_phoneController, 'رقم الهاتف'),
-            if (_locationReady)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'موقع المطبخ (يظهر للعملاء في نفس الحي)',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'اختر الحي الذي يعمل فيه المطبخ. العملاء الذين يختارون نفس الحي سيرون مطبخك ضمن «مطابخ قريبة منك».',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: TakkaColors.muted,
-                            height: 1.5,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    ObourLocationPicker(
-                      initialRegionName: _location.regionName,
-                      initialLatitude: _location.latitude,
-                      initialLongitude: _location.longitude,
-                      onChanged: (selection) {
-                        setState(() => _location = selection);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            _field(_addressController, 'العنوان', maxLines: 2),
-            _imageField(
-              _logoController,
-              'رابط اللوجو',
-              'kitchenLogo',
-            ),
-            _imageField(
-              _coverController,
-              'رابط صورة الغلاف',
-              'kitchenCover',
-            ),
-            _field(_instapayHandleController, 'معرّف InstaPay'),
-            _field(_instapayLinkController, 'رابط الدفع'),
-            _imageField(
-              _nationalIdController,
-              'رابط صورة البطاقة',
-              'kitchenDocument',
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _isSaving ? null : _save,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: Text(
-                _isSaving ? 'جارٍ الحفظ...' : 'حفظ وإرسال للاعتماد',
-              ),
+              ],
             ),
           ],
         ),
@@ -206,22 +588,28 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     TextEditingController controller,
     String label, {
     int maxLines = 1,
+    bool required = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        validator: (value) {
-          if ((label == 'اسم المطبخ' ||
-                  label == 'رقم الهاتف' ||
-                  label == 'العنوان') &&
-              (value == null || value.trim().isEmpty)) {
-            return 'هذا الحقل مطلوب';
+      child: Focus(
+        onFocusChange: (hasFocus) {
+          if (!hasFocus) {
+            _saveDraft();
           }
-          return null;
         },
-        decoration: InputDecoration(labelText: label),
+        child: TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          onTapOutside: (_) => _saveDraft(),
+          validator: (value) {
+            if (required && (value == null || value.trim().isEmpty)) {
+              return 'هذا الحقل مطلوب';
+            }
+            return null;
+          },
+          decoration: InputDecoration(labelText: label),
+        ),
       ),
     );
   }
@@ -230,12 +618,24 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     TextEditingController controller,
     String label,
     String purpose,
+    String criteria,
   ) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _field(controller, label),
         Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            criteria,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: TakkaColors.muted,
+                  height: 1.5,
+                ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
           child: Align(
             alignment: Alignment.centerRight,
             child: OutlinedButton.icon(
@@ -288,6 +688,8 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
           'nationalIdImageUrl': _nationalIdController.text.trim(),
         },
       );
+
+      await _clearDraft();
 
       if (!mounted) {
         return;
@@ -386,6 +788,7 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       if (url != null && mounted) {
         controller.text = url;
         setState(() {});
+        await _saveDraft();
       }
     } catch (error) {
       if (!mounted) {

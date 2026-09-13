@@ -393,6 +393,22 @@ class OrderService {
     }
   }
 
+  Future<void> cancelOrder({
+    required String sessionToken,
+    required String orderId,
+  }) async {
+    final response = await http.post(
+      _buildUri('/api/orders/$orderId/cancel'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to cancel order: ${response.body}');
+    }
+  }
+
   Future<void> submitReview({
     required String sessionToken,
     required String orderId,

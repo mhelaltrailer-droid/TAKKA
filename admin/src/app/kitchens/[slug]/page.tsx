@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { ApprovalStatus, AvailabilityStatus } from "@prisma/client";
 
+import { KitchenMenuCart } from "@/components/kitchen-menu-cart";
 import { db } from "@/lib/db";
-import {
-  ORDER_READINESS_CUSTOMER_QUESTION,
-  getOrderReadinessLabel,
-} from "@/lib/order-readiness";
 
 export default async function KitchenDetailsPage({
   params,
@@ -115,56 +112,37 @@ export default async function KitchenDetailsPage({
           </div>
           <div className="mt-5">
             <Link
-              href={`/kitchens/${kitchen.slug}/order`}
+              href="/cart"
               className="inline-flex rounded-full bg-[var(--brand-primary)] px-5 py-3 text-sm font-medium text-white"
             >
-              ابدأ الطلب من هذا المطبخ
+              مراجعة السلة
             </Link>
           </div>
         </header>
 
         <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">المنيو</h2>
-            <div className="mt-5 space-y-4">
-              {kitchen.menuItems.length === 0 ? (
-                <div className="rounded-2xl bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
-                  لا توجد أصناف متاحة حاليًا.
-                </div>
-              ) : (
-                kitchen.menuItems.map((item) => (
-                  <article
-                    key={item.id}
-                    className="rounded-2xl border border-zinc-200 p-4"
-                  >
-                    <h3 className="text-lg font-semibold">{item.name}</h3>
-                    <p className="mt-2 text-sm leading-7 text-zinc-600">
-                      {item.description || "لا يوجد وصف للصنف."}
-                    </p>
-                    <div className="mt-3 text-sm text-zinc-700">
-                      <p>السعر: {String(item.basePrice)} جنيه</p>
-                      <p>العربون: {String(item.depositAmount)} جنيه</p>
-                      <p>
-                        {ORDER_READINESS_CUSTOMER_QUESTION}{" "}
-                        {getOrderReadinessLabel(item.orderReadiness)}
-                      </p>
-                    </div>
-                    {item.sizes.length ? (
-                      <div className="mt-3 rounded-xl bg-zinc-50 px-3 py-3 text-xs text-zinc-600">
-                        {item.sizes.map((size) => (
-                          <div key={size.id}>
-                            {size.sizeName}: {String(size.price)} جنيه
-                            {size.depositAmount
-                              ? ` | عربون ${String(size.depositAmount)}`
-                              : ""}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                ))
-              )}
-            </div>
+            <KitchenMenuCart
+              kitchenId={kitchen.id}
+              kitchenName={kitchen.kitchenName}
+              kitchenSlug={kitchen.slug}
+              menuItems={kitchen.menuItems.map((item) => ({
+                id: item.id,
+                name: item.name,
+                description: item.description,
+                basePrice: String(item.basePrice),
+                depositAmount: String(item.depositAmount),
+                orderReadiness: item.orderReadiness,
+                sizes: item.sizes.map((size) => ({
+                  id: size.id,
+                  sizeName: size.sizeName,
+                  price: String(size.price),
+                  depositAmount: size.depositAmount
+                    ? String(size.depositAmount)
+                    : null,
+                })),
+              }))}
+            />
           </div>
 
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

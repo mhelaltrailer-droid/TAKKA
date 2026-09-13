@@ -6,6 +6,7 @@ import { isClerkConfigured } from "@/lib/clerk";
 
 const customerTopLinks = [
   { href: "/kitchens", label: "المطابخ" },
+  { href: "/cart", label: "السلة" },
   { href: "/orders", label: "طلباتي" },
   { href: "/account", label: "حسابي" },
   { href: "/addresses", label: "عناويني" },

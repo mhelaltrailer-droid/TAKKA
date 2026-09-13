@@ -2,14 +2,7 @@ import { db } from "@/lib/db";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
 
 export async function ensureDefaultObourDistricts() {
-  const existing = await db.region.count({
-    where: { cityName: OBOUR_CITY_NAME },
-  });
-
-  if (existing > 0) {
-    return;
-  }
-
+  // Always upsert defaults so newly added catalog names appear on existing DBs.
   await db.region.createMany({
     data: OBOUR_DISTRICTS.map((regionName) => ({
       cityName: OBOUR_CITY_NAME,

@@ -52,8 +52,7 @@ export default async function MenuManagementPage() {
         <div className="mx-auto max-w-3xl rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-bold">لا يوجد مطبخ مرتبط بحسابك بعد</h1>
           <p className="mt-3 text-sm leading-7 text-zinc-600">
-            أكمل `Kitchen Onboarding` أولًا حتى نستطيع ربط الأصناف بالمطبخ
-            الصحيح.
+            أكمل إعداد المطبخ أولًا حتى نستطيع ربط الأصناف بالمطبخ الصحيح.
           </p>
           <Link
             href="/dashboard/kitchen/onboarding"
@@ -66,39 +65,64 @@ export default async function MenuManagementPage() {
     );
   }
 
+  if (kitchen.approvalStatus !== "APPROVED") {
+    return (
+      <main className="min-h-screen bg-[var(--background)] px-6 py-10">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+          <h1 className="text-2xl font-bold text-amber-950">
+            انتظر اعتماد المطبخ أولًا
+          </h1>
+          <p className="mt-3 text-sm leading-7 text-amber-900">
+            لا يمكن إضافة الأصناف قبل اعتماد المطبخ من الإدارة. تابع حالة
+            الاعتماد من شاشة إعداد المطبخ.
+          </p>
+          {kitchen.approvalStatus === "REJECTED" && kitchen.rejectionReason ? (
+            <p className="mt-3 rounded-2xl bg-white/80 px-4 py-3 text-sm leading-7 text-red-700">
+              سبب الرفض: {kitchen.rejectionReason}
+            </p>
+          ) : null}
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/kitchen/onboarding"
+              className="inline-flex rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white"
+            >
+              {kitchen.approvalStatus === "REJECTED"
+                ? "عدّل وأعد الإرسال"
+                : "متابعة حالة الاعتماد"}
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex rounded-full border border-amber-300 bg-white px-5 py-3 font-medium text-amber-950"
+            >
+              العودة إلى لوحة التحكم
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-[var(--brand-secondary)]">
-            Menu Management
+            منيو المطبخ
           </p>
           <h1 className="mt-2 text-3xl font-bold">إدارة المنيو</h1>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-600">
-            من هنا يستطيع صاحب المطبخ إضافة الأصناف، تحديد السعر، العربون،
-            الصورة، والأحجام الاختيارية. حالة الاعتماد الحالية للمطبخ:
+            أضف الأصناف، حدّد السعر والعربون والصورة والأحجام، وأرسلها للاعتماد
+            قبل ظهورها للعملاء.
           </p>
           <div className="mt-4 space-y-3">
             <StatusPill
               label={getApprovalStatusLabel(kitchen.approvalStatus)}
-              tone={
-                kitchen.approvalStatus === "APPROVED"
-                  ? "success"
-                  : kitchen.approvalStatus === "PENDING"
-                    ? "warning"
-                    : "danger"
-              }
+              tone="success"
             />
-            {kitchen.approvalStatus !== "APPROVED" ? (
-              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-900">
-                انتظر اعتماد المطبخ أولا ثم ابدأ في إضافة الأصناف
-              </div>
-            ) : null}
           </div>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          {kitchen.approvalStatus === "APPROVED" ? (
           <form
             action={createMenuItem}
             className="grid gap-6 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
@@ -252,11 +276,6 @@ export default async function MenuManagementPage() {
               <SubmitButton label="إرسال للاعتماد" pendingLabel="جارٍ الإرسال..." />
             </div>
           </form>
-          ) : (
-            <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm leading-7 text-amber-900">
-              انتظر اعتماد المطبخ أولا ثم ابدأ في إضافة الأصناف
-            </div>
-          )}
 
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between gap-4">

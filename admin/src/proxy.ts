@@ -45,7 +45,8 @@ export default clerkMiddleware(async (auth, req) => {
       pathname.startsWith("/role-setup") ||
       pathname.startsWith("/addresses") ||
       pathname.startsWith("/notifications") ||
-      pathname.startsWith("/orders")
+      pathname.startsWith("/orders") ||
+      pathname.startsWith("/cart")
     ) {
       const url = req.nextUrl.clone();
       url.pathname = "/sign-in";

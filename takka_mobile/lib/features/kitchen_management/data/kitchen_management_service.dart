@@ -150,6 +150,7 @@ class KitchenProfileData {
     required this.coverImageUrl,
     required this.instapayHandle,
     required this.instapayLink,
+    required this.nationalIdImageUrl,
     required this.approvalStatus,
     required this.rejectionReason,
   });
@@ -159,6 +160,11 @@ class KitchenProfileData {
     final paymentMethods = (json['paymentMethods'] as List<dynamic>? ?? const []);
     final payment = paymentMethods.isNotEmpty
         ? paymentMethods.first as Map<String, dynamic>
+        : const <String, dynamic>{};
+
+    final documents = (json['documents'] as List<dynamic>? ?? const []);
+    final nationalIdDoc = documents.isNotEmpty
+        ? documents.first as Map<String, dynamic>
         : const <String, dynamic>{};
 
     return KitchenProfileData(
@@ -172,6 +178,7 @@ class KitchenProfileData {
       coverImageUrl: json['coverImageUrl']?.toString(),
       instapayHandle: payment['accountNumberOrHandle']?.toString(),
       instapayLink: payment['paymentLink']?.toString(),
+      nationalIdImageUrl: nationalIdDoc['fileUrl']?.toString(),
       approvalStatus: json['approvalStatus']?.toString() ?? 'PENDING',
       rejectionReason: json['rejectionReason']?.toString(),
     );
@@ -187,6 +194,7 @@ class KitchenProfileData {
   final String? coverImageUrl;
   final String? instapayHandle;
   final String? instapayLink;
+  final String? nationalIdImageUrl;
   final String approvalStatus;
   final String? rejectionReason;
 }

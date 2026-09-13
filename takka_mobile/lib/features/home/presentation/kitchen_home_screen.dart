@@ -1,12 +1,16 @@
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/community/takka_partners_community.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../kitchen_management/data/kitchen_management_service.dart';
 import '../../kitchen_management/presentation/kitchen_menu_management_screen.dart';
 import '../../kitchen_management/presentation/kitchen_onboarding_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/kitchen_orders_screen.dart';
 
-class KitchenHomeScreen extends StatelessWidget {
+class KitchenHomeScreen extends StatefulWidget {
   const KitchenHomeScreen({
     super.key,
     required this.displayName,
@@ -17,6 +21,36 @@ class KitchenHomeScreen extends StatelessWidget {
   final String displayName;
   final VoidCallback onSignOut;
   final VoidCallback onSwitchRole;
+
+  @override
+  State<KitchenHomeScreen> createState() => _KitchenHomeScreenState();
+}
+
+class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
+  final _service = const KitchenManagementService();
+  Future<KitchenProfileData?>? _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _loadProfile();
+  }
+
+  Future<KitchenProfileData?> _loadProfile() async {
+    final authState = ClerkAuth.of(context, listen: false);
+    final token = await authState.sessionToken();
+    return _service.loadProfile(sessionToken: token.jwt);
+  }
+
+  Future<void> _openTakkaFamily() async {
+    final uri = Uri.parse(takkaPartnersCommunityUrl);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر فتح رابط مجتمع واتساب.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,12 +70,12 @@ class KitchenHomeScreen extends StatelessWidget {
             tooltip: 'الإشعارات',
           ),
           IconButton(
-            onPressed: onSwitchRole,
+            onPressed: widget.onSwitchRole,
             icon: const Icon(Icons.swap_horiz_rounded),
             tooltip: 'التحول إلى مسار العميل',
           ),
           IconButton(
-            onPressed: onSignOut,
+            onPressed: widget.onSignOut,
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'تسجيل الخروج',
           ),
@@ -50,8 +84,21 @@ class KitchenHomeScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _KitchenIntroCard(displayName: displayName),
+          _KitchenIntroCard(displayName: widget.displayName),
           const SizedBox(height: 16),
+          FutureBuilder<KitchenProfileData?>(
+            future: _profileFuture,
+            builder: (context, snapshot) {
+              final approved = snapshot.data?.approvalStatus == 'APPROVED';
+              if (!approved) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _TakkaFamilyJoinCard(onJoin: _openTakkaFamily),
+              );
+            },
+          ),
           FilledButton.icon(
             onPressed: () {
               Navigator.of(context).push(
@@ -104,6 +151,78 @@ class KitchenHomeScreen extends StatelessWidget {
             description: 'قبول الطلبات، تحديد رسوم التوصيل، ومتابعة الحالات.',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TakkaFamilyJoinCard extends StatelessWidget {
+  const _TakkaFamilyJoinCard({
+    required this.onJoin,
+  });
+
+  final VoidCallback onJoin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFFECFDF5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Color(0xFFA7F3D0)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: TakkaColors.primary.withValues(alpha: 0.15),
+                  child: Icon(
+                    Icons.groups_2_outlined,
+                    color: TakkaColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    takkaFamilyJoinTitle,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              takkaFamilyJoinBody,
+              style: TextStyle(height: 1.55),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              takkaFamilyJoinNote,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: onJoin,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text(takkaFamilyJoinTitle),
+            ),
+          ],
+        ),
       ),
     );
   }

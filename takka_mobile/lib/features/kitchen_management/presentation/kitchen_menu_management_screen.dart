@@ -1,10 +1,13 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/kitchen/kitchen_onboarding_copy.dart';
 import '../../../core/location/food_categories.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/order_readiness.dart';
+import '../../../core/theme/app_theme.dart';
 import '../data/kitchen_management_service.dart';
+import 'kitchen_onboarding_screen.dart';
 
 class KitchenMenuManagementScreen extends StatefulWidget {
   const KitchenMenuManagementScreen({super.key});
@@ -64,149 +67,183 @@ class _KitchenMenuManagementScreenState
       body: FutureBuilder<_MenuPageData>(
         future: _future,
         builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                snapshot.error.toString(),
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+
           final approved = snapshot.data?.kitchenApproved ?? false;
           final items = snapshot.data?.items ?? const <KitchenManagedMenuItem>[];
+
+          if (!approved) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Card(
+                color: const Color(0xFFFFF8E1),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        kitchenMenuAwaitApprovalTitle,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: TakkaColors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        kitchenMenuAwaitApprovalBody,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(height: 1.6, fontSize: 15),
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const KitchenOnboardingScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(kitchenMenuGoToOnboarding),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
 
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              if (snapshot.connectionState == ConnectionState.done &&
-                  !approved)
-                const Card(
-                  color: Color(0xFFFFF8E1),
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'انتظر اعتماد المطبخ أولا ثم ابدأ في إضافة الأصناف',
-                      style: TextStyle(height: 1.5, fontWeight: FontWeight.w600),
-                    ),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'إضافة صنف جديد',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'يُرسل الصنف للاعتماد قبل ظهوره للعملاء.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF7A5644)),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _nameController,
+                        decoration:
+                            const InputDecoration(labelText: 'اسم الصنف'),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: _categoryId,
+                        decoration: const InputDecoration(
+                          labelText: 'فئة الوجبة (تاكل ايه؟)',
+                        ),
+                        items: foodCategories
+                            .map(
+                              (category) => DropdownMenuItem(
+                                value: category.id,
+                                child: Text(
+                                  '${category.thumb} ${category.label}',
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() => _categoryId = value);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: _orderReadiness,
+                        decoration: const InputDecoration(
+                          labelText: orderReadinessFieldLabel,
+                          helperText: 'يظهر للعميل كـ «متى يكون جاهز؟»',
+                        ),
+                        items: orderReadinessOptions
+                            .map(
+                              (option) => DropdownMenuItem(
+                                value: option.id,
+                                child: Text(option.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() => _orderReadiness = value);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _descriptionController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(labelText: 'الوصف'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _priceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(labelText: 'السعر'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _depositController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration:
+                            const InputDecoration(labelText: 'العربون'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _imageController,
+                        decoration: const InputDecoration(
+                          labelText: 'رابط صورة الصنف',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _uploadMenuItemImage,
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('اختيار ورفع صورة الصنف'),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _createItem,
+                        child: const Text('إرسال للاعتماد'),
+                      ),
+                    ],
                   ),
                 ),
-              if (approved)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'إضافة صنف جديد',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'يُرسل الصنف للاعتماد قبل ظهوره للعملاء.',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF7A5644)),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _nameController,
-                          decoration:
-                              const InputDecoration(labelText: 'اسم الصنف'),
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          initialValue: _categoryId,
-                          decoration: const InputDecoration(
-                            labelText: 'فئة الوجبة (تاكل ايه؟)',
-                          ),
-                          items: foodCategories
-                              .map(
-                                (category) => DropdownMenuItem(
-                                  value: category.id,
-                                  child: Text(
-                                    '${category.thumb} ${category.label}',
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() => _categoryId = value);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          initialValue: _orderReadiness,
-                          decoration: const InputDecoration(
-                            labelText: orderReadinessFieldLabel,
-                            helperText:
-                                'يظهر للعميل كـ «متى يكون جاهز؟»',
-                          ),
-                          items: orderReadinessOptions
-                              .map(
-                                (option) => DropdownMenuItem(
-                                  value: option.id,
-                                  child: Text(option.label),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            setState(() => _orderReadiness = value);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _descriptionController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(labelText: 'الوصف'),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _priceController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: const InputDecoration(labelText: 'السعر'),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _depositController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration:
-                              const InputDecoration(labelText: 'العربون'),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _imageController,
-                          decoration: const InputDecoration(
-                            labelText: 'رابط صورة الصنف',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: _uploadMenuItemImage,
-                          icon: const Icon(Icons.photo_library_outlined),
-                          label: const Text('اختيار ورفع صورة الصنف'),
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: _createItem,
-                          child: const Text('إرسال للاعتماد'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              ),
               const SizedBox(height: 16),
-              if (snapshot.connectionState != ConnectionState.done)
-                const Center(child: CircularProgressIndicator())
-              else if (snapshot.hasError)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    snapshot.error.toString(),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else if (items.isEmpty)
+              if (items.isEmpty)
                 const Card(
                   child: Padding(
                     padding: EdgeInsets.all(24),

@@ -1,14 +1,8 @@
 import Link from "next/link";
 
-import { ObourLocationFields } from "@/components/obour-location-fields";
-import { SubmitButton } from "@/components/submit-button";
-import { StatusPill } from "@/components/status-pill";
-import { UploadField } from "@/components/upload-field";
+import { KitchenOnboardingWizard } from "@/components/kitchen-onboarding-wizard";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getApprovalStatusLabel } from "@/lib/status-labels";
-
-import { saveKitchenOnboarding } from "./actions";
 
 export default async function KitchenOnboardingPage() {
   const user = await requireAuth();
@@ -34,35 +28,13 @@ export default async function KitchenOnboardingPage() {
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-[var(--brand-secondary)]">
-            Kitchen Onboarding
+            شركاء تكة
           </p>
           <h1 className="mt-2 text-3xl font-bold">إعداد حساب المطبخ</h1>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-600">
-            هذه أول نسخة عملية من رحلة تسجيل المطبخ. يتم هنا حفظ بيانات
-            المطبخ، بيانات `InstaPay`، ومستند البطاقة الشخصية، ثم يوضع الحساب في
-            انتظار اعتماد الإدارة.
+            أكمل بيانات مطبخك على خطوات واضحة: البيانات والحي، الصور، الدفع
+            والهوية، ثم المراجعة والإرسال لاعتماد الإدارة.
           </p>
-          {kitchen ? (
-            <div className="mt-4 space-y-3">
-              <StatusPill
-                label={getApprovalStatusLabel(kitchen.approvalStatus)}
-                tone={
-                  kitchen.approvalStatus === "APPROVED"
-                    ? "success"
-                    : kitchen.approvalStatus === "PENDING"
-                      ? "warning"
-                      : "danger"
-                }
-              />
-              {kitchen.approvalStatus === "REJECTED" && kitchen.rejectionReason ? (
-                <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm leading-7 text-red-700">
-                  سبب الرفض: {kitchen.rejectionReason}
-                  <br />
-                  عدّل البيانات وأعد الإرسال ليتم مراجعتها مجددًا.
-                </div>
-              ) : null}
-            </div>
-          ) : null}
           <div className="mt-4">
             <Link
               href="/dashboard"
@@ -73,133 +45,24 @@ export default async function KitchenOnboardingPage() {
           </div>
         </header>
 
-        <form
-          action={saveKitchenOnboarding}
-          className="grid gap-6 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-        >
-          <section className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="kitchenName" className="block text-sm font-medium">
-                اسم المطبخ
-              </label>
-              <input
-                id="kitchenName"
-                name="kitchenName"
-                defaultValue={kitchen?.kitchenName ?? ""}
-                required
-                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="phoneNumber" className="block text-sm font-medium">
-                رقم الهاتف
-              </label>
-              <input
-                id="phoneNumber"
-                name="phoneNumber"
-                defaultValue={kitchen?.phoneNumber ?? ""}
-                required
-                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-              />
-            </div>
-          </section>
-
-          <div className="space-y-2">
-            <label htmlFor="description" className="block text-sm font-medium">
-              وصف المطبخ
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              rows={4}
-              defaultValue={kitchen?.description ?? ""}
-              className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-            />
-          </div>
-
-          <ObourLocationFields
-            defaultRegionName={kitchen?.region.regionName ?? ""}
-            defaultLatitude={kitchen?.latitude}
-            defaultLongitude={kitchen?.longitude}
-          />
-          <p className="text-sm leading-6 text-zinc-500">
-            اختر الحي الذي يعمل فيه المطبخ. العملاء الذين يختارون نفس الحي
-            سيرون المطبخ ضمن «مطابخ قريبة منك».
-          </p>
-
-          <div className="space-y-2">
-            <label htmlFor="addressLine" className="block text-sm font-medium">
-              العنوان التفصيلي
-            </label>
-            <input
-              id="addressLine"
-              name="addressLine"
-              defaultValue={kitchen?.addressLine ?? ""}
-              required
-              className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-            />
-          </div>
-
-          <section className="grid gap-6 md:grid-cols-2">
-            <UploadField
-              endpoint="kitchenLogo"
-              inputName="logoUrl"
-              label="لوجو المطبخ"
-              defaultValue={kitchen?.logoUrl}
-              helpText="ارفع لوجو واضح للمطبخ. يفضل أن يكون مربعًا وخفيف الحجم."
-            />
-
-            <UploadField
-              endpoint="kitchenCover"
-              inputName="coverImageUrl"
-              label="صورة الغلاف"
-              defaultValue={kitchen?.coverImageUrl}
-              helpText="استخدم صورة تعبر عن المطبخ أو المنتجات الرئيسية."
-            />
-          </section>
-
-          <section className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="instapayHandle" className="block text-sm font-medium">
-                رقم الحساب أو Handle على InstaPay
-              </label>
-              <input
-                id="instapayHandle"
-                name="instapayHandle"
-                defaultValue={paymentMethod?.accountNumberOrHandle ?? ""}
-                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="instapayLink" className="block text-sm font-medium">
-                رابط InstaPay
-              </label>
-              <input
-                id="instapayLink"
-                name="instapayLink"
-                defaultValue={paymentMethod?.paymentLink ?? ""}
-                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none ring-0"
-              />
-            </div>
-          </section>
-
-          <UploadField
-            endpoint="kitchenDocument"
-            inputName="nationalIdImageUrl"
-            label="صورة البطاقة الشخصية"
-            defaultValue={nationalIdDocument?.fileUrl}
-            helpText="هذه الصورة تستخدم فقط لأغراض الاعتماد الإداري ولا تظهر للعملاء."
-          />
-
-          <div className="flex items-center justify-between gap-4 rounded-2xl bg-zinc-50 px-4 py-4">
-            <div className="text-sm text-zinc-600">
-              {kitchen ? "سيتم تحديث بيانات المطبخ الحالية." : "سيتم إنشاء مطبخ جديد وربطه بحسابك."}
-            </div>
-            <SubmitButton label="حفظ وإرسال للاعتماد" />
-          </div>
-        </form>
+        <KitchenOnboardingWizard
+          initial={{
+            approvalStatus: kitchen?.approvalStatus ?? null,
+            rejectionReason: kitchen?.rejectionReason ?? null,
+            kitchenName: kitchen?.kitchenName ?? "",
+            description: kitchen?.description ?? "",
+            phoneNumber: kitchen?.phoneNumber ?? "",
+            regionName: kitchen?.region.regionName ?? "",
+            addressLine: kitchen?.addressLine ?? "",
+            latitude: kitchen?.latitude ?? null,
+            longitude: kitchen?.longitude ?? null,
+            logoUrl: kitchen?.logoUrl ?? "",
+            coverImageUrl: kitchen?.coverImageUrl ?? "",
+            instapayHandle: paymentMethod?.accountNumberOrHandle ?? "",
+            instapayLink: paymentMethod?.paymentLink ?? "",
+            nationalIdImageUrl: nationalIdDocument?.fileUrl ?? "",
+          }}
+        />
       </div>
     </main>
   );

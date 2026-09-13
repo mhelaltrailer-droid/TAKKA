@@ -16,6 +16,8 @@ type ObourLocationFieldsProps = {
   onRegionChange?: (regionName: string) => void;
   onCoordsChange?: (coords: { latitude: number; longitude: number } | null) => void;
   showDetectButton?: boolean;
+  /** When false, location values are not posted (parent supplies hidden inputs). */
+  submitFields?: boolean;
   className?: string;
 };
 
@@ -31,6 +33,7 @@ export function ObourLocationFields({
   onRegionChange,
   onCoordsChange,
   showDetectButton = true,
+  submitFields = true,
   className,
 }: ObourLocationFieldsProps) {
   const isControlled =
@@ -116,7 +119,9 @@ export function ObourLocationFields({
     <div className={className ?? "space-y-4"}>
       <div className="space-y-2">
         <label className="block text-sm font-medium">المدينة</label>
-        <input type="hidden" name={cityFieldName} value={OBOUR_CITY_NAME} />
+        {submitFields ? (
+          <input type="hidden" name={cityFieldName} value={OBOUR_CITY_NAME} />
+        ) : null}
         <div className="w-full rounded-2xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
           {OBOUR_CITY_NAME}
         </div>
@@ -128,8 +133,8 @@ export function ObourLocationFields({
         </label>
         <select
           id={regionFieldName}
-          name={regionFieldName}
-          required
+          name={submitFields ? regionFieldName : undefined}
+          required={submitFields}
           value={selectedRegion}
           onChange={(event) => setRegion(event.target.value)}
           className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
@@ -145,8 +150,16 @@ export function ObourLocationFields({
         </select>
       </div>
 
-      <input type="hidden" name={latitudeFieldName} value={latitude ?? ""} />
-      <input type="hidden" name={longitudeFieldName} value={longitude ?? ""} />
+      {submitFields ? (
+        <>
+          <input type="hidden" name={latitudeFieldName} value={latitude ?? ""} />
+          <input
+            type="hidden"
+            name={longitudeFieldName}
+            value={longitude ?? ""}
+          />
+        </>
+      ) : null}
 
       {showDetectButton ? (
         <div className="space-y-2">

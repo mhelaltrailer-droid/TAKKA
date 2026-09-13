@@ -5,7 +5,9 @@ import { useMemo, useState } from "react";
 import type { OrderStatus } from "@prisma/client";
 
 import {
-  getOrderStatusLabel,
+  getCustomerOrderStatusLabel,
+} from "@/lib/customer-order-status";
+import {
   isActiveOrderStatus,
   isPreviousOrderStatus,
 } from "@/lib/order-status";
@@ -68,9 +70,6 @@ export function MyOrdersClient({ orders }: { orders: MyOrderListItem[] }) {
       ) : (
         <section className="space-y-4">
           {filtered.map((order) => {
-            const cancelled =
-              order.status.startsWith("CANCELLED") ||
-              order.status === "REJECTED_BY_KITCHEN";
             return (
               <article
                 key={order.id}
@@ -89,7 +88,10 @@ export function MyOrdersClient({ orders }: { orders: MyOrderListItem[] }) {
                     </p>
                   </div>
                   <span className="rounded-full bg-[#f2f2f2] px-3 py-1 text-xs font-semibold text-[#4a2e22]">
-                    {cancelled ? "تم الإلغاء" : getOrderStatusLabel(order.status)}
+                    {getCustomerOrderStatusLabel(
+                      order.status,
+                      order.deliveryType,
+                    )}
                   </span>
                 </div>
 

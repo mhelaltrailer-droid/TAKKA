@@ -6,6 +6,7 @@ import { OrderStatus } from "@prisma/client";
 
 import { LiveNotificationBell } from "@/components/live-notification-bell";
 import { StatusPill } from "@/components/status-pill";
+import { TakkaFamilyJoinCard } from "@/components/takka-family-join-card";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getRoleLabel } from "@/lib/roles";
@@ -152,6 +153,9 @@ export default async function DashboardPage() {
 
         {user.role === "kitchen_owner" ? (
           <>
+            {kitchen?.approvalStatus === "APPROVED" ? (
+              <TakkaFamilyJoinCard />
+            ) : null}
             <section className="grid gap-4 md:grid-cols-3">
               <div className="border border-[#ead9c8] bg-white p-5 md:col-span-2">
                 <h2 className="text-xl font-bold">

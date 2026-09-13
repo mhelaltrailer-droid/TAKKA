@@ -276,12 +276,24 @@ class _MenuItemCard extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '$orderReadinessCustomerQuestion ${orderReadinessLabel(item.orderReadiness)}',
-              style: TextStyle(
-                color: Colors.grey.shade800,
-                fontWeight: FontWeight.w600,
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F9FF),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFBAE6FD)),
+                ),
+                child: Text(
+                  '$orderReadinessCustomerQuestion ${orderReadinessLabel(item.orderReadiness)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0C4A6E),
+                  ),
+                ),
               ),
             ),
             if (item.sizes.isNotEmpty) ...[

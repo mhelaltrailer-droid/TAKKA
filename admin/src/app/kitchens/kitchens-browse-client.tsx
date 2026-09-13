@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 
 import { DeliveryLocationHeader } from "@/components/delivery-location-header";
 import { FoodCategoriesStrip } from "@/components/food-categories-strip";
@@ -10,6 +10,11 @@ import {
   type PromoSlide,
 } from "@/components/promo-carousel";
 import { FOOD_CATEGORIES, getFoodCategoryByLabel } from "@/lib/food-categories";
+import {
+  getNearbyDistrictNames,
+  kitchenMatchesAnyDistrict,
+  kitchenMatchesDistrict,
+} from "@/lib/obour-nearby-districts";
 
 export type BrowseKitchen = {
   id: string;
@@ -93,6 +98,16 @@ function KitchenCard({ kitchen }: { kitchen: BrowseKitchen }) {
   );
 }
 
+function KitchenGrid({ kitchens }: { kitchens: BrowseKitchen[] }) {
+  return (
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      {kitchens.map((kitchen) => (
+        <KitchenCard key={kitchen.id} kitchen={kitchen} />
+      ))}
+    </div>
+  );
+}
+
 export function KitchensBrowseClient({
   kitchens,
   promos,
@@ -104,18 +119,52 @@ export function KitchensBrowseClient({
 
   const nearbyKitchens = useMemo(() => {
     if (!district) {
-      return [];
+      return kitchens.filter(
+        (kitchen) =>
+          !categoryLabel || matchesCategory(kitchen, categoryLabel),
+      );
     }
     return kitchens.filter(
       (kitchen) =>
-        kitchen.region.regionName === district &&
+        kitchenMatchesDistrict(kitchen.region.regionName, district) &&
         (!categoryLabel || matchesCategory(kitchen, categoryLabel)),
     );
   }, [categoryLabel, district, kitchens]);
 
+  const adjacentKitchens = useMemo(() => {
+    if (!district || nearbyKitchens.length > 0) {
+      return [];
+    }
+    const adjacentNames = getNearbyDistrictNames(district);
+    if (adjacentNames.length === 0) {
+      return [];
+    }
+    return kitchens.filter(
+      (kitchen) =>
+        kitchenMatchesAnyDistrict(kitchen.region.regionName, adjacentNames) &&
+        (!categoryLabel || matchesCategory(kitchen, categoryLabel)),
+    );
+  }, [categoryLabel, district, kitchens, nearbyKitchens.length]);
+
   const allKitchens = useMemo(() => {
     return kitchens.filter((kitchen) => matchesTextSearch(kitchen, search));
   }, [kitchens, search]);
+
+  const showAdjacentFallback =
+    Boolean(district) &&
+    nearbyKitchens.length === 0 &&
+    adjacentKitchens.length > 0;
+  const showCityFallback =
+    Boolean(district) &&
+    nearbyKitchens.length === 0 &&
+    adjacentKitchens.length === 0 &&
+    allKitchens.length > 0;
+
+  function scrollToAllKitchens() {
+    document
+      .getElementById("all-kitchens")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <>
@@ -149,33 +198,73 @@ export function KitchensBrowseClient({
 
       <section className="mb-10 space-y-4">
         <h2 className="text-xl font-bold text-[#3b2418]">
-          {district
+          {!district
             ? categoryLabel
+              ? `المطابخ المتاحة · ${categoryLabel}`
+              : "المطابخ المتاحة"
+            : categoryLabel
               ? `مطابخ قريبة · ${district} · ${categoryLabel}`
-              : `مطابخ قريبة منك · ${district}`
-            : "مطابخ قريبة منك"}
+              : `مطابخ قريبة منك · ${district}`}
         </h2>
 
         {!district ? (
-          <div className="border border-[#ead9c8] bg-white p-6 text-sm leading-7 text-[#6b4a3a]">
-            اختر الحي من أعلى الصفحة لعرض المطابخ القريبة عبر «تاكل ايه؟».
+          <div className="space-y-4">
+            <div className="border border-[#ead9c8] bg-white p-6 text-sm leading-7 text-[#6b4a3a]">
+              <p className="font-semibold text-[#3b2418]">اختر الحي</p>
+              <p className="mt-2">
+                لم تختر حيًا بعد — نعرض كل المطابخ المتاحة. اختر الحي من أعلى
+                الصفحة لتصفية «مطابخ قريبة منك».
+              </p>
+              <button
+                type="button"
+                onClick={scrollToAllKitchens}
+                className="mt-4 inline-flex rounded-full border border-[#ead9c8] bg-[#fff8f1] px-4 py-2 text-sm font-semibold text-[#4a2e22]"
+              >
+                استعراض كل المطابخ
+              </button>
+            </div>
+            {nearbyKitchens.length > 0 ? (
+              <KitchenGrid kitchens={nearbyKitchens} />
+            ) : (
+              <div className="border border-[#ead9c8] bg-white p-6 text-sm text-[#6b4a3a]">
+                لا توجد مطابخ متاحة حاليًا.
+              </div>
+            )}
           </div>
         ) : nearbyKitchens.length === 0 ? (
-          <div className="border border-[#ead9c8] bg-white p-6 text-sm leading-7 text-[#6b4a3a]">
-            {categoryLabel
-              ? `لا توجد مطابخ قريبة في ${district} لفئة «${categoryLabel}».`
-              : `لا توجد مطابخ مفتوحة في ${district} حاليًا.`}
+          <div className="space-y-4">
+            <div className="border border-amber-200 bg-amber-50 p-6 text-sm leading-7 text-amber-950">
+              <p className="font-semibold">
+                {categoryLabel
+                  ? `مفيش مطابخ في ${district} لفئة «${categoryLabel}».`
+                  : `مفيش مطابخ في الحي المختار (${district}).`}
+              </p>
+              <p className="mt-2">
+                {showAdjacentFallback
+                  ? "نعرض مطابخ من أحياء قريبة من حيّك."
+                  : showCityFallback
+                    ? "مفيش مطابخ في الأحياء القريبة حاليًا — نعرض كل المطابخ المتاحة."
+                    : "لا توجد مطابخ متاحة حاليًا."}
+              </p>
+              <button
+                type="button"
+                onClick={scrollToAllKitchens}
+                className="mt-4 inline-flex rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
+              >
+                استعراض كل المطابخ
+              </button>
+            </div>
+            {showAdjacentFallback ? (
+              <KitchenGrid kitchens={adjacentKitchens} />
+            ) : null}
+            {showCityFallback ? <KitchenGrid kitchens={allKitchens} /> : null}
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {nearbyKitchens.map((kitchen) => (
-              <KitchenCard key={kitchen.id} kitchen={kitchen} />
-            ))}
-          </div>
+          <KitchenGrid kitchens={nearbyKitchens} />
         )}
       </section>
 
-      <section className="space-y-4">
+      <section id="all-kitchens" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="text-xl font-bold text-[#3b2418]">استعراض المطابخ</h2>
           <p className="text-sm text-[#6b4a3a]">كل المطابخ المتاحة في العبور</p>
@@ -203,11 +292,7 @@ export function KitchensBrowseClient({
               : "لا توجد مطابخ متاحة حاليًا."}
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {allKitchens.map((kitchen) => (
-              <KitchenCard key={kitchen.id} kitchen={kitchen} />
-            ))}
-          </div>
+          <KitchenGrid kitchens={allKitchens} />
         )}
       </section>
     </>
