@@ -13,7 +13,7 @@ export default async function KitchenOrderPage({
   const user = await requireAuth();
   const { slug } = await params;
 
-  const [kitchen, addresses] = await Promise.all([
+  const [kitchen, addresses, appUser] = await Promise.all([
     db.kitchen.findFirst({
       where: {
         slug,
@@ -21,24 +21,25 @@ export default async function KitchenOrderPage({
         availabilityStatus: AvailabilityStatus.OPEN,
       },
       include: {
-        menuItems: {
-          where: {
-            isAvailable: true,
-          },
-          include: {
-            sizes: {
-              where: {
-                isActive: true,
-              },
-              orderBy: {
-                createdAt: "asc",
-              },
+      menuItems: {
+        where: {
+          isAvailable: true,
+          approvalStatus: ApprovalStatus.APPROVED,
+        },
+        include: {
+          sizes: {
+            where: {
+              isActive: true,
+            },
+            orderBy: {
+              createdAt: "asc",
             },
           },
-          orderBy: {
-            createdAt: "desc",
-          },
         },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
       },
     }),
     db.customerAddress.findMany({
@@ -49,6 +50,10 @@ export default async function KitchenOrderPage({
         region: true,
       },
       orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+    }),
+    db.user.findUnique({
+      where: { id: user.appUserId },
+      select: { phoneNumber: true },
     }),
   ]);
 
@@ -87,12 +92,14 @@ export default async function KitchenOrderPage({
 
         <CustomerOrderForm
           kitchenId={kitchen.id}
+          registeredPhone={appUser?.phoneNumber ?? null}
           menuItems={kitchen.menuItems.map((item) => ({
             id: item.id,
             name: item.name,
             description: item.description,
             basePrice: String(item.basePrice),
             depositAmount: String(item.depositAmount),
+            orderReadiness: item.orderReadiness,
             sizes: item.sizes.map((size) => ({
               id: size.id,
               sizeName: size.sizeName,
@@ -106,6 +113,8 @@ export default async function KitchenOrderPage({
             id: address.id,
             label: address.label,
             addressLine: address.addressLine,
+            latitude: address.latitude,
+            longitude: address.longitude,
             region: {
               cityName: address.region.cityName,
               regionName: address.region.regionName,

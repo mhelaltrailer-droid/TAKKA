@@ -81,6 +81,9 @@ class OrderService {
     required String deliveryType,
     String? customerAddressId,
     String? customerNotes,
+    String? customerContactPhone,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     required List<CartItem> items,
   }) async {
     final response = await http.post(
@@ -94,6 +97,9 @@ class OrderService {
         'deliveryType': deliveryType,
         'customerAddressId': customerAddressId,
         'customerNotes': customerNotes,
+        'customerContactPhone': customerContactPhone,
+        'deliveryLatitude': deliveryLatitude,
+        'deliveryLongitude': deliveryLongitude,
         'items': items
             .map(
               (item) => {
@@ -282,6 +288,27 @@ class OrderService {
     }
   }
 
+  Future<List<OrderMessageInfo>> loadOrderMessages({
+    required String sessionToken,
+    required String orderId,
+  }) async {
+    final response = await http.get(
+      _buildUri('/api/orders/$orderId/messages'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to load messages: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return (json['messages'] as List<dynamic>? ?? const [])
+        .map((item) => OrderMessageInfo.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<AppNotification>> loadNotifications({
     required String sessionToken,
   }) async {
@@ -398,6 +425,8 @@ class CustomerAddress {
     required this.cityName,
     required this.regionName,
     required this.isDefault,
+    required this.latitude,
+    required this.longitude,
   });
 
   factory CustomerAddress.fromJson(Map<String, dynamic> json) {
@@ -411,6 +440,8 @@ class CustomerAddress {
       regionName:
           region['regionName']?.toString() ?? json['regionName']?.toString() ?? '',
       isDefault: json['isDefault'] == true,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -420,6 +451,8 @@ class CustomerAddress {
   final String cityName;
   final String regionName;
   final bool isDefault;
+  final double? latitude;
+  final double? longitude;
 }
 
 class OrderCreationResult {
@@ -565,6 +598,7 @@ class OrderLineItem {
     required this.sizeName,
     required this.quantity,
     required this.lineTotal,
+    required this.customerNote,
   });
 
   factory OrderLineItem.fromJson(Map<String, dynamic> json) {
@@ -574,6 +608,7 @@ class OrderLineItem {
       sizeName: json['sizeNameSnapshot']?.toString(),
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
       lineTotal: double.tryParse(json['lineTotal']?.toString() ?? '') ?? 0,
+      customerNote: json['customerNote']?.toString(),
     );
   }
 
@@ -582,6 +617,7 @@ class OrderLineItem {
   final String? sizeName;
   final int quantity;
   final double lineTotal;
+  final String? customerNote;
 }
 
 class DepositProofInfo {
@@ -644,8 +680,12 @@ class KitchenOrderSummary {
     required this.deliveryType,
     required this.totalAmount,
     required this.customerName,
-    required this.customerContact,
+    required this.customerPhone,
+    required this.customerContactPhone,
+    required this.customerNotes,
     required this.addressLine,
+    required this.deliveryLatitude,
+    required this.deliveryLongitude,
     required this.latestDepositProof,
     required this.items,
   });
@@ -662,11 +702,12 @@ class KitchenOrderSummary {
       deliveryType: json['deliveryType']?.toString() ?? 'PICKUP',
       totalAmount: double.tryParse(json['totalAmount']?.toString() ?? '') ?? 0,
       customerName: customer['fullName']?.toString() ?? 'عميل',
-      customerContact:
-          customer['phoneNumber']?.toString() ??
-          customer['email']?.toString() ??
-          '',
+      customerPhone: customer['phoneNumber']?.toString() ?? '',
+      customerContactPhone: json['customerContactPhone']?.toString(),
+      customerNotes: json['customerNotes']?.toString(),
       addressLine: address['addressLine']?.toString(),
+      deliveryLatitude: (json['deliveryLatitude'] as num?)?.toDouble(),
+      deliveryLongitude: (json['deliveryLongitude'] as num?)?.toDouble(),
       latestDepositProof: depositProofs.isNotEmpty
           ? DepositProofInfo.fromJson(depositProofs.first as Map<String, dynamic>)
           : null,
@@ -682,8 +723,12 @@ class KitchenOrderSummary {
   final String deliveryType;
   final double totalAmount;
   final String customerName;
-  final String customerContact;
+  final String customerPhone;
+  final String? customerContactPhone;
+  final String? customerNotes;
   final String? addressLine;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
   final DepositProofInfo? latestDepositProof;
   final List<OrderLineItem> items;
 }

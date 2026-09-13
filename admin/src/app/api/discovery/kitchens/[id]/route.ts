@@ -26,6 +26,7 @@ export async function GET(
       menuItems: {
         where: {
           isAvailable: true,
+          approvalStatus: ApprovalStatus.APPROVED,
         },
         include: {
           sizes: {

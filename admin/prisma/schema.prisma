@@ -30,6 +30,13 @@ enum DeliveryType {
   DELIVERY
 }
 
+/// When the dish can be fulfilled (pickup/delivery timing expectation).
+enum OrderReadiness {
+  AVAILABLE_NOW
+  PREORDER
+  ASK_KITCHEN
+}
+
 enum OrderStatus {
   PENDING_KITCHEN_APPROVAL
   ACCEPTED_AWAITING_DEPOSIT
@@ -145,6 +152,9 @@ model Kitchen {
   longitude          Float?
   approvalStatus     ApprovalStatus        @default(PENDING)
   availabilityStatus AvailabilityStatus    @default(CLOSED)
+  /// Admin rejection note shown in-app to the kitchen owner.
+  rejectionReason    String?
+  reviewedAt         DateTime?
   averageRating      Float                 @default(0)
   reviewsCount       Int                   @default(0)
   createdAt          DateTime              @default(now())
@@ -203,8 +213,24 @@ model MenuItem {
   categoryId    String         @default("meals")
   basePrice     Decimal        @db.Decimal(10, 2)
   depositAmount Decimal        @db.Decimal(10, 2)
+  /// Kitchen-set: متاح الآن / حجز مسبق / اسأل المطبخ — shown to customers.
+  orderReadiness OrderReadiness @default(AVAILABLE_NOW)
   isAvailable   Boolean        @default(true)
   sortOrder     Int            @default(0)
+  /// New items start PENDING; existing rows default APPROVED via db push default.
+  approvalStatus ApprovalStatus @default(APPROVED)
+  rejectionReason String?
+  /// When an approved item is edited, live fields stay; pending* holds the draft.
+  draftStatus ApprovalStatus?
+  draftRejectionReason String?
+  pendingName String?
+  pendingDescription String?
+  pendingImageUrl String?
+  pendingCategoryId String?
+  pendingBasePrice Decimal? @db.Decimal(10, 2)
+  pendingDepositAmount Decimal? @db.Decimal(10, 2)
+  /// JSON array of {sizeName, price, depositAmount?} for draft sizes.
+  pendingSizesJson String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   kitchen       Kitchen        @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
@@ -240,6 +266,11 @@ model Order {
   currencyCode           String            @default("EGP")
   status                 OrderStatus       @default(PENDING_KITCHEN_APPROVAL)
   customerNotes          String?
+  /// Optional alternate contact phone for this order (in addition to account phone).
+  customerContactPhone   String?
+  /// Confirmed delivery pin for this order (required when deliveryType=DELIVERY).
+  deliveryLatitude       Float?
+  deliveryLongitude      Float?
   kitchenNotes           String?
   cancelledBy            UserRole?
   cancelReason           String?

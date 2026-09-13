@@ -89,7 +89,14 @@ class KitchenManagementService {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to create menu item: ${response.body}');
+      String message = 'Failed to create menu item';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        message = body['error']?.toString() ?? message;
+      } catch (_) {
+        message = 'Failed to create menu item: ${response.body}';
+      }
+      throw Exception(message);
     }
   }
 
@@ -143,6 +150,8 @@ class KitchenProfileData {
     required this.coverImageUrl,
     required this.instapayHandle,
     required this.instapayLink,
+    required this.approvalStatus,
+    required this.rejectionReason,
   });
 
   factory KitchenProfileData.fromJson(Map<String, dynamic> json) {
@@ -163,6 +172,8 @@ class KitchenProfileData {
       coverImageUrl: json['coverImageUrl']?.toString(),
       instapayHandle: payment['accountNumberOrHandle']?.toString(),
       instapayLink: payment['paymentLink']?.toString(),
+      approvalStatus: json['approvalStatus']?.toString() ?? 'PENDING',
+      rejectionReason: json['rejectionReason']?.toString(),
     );
   }
 
@@ -176,6 +187,8 @@ class KitchenProfileData {
   final String? coverImageUrl;
   final String? instapayHandle;
   final String? instapayLink;
+  final String approvalStatus;
+  final String? rejectionReason;
 }
 
 class KitchenManagedMenuItem {
@@ -183,9 +196,14 @@ class KitchenManagedMenuItem {
     required this.id,
     required this.name,
     required this.categoryId,
+    required this.orderReadiness,
     required this.basePrice,
     required this.depositAmount,
     required this.isAvailable,
+    required this.approvalStatus,
+    required this.rejectionReason,
+    required this.draftStatus,
+    required this.draftRejectionReason,
   });
 
   factory KitchenManagedMenuItem.fromJson(Map<String, dynamic> json) {
@@ -193,17 +211,28 @@ class KitchenManagedMenuItem {
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       categoryId: json['categoryId']?.toString() ?? 'meals',
+      orderReadiness:
+          json['orderReadiness']?.toString() ?? 'AVAILABLE_NOW',
       basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
       isAvailable: json['isAvailable'] == true,
+      approvalStatus: json['approvalStatus']?.toString() ?? 'APPROVED',
+      rejectionReason: json['rejectionReason']?.toString(),
+      draftStatus: json['draftStatus']?.toString(),
+      draftRejectionReason: json['draftRejectionReason']?.toString(),
     );
   }
 
   final String id;
   final String name;
   final String categoryId;
+  final String orderReadiness;
   final double basePrice;
   final double depositAmount;
   final bool isAvailable;
+  final String approvalStatus;
+  final String? rejectionReason;
+  final String? draftStatus;
+  final String? draftRejectionReason;
 }

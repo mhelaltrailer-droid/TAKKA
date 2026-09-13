@@ -18,7 +18,7 @@ export default async function KitchensPage() {
       include: {
         region: true,
         menuItems: {
-          where: { isAvailable: true },
+          where: { isAvailable: true, approvalStatus: ApprovalStatus.APPROVED },
           select: { name: true, categoryId: true },
           orderBy: { sortOrder: "asc" },
           take: 24,
@@ -39,7 +39,7 @@ export default async function KitchensPage() {
     <AppShell
       mode="customer"
       title="المطابخ المتاحة"
-      subtitle="اختر الحي في مدينة العبور ثم تصفّح المطابخ القريبة واطلب مباشرة."
+      subtitle="تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة."
       activeNav="home"
     >
       <KitchensBrowseClient

@@ -24,6 +24,7 @@ class CustomAuthScreen extends StatefulWidget {
 class _CustomAuthScreenState extends State<CustomAuthScreen> {
   late AuthMode _mode;
   var _step = _SignUpStep.details;
+  var _signInStep = _SignInStep.credentials;
   var _forgotStep = _ForgotStep.email;
 
   final _fullNameController = TextEditingController();
@@ -60,6 +61,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     setState(() {
       _mode = mode;
       _step = _SignUpStep.details;
+      _signInStep = _SignInStep.credentials;
       _forgotStep = _ForgotStep.email;
       _error = null;
       _info = null;
@@ -72,6 +74,17 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
   }
 
   Future<void> _submitSignIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _error = 'أدخل بريدًا إلكترونيًا صالحًا.');
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _error = 'أدخل كلمة المرور.');
+      return;
+    }
+
     final authState = ClerkAuth.of(context, listen: false);
     setState(() {
       _isSubmitting = true;
@@ -85,8 +98,79 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         () async {
           await authState.attemptSignIn(
             strategy: clerk.Strategy.password,
-            identifier: _emailController.text.trim(),
-            password: _passwordController.text,
+            identifier: email,
+            password: password,
+          );
+
+          // Native apps often require Clerk client-trust email code after password.
+          final signIn = authState.signIn;
+          if (authState.user == null && signIn != null && signIn.needsFactor) {
+            await authState.attemptSignIn(strategy: clerk.Strategy.emailCode);
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() => _error = error.message);
+          }
+        },
+      );
+
+      if (!mounted) return;
+      if (authState.user != null) {
+        Navigator.of(context).pop();
+        return;
+      }
+
+      if (_error != null) {
+        return;
+      }
+
+      final signIn = authState.signIn;
+      if (signIn != null && signIn.needsFactor) {
+        setState(() {
+          _signInStep = _SignInStep.verify;
+          _info = 'أرسلنا رمز تأكيد إلى بريدك لإكمال تسجيل الدخول من التطبيق.';
+          _codeController.clear();
+        });
+        return;
+      }
+
+      setState(() {
+        _error =
+            'تعذر إكمال تسجيل الدخول${signIn != null ? ' (${signIn.status.name})' : ''}. تحقق من البيانات أو جرّب إعادة تعيين كلمة المرور.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _submitSignInVerify() async {
+    final code = _codeController.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = 'أدخل رمز التأكيد.');
+      return;
+    }
+
+    final authState = ClerkAuth.of(context, listen: false);
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+      _info = null;
+    });
+
+    try {
+      await authState.safelyCall(
+        context,
+        () async {
+          await authState.attemptSignIn(
+            strategy: clerk.Strategy.emailCode,
+            code: code,
           );
         },
         onError: (error) {
@@ -99,8 +183,13 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       if (!mounted) return;
       if (authState.user != null) {
         Navigator.of(context).pop();
-      } else if (_error == null) {
-        setState(() => _error = 'تعذر إكمال تسجيل الدخول.');
+        return;
+      }
+
+      if (_error == null) {
+        setState(() {
+          _error = 'لم يكتمل التحقق بعد. تأكد من الرمز وحاول مجددًا.';
+        });
       }
     } catch (error) {
       if (mounted) {
@@ -348,28 +437,36 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     final theme = Theme.of(context);
     final isSignUp = _mode == AuthMode.signUp;
     final isForgot = _mode == AuthMode.forgotPassword;
-    final showingVerify = isSignUp && _step == _SignUpStep.verify;
+    final isSignIn = _mode == AuthMode.signIn;
+    final showingSignUpVerify = isSignUp && _step == _SignUpStep.verify;
+    final showingSignInVerify =
+        isSignIn && _signInStep == _SignInStep.verify;
+    final showingVerify = showingSignUpVerify || showingSignInVerify;
     final showingForgotReset = isForgot && _forgotStep == _ForgotStep.reset;
 
-    final title = showingVerify
-        ? 'تأكيد الحساب'
-        : showingForgotReset
-            ? 'تعيين كلمة مرور جديدة'
-            : isForgot
-                ? 'نسيت كلمة المرور'
-                : isSignUp
-                    ? 'إنشاء حساب'
-                    : 'تسجيل الدخول';
+    final title = showingSignInVerify
+        ? 'تأكيد تسجيل الدخول'
+        : showingSignUpVerify
+            ? 'تأكيد الحساب'
+            : showingForgotReset
+                ? 'تعيين كلمة مرور جديدة'
+                : isForgot
+                    ? 'نسيت كلمة المرور'
+                    : isSignUp
+                        ? 'إنشاء حساب'
+                        : 'تسجيل الدخول';
 
-    final subtitle = showingVerify
-        ? 'أرسلنا رمز التأكيد إلى بريدك الإلكتروني. أدخله لإكمال إنشاء الحساب.'
-        : showingForgotReset
-            ? 'أدخل الرمز المرسل إلى ${_emailController.text.trim()} ثم اختر كلمة مرور جديدة.'
-            : isForgot
-                ? 'أدخل بريدك الإلكتروني وسنرسل رمزًا لإعادة تعيين كلمة المرور.'
-                : isSignUp
-                    ? 'أدخل رقم هاتفك والاسم والإيميل. رمز التأكيد سيصل على البريد الإلكتروني.'
-                    : 'ادخل بالإيميل وكلمة المرور لمتابعة طلباتك أو إدارة مطبخك.';
+    final subtitle = showingSignInVerify
+        ? 'لحماية حسابك أرسلنا رمز تأكيد إلى ${_emailController.text.trim()}. أدخله لإكمال الدخول من التطبيق.'
+        : showingSignUpVerify
+            ? 'أرسلنا رمز التأكيد إلى بريدك الإلكتروني. أدخله لإكمال إنشاء الحساب.'
+            : showingForgotReset
+                ? 'أدخل الرمز المرسل إلى ${_emailController.text.trim()} ثم اختر كلمة مرور جديدة.'
+                : isForgot
+                    ? 'أدخل بريدك الإلكتروني وسنرسل رمزًا لإعادة تعيين كلمة المرور.'
+                    : isSignUp
+                        ? 'أدخل رقم هاتفك والاسم والإيميل. رمز التأكيد سيصل على البريد الإلكتروني.'
+                        : 'ادخل بالإيميل وكلمة المرور لمتابعة طلباتك أو إدارة مطبخك.';
 
     return Scaffold(
       backgroundColor: TakkaColors.cream,
@@ -377,7 +474,18 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         backgroundColor: TakkaColors.cream,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (showingSignInVerify) {
+              setState(() {
+                _signInStep = _SignInStep.credentials;
+                _error = null;
+                _info = null;
+                _codeController.clear();
+              });
+              return;
+            }
+            Navigator.of(context).pop();
+          },
         ),
       ),
       body: SafeArea(
@@ -410,7 +518,11 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
                       ),
                       const SizedBox(height: 22),
                       if (showingVerify)
-                        ..._buildVerifyFields()
+                        ..._buildVerifyFields(
+                          onSubmit: showingSignInVerify
+                              ? _submitSignInVerify
+                              : _submitVerification,
+                        )
                       else if (showingForgotReset)
                         ..._buildForgotResetFields()
                       else if (isForgot)
@@ -444,7 +556,9 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
                         onPressed: _isSubmitting
                             ? null
                             : () {
-                                if (showingVerify) {
+                                if (showingSignInVerify) {
+                                  _submitSignInVerify();
+                                } else if (showingSignUpVerify) {
                                   _submitVerification();
                                 } else if (showingForgotReset) {
                                   _submitForgotReset();
@@ -465,15 +579,17 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
                                       : isSignUp
                                           ? 'جارٍ إنشاء الحساب...'
                                           : 'جارٍ الدخول...')
-                              : (showingVerify
-                                  ? 'تأكيد الحساب'
-                                  : showingForgotReset
-                                      ? 'تعيين كلمة المرور'
-                                      : isForgot
-                                          ? 'إرسال رمز إعادة التعيين'
-                                          : isSignUp
-                                              ? 'متابعة'
-                                              : 'تسجيل الدخول'),
+                              : (showingSignInVerify
+                                  ? 'تأكيد الدخول'
+                                  : showingSignUpVerify
+                                      ? 'تأكيد الحساب'
+                                      : showingForgotReset
+                                          ? 'تعيين كلمة المرور'
+                                          : isForgot
+                                              ? 'إرسال رمز إعادة التعيين'
+                                              : isSignUp
+                                                  ? 'متابعة'
+                                                  : 'تسجيل الدخول'),
                         ),
                       ),
                       if (!showingVerify) ...[
@@ -739,7 +855,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     ];
   }
 
-  List<Widget> _buildVerifyFields() {
+  List<Widget> _buildVerifyFields({required VoidCallback onSubmit}) {
     return [
       _LabeledField(
         label: 'رمز التأكيد',
@@ -750,7 +866,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: const InputDecoration(hintText: '123456'),
           onSubmitted: (_) {
-            if (!_isSubmitting) _submitVerification();
+            if (!_isSubmitting) onSubmit();
           },
         ),
       ),
@@ -759,6 +875,8 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 }
 
 enum _SignUpStep { details, verify }
+
+enum _SignInStep { credentials, verify }
 
 enum _ForgotStep { email, reset }
 

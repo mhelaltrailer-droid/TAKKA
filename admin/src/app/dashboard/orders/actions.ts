@@ -341,6 +341,16 @@ export async function sendKitchenOrderMessage(formData: FormData) {
     throw new Error("المحادثة لا تفتح إلا بعد قبول الطلب.");
   }
 
+  if (
+    order.status === OrderStatus.COMPLETED ||
+    order.status === OrderStatus.CANCELLED_BEFORE_DEPOSIT ||
+    order.status === OrderStatus.CANCELLED_AFTER_DEPOSIT
+  ) {
+    throw new Error(
+      "المحادثة مغلقة بعد اكتمال الطلب. يمكنك الاطلاع على السجل فقط.",
+    );
+  }
+
   if (!messageText && !imageUrl) {
     throw new Error("أدخل رسالة أو ارفع صورة قبل الإرسال.");
   }

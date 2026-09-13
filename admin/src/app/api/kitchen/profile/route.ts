@@ -132,6 +132,8 @@ export async function POST(request: Request) {
         latitude,
         longitude,
         approvalStatus: ApprovalStatus.PENDING,
+        rejectionReason: null,
+        reviewedAt: null,
         availabilityStatus: AvailabilityStatus.CLOSED,
       },
       create: {
@@ -148,6 +150,7 @@ export async function POST(request: Request) {
         latitude,
         longitude,
         approvalStatus: ApprovalStatus.PENDING,
+        rejectionReason: null,
         availabilityStatus: AvailabilityStatus.CLOSED,
       },
     });

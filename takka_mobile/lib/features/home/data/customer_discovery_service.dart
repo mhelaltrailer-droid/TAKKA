@@ -287,6 +287,7 @@ class MenuItemSummary {
     required this.imageUrl,
     required this.basePrice,
     required this.depositAmount,
+    required this.orderReadiness,
     required this.sizes,
   });
 
@@ -299,6 +300,8 @@ class MenuItemSummary {
       basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
+      orderReadiness:
+          json['orderReadiness']?.toString() ?? 'AVAILABLE_NOW',
       sizes: (json['sizes'] as List<dynamic>? ?? const [])
           .map((item) => MenuItemSizeSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
@@ -311,6 +314,7 @@ class MenuItemSummary {
   final String? imageUrl;
   final double basePrice;
   final double depositAmount;
+  final String orderReadiness;
   final List<MenuItemSizeSummary> sizes;
 }
 

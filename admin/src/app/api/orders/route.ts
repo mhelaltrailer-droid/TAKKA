@@ -4,6 +4,11 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import {
+  isValidEgyptianPhone,
+  normalizeEgyptianPhone,
+} from "@/lib/phone";
+import { isValidLatLng } from "@/lib/maps";
 
 type CreateOrderItemInput = {
   menuItemId: string;
@@ -17,6 +22,9 @@ type CreateOrderPayload = {
   deliveryType: "pickup" | "delivery";
   customerAddressId?: string;
   customerNotes?: string;
+  customerContactPhone?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
   items: CreateOrderItemInput[];
 };
 
@@ -65,6 +73,56 @@ export async function POST(request: Request) {
       );
     }
 
+    let deliveryLatitude: number | null = null;
+    let deliveryLongitude: number | null = null;
+
+    if (deliveryType === DeliveryType.DELIVERY) {
+      if (
+        !isValidLatLng(payload.deliveryLatitude, payload.deliveryLongitude)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "موقع التوصيل مطلوب. فعّل الموقع أو حدّد نقطة على الخريطة ثم أكّدها قبل إرسال الطلب.",
+          },
+          { status: 400 },
+        );
+      }
+      deliveryLatitude = Number(payload.deliveryLatitude);
+      deliveryLongitude = Number(payload.deliveryLongitude);
+    }
+
+    const customer = await db.user.findUnique({
+      where: { id: user.appUserId },
+      select: { phoneNumber: true },
+    });
+
+    if (!customer?.phoneNumber) {
+      return NextResponse.json(
+        {
+          error:
+            "لا يوجد رقم هاتف مسجّل على حسابك. حدّث بيانات الحساب قبل إرسال الطلب.",
+        },
+        { status: 400 },
+      );
+    }
+
+    let customerContactPhone: string | null = null;
+    const rawAlt = payload.customerContactPhone?.trim() ?? "";
+    if (rawAlt) {
+      const normalized = normalizeEgyptianPhone(rawAlt);
+      if (!isValidEgyptianPhone(normalized)) {
+        return NextResponse.json(
+          {
+            error:
+              "رقم هاتف التواصل الإضافي غير صالح. يجب أن يبدأ بـ 01 ويكون 11 رقمًا.",
+          },
+          { status: 400 },
+        );
+      }
+      customerContactPhone = normalized;
+    }
+
     const requestedItemIds = payload.items.map((item) => item.menuItemId);
 
     const menuItems = await db.menuItem.findMany({
@@ -74,6 +132,7 @@ export async function POST(request: Request) {
         },
         kitchenId: kitchen.id,
         isAvailable: true,
+        approvalStatus: "APPROVED",
       },
       include: {
         sizes: {
@@ -152,6 +211,9 @@ export async function POST(request: Request) {
         totalAmount: toMoney(subtotalAmount),
         depositAmount: toMoney(depositAmount),
         customerNotes: payload.customerNotes?.trim() || null,
+        customerContactPhone,
+        deliveryLatitude,
+        deliveryLongitude,
         items: {
           create: orderItemsData.map((item) => ({
             menuItemId: item.menuItemId,

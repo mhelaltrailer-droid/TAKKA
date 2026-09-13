@@ -42,6 +42,7 @@ export async function GET(request: Request) {
                 menuItems: {
                   some: {
                     isAvailable: true,
+                    approvalStatus: ApprovalStatus.APPROVED,
                     OR: [
                       {
                         name: {
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
       menuItems: {
         where: {
           isAvailable: true,
+          approvalStatus: ApprovalStatus.APPROVED,
         },
         select: {
           id: true,

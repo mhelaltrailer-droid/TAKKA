@@ -38,4 +38,9 @@ Customer and kitchen pick district via dropdown + optional Detect location (GPS 
 - Web: `admin/src/lib/food-categories.ts`
 - Mobile: `takka_mobile/lib/core/location/food_categories.dart`
 
-Keep labels/order aligned. Tapping a category filters kitchens/meals.
+Keep labels/order aligned.
+
+Behavior on customer home:
+
+- **تاكل ايه؟** → nearby kitchens only (selected Obour district), optionally filtered by category.
+- **استعراض المطابخ** → all available (approved + open) kitchens city-wide; search applies here.

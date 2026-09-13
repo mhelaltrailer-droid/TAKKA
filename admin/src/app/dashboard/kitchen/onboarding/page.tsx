@@ -43,7 +43,7 @@ export default async function KitchenOnboardingPage() {
             انتظار اعتماد الإدارة.
           </p>
           {kitchen ? (
-            <div className="mt-4">
+            <div className="mt-4 space-y-3">
               <StatusPill
                 label={getApprovalStatusLabel(kitchen.approvalStatus)}
                 tone={
@@ -54,6 +54,13 @@ export default async function KitchenOnboardingPage() {
                       : "danger"
                 }
               />
+              {kitchen.approvalStatus === "REJECTED" && kitchen.rejectionReason ? (
+                <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm leading-7 text-red-700">
+                  سبب الرفض: {kitchen.rejectionReason}
+                  <br />
+                  عدّل البيانات وأعد الإرسال ليتم مراجعتها مجددًا.
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="mt-4">

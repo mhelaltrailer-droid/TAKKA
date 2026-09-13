@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DeliveryType, OrderStatus } from "@prisma/client";
 
+import { DeliveryLocationActions } from "@/components/delivery-location-actions";
 import { LiveRefreshListener } from "@/components/live-refresh-listener";
 import { StatusPill } from "@/components/status-pill";
 import { UploadField } from "@/components/upload-field";
@@ -24,6 +25,23 @@ import {
   updateOrderStatus,
 } from "./actions";
 
+function canSendChat(status: OrderStatus) {
+  return (
+    status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&
+    status !== OrderStatus.REJECTED_BY_KITCHEN &&
+    status !== OrderStatus.COMPLETED &&
+    status !== OrderStatus.CANCELLED_BEFORE_DEPOSIT &&
+    status !== OrderStatus.CANCELLED_AFTER_DEPOSIT
+  );
+}
+
+function canViewChat(status: OrderStatus) {
+  return (
+    status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&
+    status !== OrderStatus.REJECTED_BY_KITCHEN
+  );
+}
+
 export default async function OrdersPage() {
   const user = await requireAuth();
 
@@ -43,7 +61,11 @@ export default async function OrdersPage() {
               phoneNumber: true,
             },
           },
-          customerAddress: true,
+          customerAddress: {
+            include: {
+              region: true,
+            },
+          },
           depositProofs: {
             orderBy: {
               submittedAt: "desc",
@@ -220,14 +242,38 @@ export default async function OrdersPage() {
                             العميل: {order.customer.fullName || "غير محدد"}
                           </p>
                           <p>
-                            وسيلة التواصل:{" "}
-                            {order.customer.phoneNumber ||
-                              order.customer.email ||
-                              "غير متوفرة"}
+                            هاتف التسجيل:{" "}
+                            {order.customer.phoneNumber || "غير متوفر"}
                           </p>
+                          {order.customerContactPhone ? (
+                            <p>
+                              هاتف تواصل آخر: {order.customerContactPhone}
+                            </p>
+                          ) : null}
                           {order.customerAddress ? (
                             <p>
                               عنوان الطلب: {order.customerAddress.addressLine}
+                            </p>
+                          ) : null}
+                          {order.deliveryType === DeliveryType.DELIVERY &&
+                          order.deliveryLatitude != null &&
+                          order.deliveryLongitude != null ? (
+                            <DeliveryLocationActions
+                              latitude={order.deliveryLatitude}
+                              longitude={order.deliveryLongitude}
+                              fullAddress={[
+                                order.customerAddress?.addressLine,
+                                order.customerAddress?.landmark,
+                                order.customerAddress?.region.regionName,
+                                order.customerAddress?.region.cityName,
+                              ]
+                                .filter(Boolean)
+                                .join(" — ")}
+                            />
+                          ) : null}
+                          {order.customerNotes ? (
+                            <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-900">
+                              ملاحظات العميل: {order.customerNotes}
                             </p>
                           ) : null}
                         </div>
@@ -243,14 +289,22 @@ export default async function OrdersPage() {
                               {item.quantity}
                               {" | "}
                               {String(item.lineTotal)} جنيه
+                              {item.customerNote ? (
+                                <span className="block text-xs text-zinc-500">
+                                  ملاحظة الصنف: {item.customerNote}
+                                </span>
+                              ) : null}
                             </div>
                           ))}
                         </div>
 
                         <div className="text-sm text-zinc-700">
-                          <p>المجموع: {String(order.subtotalAmount)} جنيه</p>
-                          <p>التوصيل: {String(order.deliveryFee)} جنيه</p>
-                          <p>الإجمالي: {String(order.totalAmount)} جنيه</p>
+                          <p>سعر الأصناف: {String(order.subtotalAmount)} جنيه</p>
+                          <p>رسوم التوصيل: {String(order.deliveryFee)} جنيه</p>
+                          <p className="font-medium">
+                            الإجمالي (طلب + توصيل): {String(order.totalAmount)}{" "}
+                            جنيه
+                          </p>
                           <p>العربون: {String(order.depositAmount)} جنيه</p>
                         </div>
 
@@ -277,8 +331,7 @@ export default async function OrdersPage() {
                           </div>
                         ) : null}
 
-                        {order.status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&
-                        order.status !== OrderStatus.REJECTED_BY_KITCHEN ? (
+                        {canViewChat(order.status) ? (
                           <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4">
                             <div className="mb-3 flex items-center justify-between gap-3">
                               <p className="text-sm font-medium">محادثة الطلب</p>
@@ -306,19 +359,23 @@ export default async function OrdersPage() {
                                       </p>
                                     ) : null}
                                     {message.fileUrl ? (
-                                      <a
-                                        href={message.fileUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="mt-2 inline-flex text-xs font-medium text-[var(--brand-secondary)] underline underline-offset-4"
-                                      >
-                                        فتح الصورة
-                                      </a>
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={message.fileUrl}
+                                        alt="صورة محادثة"
+                                        className="mt-2 max-h-56 w-full rounded-xl object-contain bg-white"
+                                      />
                                     ) : null}
                                   </div>
                                 ))
                               )}
                             </div>
+                            {order.status === OrderStatus.COMPLETED ? (
+                              <p className="mt-3 text-xs text-zinc-500">
+                                المحادثة مغلقة بعد تأكيد الاستلام. السجل متاح
+                                للعرض فقط.
+                              </p>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -337,7 +394,7 @@ export default async function OrdersPage() {
                                     htmlFor={`deliveryFee-${order.id}`}
                                     className="block text-sm font-medium"
                                   >
-                                    رسوم التوصيل
+                                    رسوم التوصيل (يمكن 0)
                                   </label>
                                   <input
                                     id={`deliveryFee-${order.id}`}
@@ -345,9 +402,14 @@ export default async function OrdersPage() {
                                     type="number"
                                     min="0"
                                     step="0.01"
+                                    required
                                     defaultValue={0}
                                     className="w-full rounded-xl border border-zinc-300 px-3 py-2 outline-none"
                                   />
+                                  <p className="text-xs text-zinc-500">
+                                    انسخ موقع العميل أولاً لحساب التوصيل، ثم أدخل
+                                    الرسوم قبل القبول.
+                                  </p>
                                 </div>
                               ) : null}
                               <button
@@ -438,8 +500,7 @@ export default async function OrdersPage() {
                           </div>
                         )}
 
-                        {order.status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&
-                        order.status !== OrderStatus.REJECTED_BY_KITCHEN ? (
+                        {canSendChat(order.status) ? (
                           <form
                             action={sendKitchenOrderMessage}
                             className="rounded-2xl bg-zinc-50 p-4"

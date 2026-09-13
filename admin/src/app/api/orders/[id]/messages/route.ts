@@ -108,6 +108,20 @@ export async function POST(
       );
     }
 
+    if (
+      order.status === "COMPLETED" ||
+      order.status === "CANCELLED_BEFORE_DEPOSIT" ||
+      order.status === "CANCELLED_AFTER_DEPOSIT"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "المحادثة مغلقة بعد اكتمال الطلب. يمكنك الاطلاع على السجل فقط.",
+        },
+        { status: 400 },
+      );
+    }
+
     const text = payload.text?.trim() ?? "";
     const imageUrl = payload.imageUrl?.trim() ?? "";
 

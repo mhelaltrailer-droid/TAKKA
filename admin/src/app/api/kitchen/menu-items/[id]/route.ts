@@ -32,6 +32,7 @@ export async function PATCH(
       where: {
         id,
         kitchenId: kitchen.id,
+        approvalStatus: "APPROVED",
       },
       data: {
         isAvailable: payload.isAvailable ?? true,
@@ -39,7 +40,10 @@ export async function PATCH(
     });
 
     if (!updated.count) {
-      return NextResponse.json({ error: "الصنف غير موجود." }, { status: 404 });
+      return NextResponse.json(
+        { error: "الصنف غير موجود أو غير معتمد بعد." },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json({ success: true });

@@ -238,15 +238,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                         const SizedBox(height: 12),
                         _SummaryText(
-                          label: 'المجموع',
+                          label: 'سعر الأصناف',
                           value: '${order.subtotalAmount.toStringAsFixed(0)} ج.م',
                         ),
                         _SummaryText(
-                          label: 'التوصيل',
+                          label: 'رسوم التوصيل',
                           value: '${order.deliveryFee.toStringAsFixed(0)} ج.م',
                         ),
                         _SummaryText(
-                          label: 'الإجمالي',
+                          label: 'الإجمالي (طلب + توصيل)',
                           value: '${order.totalAmount.toStringAsFixed(0)} ج.م',
                         ),
                         _SummaryText(
@@ -327,10 +327,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                       ),
                                     if (message.fileUrl != null)
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 6),
-                                        child: Text(
-                                          message.fileUrl!,
-                                          style: const TextStyle(fontSize: 12),
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.network(
+                                            message.fileUrl!,
+                                            height: 180,
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Text(
+                                              message.fileUrl!,
+                                              style: const TextStyle(fontSize: 12),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -338,31 +347,42 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                               ),
                             ),
                           ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _chatTextController,
-                          maxLines: 2,
-                          decoration: const InputDecoration(
-                            hintText: 'اكتب رسالة للمطبخ',
+                        if (order.status == 'COMPLETED' ||
+                            order.status == 'CANCELLED_BEFORE_DEPOSIT' ||
+                            order.status == 'CANCELLED_AFTER_DEPOSIT') ...[
+                          const SizedBox(height: 12),
+                          const Text(
+                            'المحادثة مغلقة بعد اكتمال الطلب. السجل متاح للعرض فقط.',
+                            style: TextStyle(height: 1.4),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: () => _sendChatMessage(order.id),
-                                child: const Text('إرسال رسالة'),
+                        ] else if (order.status != 'PENDING_KITCHEN_APPROVAL' &&
+                            order.status != 'REJECTED_BY_KITCHEN') ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _chatTextController,
+                            maxLines: 2,
+                            decoration: const InputDecoration(
+                              hintText: 'اكتب رسالة للمطبخ',
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: () => _sendChatMessage(order.id),
+                                  child: const Text('إرسال رسالة'),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            OutlinedButton.icon(
-                              onPressed: () => _sendChatImage(order.id),
-                              icon: const Icon(Icons.image_outlined),
-                              label: const Text('صورة'),
-                            ),
-                          ],
-                        ),
+                              const SizedBox(width: 10),
+                              OutlinedButton.icon(
+                                onPressed: () => _sendChatImage(order.id),
+                                icon: const Icon(Icons.image_outlined),
+                                label: const Text('صورة'),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

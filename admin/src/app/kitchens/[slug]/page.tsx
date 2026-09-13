@@ -2,6 +2,10 @@ import Link from "next/link";
 import { ApprovalStatus, AvailabilityStatus } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import {
+  ORDER_READINESS_CUSTOMER_QUESTION,
+  getOrderReadinessLabel,
+} from "@/lib/order-readiness";
 
 export default async function KitchenDetailsPage({
   params,
@@ -26,6 +30,7 @@ export default async function KitchenDetailsPage({
       menuItems: {
         where: {
           isAvailable: true,
+          approvalStatus: ApprovalStatus.APPROVED,
         },
         include: {
           sizes: {
@@ -139,6 +144,10 @@ export default async function KitchenDetailsPage({
                     <div className="mt-3 text-sm text-zinc-700">
                       <p>السعر: {String(item.basePrice)} جنيه</p>
                       <p>العربون: {String(item.depositAmount)} جنيه</p>
+                      <p>
+                        {ORDER_READINESS_CUSTOMER_QUESTION}{" "}
+                        {getOrderReadinessLabel(item.orderReadiness)}
+                      </p>
                     </div>
                     {item.sizes.length ? (
                       <div className="mt-3 rounded-xl bg-zinc-50 px-3 py-3 text-xs text-zinc-600">

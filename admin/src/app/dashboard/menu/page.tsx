@@ -6,6 +6,11 @@ import { UploadField } from "@/components/upload-field";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { FOOD_CATEGORIES, getFoodCategoryById } from "@/lib/food-categories";
+import {
+  ORDER_READINESS_FIELD_LABEL,
+  ORDER_READINESS_OPTIONS,
+  getOrderReadinessLabel,
+} from "@/lib/order-readiness";
 import { getApprovalStatusLabel } from "@/lib/status-labels";
 
 import {
@@ -25,6 +30,7 @@ export default async function MenuManagementPage() {
       id: true,
       kitchenName: true,
       approvalStatus: true,
+      rejectionReason: true,
       menuItems: {
         include: {
           sizes: {
@@ -72,7 +78,7 @@ export default async function MenuManagementPage() {
             من هنا يستطيع صاحب المطبخ إضافة الأصناف، تحديد السعر، العربون،
             الصورة، والأحجام الاختيارية. حالة الاعتماد الحالية للمطبخ:
           </p>
-          <div className="mt-4">
+          <div className="mt-4 space-y-3">
             <StatusPill
               label={getApprovalStatusLabel(kitchen.approvalStatus)}
               tone={
@@ -83,10 +89,16 @@ export default async function MenuManagementPage() {
                     : "danger"
               }
             />
+            {kitchen.approvalStatus !== "APPROVED" ? (
+              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-900">
+                انتظر اعتماد المطبخ أولا ثم ابدأ في إضافة الأصناف
+              </div>
+            ) : null}
           </div>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          {kitchen.approvalStatus === "APPROVED" ? (
           <form
             action={createMenuItem}
             className="grid gap-6 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
@@ -134,6 +146,31 @@ export default async function MenuManagementPage() {
               </select>
               <p className="text-xs leading-6 text-zinc-500">
                 الفئة مطلوبة حتى تظهر الوجبة في البحث وقسم تاكل ايه؟
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="orderReadiness"
+                className="block text-sm font-medium"
+              >
+                {ORDER_READINESS_FIELD_LABEL}
+              </label>
+              <select
+                id="orderReadiness"
+                name="orderReadiness"
+                required
+                defaultValue="AVAILABLE_NOW"
+                className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
+              >
+                {ORDER_READINESS_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs leading-6 text-zinc-500">
+                يظهر للعميل كـ «متى يكون جاهز؟» مع الخيار الذي تختاره.
               </p>
             </div>
 
@@ -210,11 +247,16 @@ export default async function MenuManagementPage() {
 
             <div className="flex items-center justify-between gap-4 rounded-2xl bg-zinc-50 px-4 py-4">
               <p className="text-sm text-zinc-600">
-                سيتم تفعيل الصنف مباشرة بحالة `متاح`.
+                يُرسل الصنف للاعتماد قبل ظهوره للعملاء.
               </p>
-              <SubmitButton label="إضافة الصنف" pendingLabel="جارٍ إنشاء الصنف..." />
+              <SubmitButton label="إرسال للاعتماد" pendingLabel="جارٍ الإرسال..." />
             </div>
           </form>
+          ) : (
+            <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm leading-7 text-amber-900">
+              انتظر اعتماد المطبخ أولا ثم ابدأ في إضافة الأصناف
+            </div>
+          )}
 
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between gap-4">
@@ -248,10 +290,45 @@ export default async function MenuManagementPage() {
                           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700">
                             {item.isAvailable ? "متاح" : "غير متاح"}
                           </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs ${
+                              item.approvalStatus === "APPROVED"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : item.approvalStatus === "PENDING"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {getApprovalStatusLabel(item.approvalStatus)}
+                          </span>
+                          {item.draftStatus === "PENDING" ? (
+                            <span className="rounded-full bg-sky-50 px-3 py-1 text-xs text-sky-700">
+                              تعديل بانتظار الاعتماد
+                            </span>
+                          ) : null}
+                          {item.draftStatus === "REJECTED" ? (
+                            <span className="rounded-full bg-red-50 px-3 py-1 text-xs text-red-700">
+                              تعديل مرفوض
+                            </span>
+                          ) : null}
                         </div>
+                        {item.rejectionReason ? (
+                          <p className="text-sm text-red-600">
+                            سبب الرفض: {item.rejectionReason}
+                          </p>
+                        ) : null}
+                        {item.draftRejectionReason ? (
+                          <p className="text-sm text-red-600">
+                            سبب رفض التعديل: {item.draftRejectionReason}
+                          </p>
+                        ) : null}
                         <p className="text-sm text-zinc-600">
                           السعر: {String(item.basePrice)} جنيه | العربون:{" "}
                           {String(item.depositAmount)} جنيه
+                        </p>
+                        <p className="text-sm text-zinc-600">
+                          {ORDER_READINESS_FIELD_LABEL}:{" "}
+                          {getOrderReadinessLabel(item.orderReadiness)}
                         </p>
                         {item.description ? (
                           <p className="text-sm leading-7 text-zinc-600">

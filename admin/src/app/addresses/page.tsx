@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { AddressManager } from "@/components/address-manager";
 import { AppShell } from "@/components/app-shell";
 import { requireAppAccount } from "@/lib/app-gate";
@@ -33,20 +35,26 @@ export default async function AddressesPage() {
       subtitle="أضف عناوينك، اختر الافتراضي، واحذف ما لا تحتاجه لتسهيل الطلبات."
       activeNav="account"
     >
-      <AddressManager
-        initialAddresses={addresses.map((address) => ({
-          id: address.id,
-          label: address.label,
-          cityName: address.cityName,
-          addressLine: address.addressLine,
-          landmark: address.landmark,
-          isDefault: address.isDefault,
-          region: {
-            cityName: address.region.cityName,
-            regionName: address.region.regionName,
-          },
-        }))}
-      />
+      <Suspense
+        fallback={
+          <p className="text-sm text-zinc-500">جارٍ تحميل العناوين...</p>
+        }
+      >
+        <AddressManager
+          initialAddresses={addresses.map((address) => ({
+            id: address.id,
+            label: address.label,
+            cityName: address.cityName,
+            addressLine: address.addressLine,
+            landmark: address.landmark,
+            isDefault: address.isDefault,
+            region: {
+              cityName: address.region.cityName,
+              regionName: address.region.regionName,
+            },
+          }))}
+        />
+      </Suspense>
     </AppShell>
   );
 }

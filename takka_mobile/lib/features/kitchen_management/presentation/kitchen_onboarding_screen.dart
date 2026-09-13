@@ -34,6 +34,8 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
   );
   bool _isSaving = false;
   bool _locationReady = false;
+  String? _approvalStatus;
+  String? _rejectionReason;
 
   @override
   void initState() {
@@ -79,6 +81,8 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
           cityName: obourCityName,
           regionName: profile.regionName,
         );
+        _approvalStatus = profile.approvalStatus;
+        _rejectionReason = profile.rejectionReason;
         _locationReady = true;
       });
     } catch (_) {
@@ -99,6 +103,32 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            if (_approvalStatus == 'REJECTED' &&
+                (_rejectionReason?.isNotEmpty ?? false))
+              Card(
+                color: const Color(0xFFFFEBEE),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'تم رفض اعتماد المطبخ.\nالسبب: $_rejectionReason\nعدّل البيانات وأعد الإرسال للمراجعة.',
+                    style: const TextStyle(
+                      color: Color(0xFFC62828),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            if (_approvalStatus == 'PENDING')
+              const Card(
+                color: Color(0xFFFFF8E1),
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'المطبخ قيد مراجعة الإدارة. بعد الاعتماد يمكنك إضافة الأصناف.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                ),
+              ),
             _field(_kitchenNameController, 'اسم المطبخ'),
             _field(_descriptionController, 'الوصف', maxLines: 3),
             _field(_phoneController, 'رقم الهاتف'),

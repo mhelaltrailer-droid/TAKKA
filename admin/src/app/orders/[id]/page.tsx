@@ -112,9 +112,11 @@ export default async function CustomerOrderDetailsPage({
             <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold">ملخص الطلب</h2>
               <div className="mt-4 space-y-2 text-sm text-zinc-700">
-                <p>المجموع: {String(order.subtotalAmount)} جنيه</p>
-                <p>التوصيل: {String(order.deliveryFee)} جنيه</p>
-                <p>الإجمالي: {String(order.totalAmount)} جنيه</p>
+                <p>سعر الأصناف: {String(order.subtotalAmount)} جنيه</p>
+                <p>رسوم التوصيل: {String(order.deliveryFee)} جنيه</p>
+                <p className="font-medium">
+                  الإجمالي (طلب + توصيل): {String(order.totalAmount)} جنيه
+                </p>
                 <p>العربون: {String(order.depositAmount)} جنيه</p>
                 <p>
                   طريقة الاستلام:{" "}
@@ -167,14 +169,12 @@ export default async function CustomerOrderDetailsPage({
                         </p>
                       ) : null}
                       {message.fileUrl ? (
-                        <a
-                          href={message.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-2 inline-flex text-xs font-medium text-[var(--brand-secondary)] underline underline-offset-4"
-                        >
-                          فتح المرفق
-                        </a>
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={message.fileUrl}
+                          alt="مرفق محادثة"
+                          className="mt-3 max-h-72 w-full rounded-xl object-contain bg-zinc-50"
+                        />
                       ) : null}
                     </div>
                   ))
@@ -232,8 +232,16 @@ export default async function CustomerOrderDetailsPage({
             ) : null}
 
             {order.status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&
-            order.status !== OrderStatus.REJECTED_BY_KITCHEN ? (
+            order.status !== OrderStatus.REJECTED_BY_KITCHEN &&
+            order.status !== OrderStatus.COMPLETED &&
+            order.status !== OrderStatus.CANCELLED_BEFORE_DEPOSIT &&
+            order.status !== OrderStatus.CANCELLED_AFTER_DEPOSIT ? (
               <CustomerChatForm orderId={order.id} />
+            ) : order.status === OrderStatus.COMPLETED ? (
+              <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-600">
+                المحادثة مغلقة بعد تأكيد الاستلام. يمكنك مراجعة الرسائل السابقة
+                أعلاه.
+              </div>
             ) : null}
           </div>
         </section>

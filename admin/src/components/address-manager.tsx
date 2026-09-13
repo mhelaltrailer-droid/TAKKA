@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { ObourLocationFields } from "@/components/obour-location-fields";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
@@ -23,8 +23,17 @@ type AddressManagerProps = {
   initialAddresses: Address[];
 };
 
+function safeReturnTo(value: string | null): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+  return value;
+}
+
 export function AddressManager({ initialAddresses }: AddressManagerProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = safeReturnTo(searchParams.get("returnTo"));
   const [addresses, setAddresses] = useState(initialAddresses);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +70,12 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
 
       if (!response.ok) {
         throw new Error(result.error || "تعذر حفظ العنوان.");
+      }
+
+      if (returnTo) {
+        router.push(returnTo);
+        router.refresh();
+        return;
       }
 
       const nextAddresses = form.isDefault
@@ -162,6 +177,11 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
     <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
       <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">إضافة عنوان جديد</h2>
+        {returnTo ? (
+          <p className="mt-2 text-sm leading-7 text-zinc-500">
+            بعد الحفظ هترجع تلقائيًا لصفحة الطلب لإكمال التوصيل.
+          </p>
+        ) : null}
         <div className="mt-5 space-y-4">
           <input
             value={form.label}
@@ -232,7 +252,11 @@ export function AddressManager({ initialAddresses }: AddressManagerProps) {
             disabled={loading}
             className="w-full rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loading ? "جارٍ الحفظ..." : "حفظ العنوان"}
+            {loading
+              ? "جارٍ الحفظ..."
+              : returnTo
+                ? "حفظ والعودة للطلب"
+                : "حفظ العنوان"}
           </button>
         </div>
       </section>

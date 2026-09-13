@@ -7,7 +7,13 @@ import '../../../core/theme/app_theme.dart';
 import '../data/order_service.dart';
 
 class AddressesScreen extends StatefulWidget {
-  const AddressesScreen({super.key});
+  const AddressesScreen({
+    super.key,
+    this.popOnSave = false,
+  });
+
+  /// When true, pops back after a successful save (e.g. opened from checkout).
+  final bool popOnSave;
 
   @override
   State<AddressesScreen> createState() => _AddressesScreenState();
@@ -88,6 +94,12 @@ class _AddressesScreenState extends State<AddressesScreen> {
       _labelController.clear();
       _addressController.clear();
       _landmarkController.clear();
+
+      if (widget.popOnSave && mounted) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+
       setState(() {
         _location = const ObourLocationSelection(
           cityName: obourCityName,
@@ -119,11 +131,23 @@ class _AddressesScreenState extends State<AddressesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'إضافة عنوان',
+                    widget.popOnSave
+                        ? 'إضافة عنوان ثم العودة للطلب'
+                        : 'إضافة عنوان',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                   ),
+                  if (widget.popOnSave) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'بعد الحفظ هترجع تلقائيًا لصفحة الطلب لإكمال التوصيل.',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   TextField(
                     controller: _labelController,
@@ -173,7 +197,13 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     ),
                   FilledButton(
                     onPressed: _saving ? null : _save,
-                    child: Text(_saving ? 'جارٍ الحفظ...' : 'حفظ العنوان'),
+                    child: Text(
+                      _saving
+                          ? 'جارٍ الحفظ...'
+                          : widget.popOnSave
+                              ? 'حفظ والعودة للطلب'
+                              : 'حفظ العنوان',
+                    ),
                   ),
                 ],
               ),

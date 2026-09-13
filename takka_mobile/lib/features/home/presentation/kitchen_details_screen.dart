@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/orders/order_readiness.dart';
 import '../../cart/data/cart_store.dart';
 import '../../cart/presentation/cart_screen.dart';
 import '../data/customer_discovery_service.dart';
@@ -270,6 +271,14 @@ class _MenuItemCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               'العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م',
+              style: TextStyle(
+                color: Colors.grey.shade800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$orderReadinessCustomerQuestion ${orderReadinessLabel(item.orderReadiness)}',
               style: TextStyle(
                 color: Colors.grey.shade800,
                 fontWeight: FontWeight.w600,
