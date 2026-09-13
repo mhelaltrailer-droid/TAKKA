@@ -5,8 +5,8 @@
 
 /** أسماء تُعامل كأنها الحي الثامن */
 export const DISTRICT_CANONICAL_ALIASES: Record<string, string> = {
-  الإسكان العائلي: "الحي الثامن",
-  الإسكان القومي: "الحي الثامن",
+  "الإسكان العائلي": "الحي الثامن",
+  "الإسكان القومي": "الحي الثامن",
   "إسكان المستقبل": "الحي الثامن",
 };
 
@@ -33,7 +33,7 @@ export const NEARBY_DISTRICTS: Record<string, readonly string[]> = {
   "سكن مصر (العبور الجديدة)": NEW_OBOUR_NEIGHBORS.filter(
     (d) => d !== "سكن مصر (العبور الجديدة)",
   ),
-  الحرية: NEW_OBOUR_NEIGHBORS.filter((d) => d !== "الحرية"),
+  "الحرية": NEW_OBOUR_NEIGHBORS.filter((d) => d !== "الحرية"),
   "حي الكرامة": NEW_OBOUR_NEIGHBORS.filter((d) => d !== "حي الكرامة"),
   "حي المجد": NEW_OBOUR_NEIGHBORS.filter((d) => d !== "حي المجد"),
 
