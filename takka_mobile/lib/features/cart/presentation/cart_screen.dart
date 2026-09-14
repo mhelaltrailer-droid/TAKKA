@@ -2,6 +2,7 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/location/kitchen_location_actions.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/validation/phone.dart';
 import '../../home/data/customer_discovery_service.dart';
 import '../../orders/presentation/order_tracking_screen.dart';
@@ -262,8 +263,8 @@ class _CartScreenState extends State<CartScreen> {
                           builder: (context, snapshot) {
                             if (snapshot.connectionState != ConnectionState.done) {
                               return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                child: CircularProgressIndicator(),
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: TakkaCardSkeleton(lines: 1),
                               );
                             }
 

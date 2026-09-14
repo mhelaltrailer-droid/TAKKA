@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/location/obour_areas.dart';
 import '../../../core/location/obour_location_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../data/order_service.dart';
 
 class AddressesScreen extends StatefulWidget {
@@ -221,7 +222,13 @@ class _AddressesScreenState extends State<AddressesScreen> {
             future: _addressesFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
+                return const Column(
+                  children: [
+                    TakkaCardSkeleton(),
+                    SizedBox(height: 12),
+                    TakkaCardSkeleton(),
+                  ],
+                );
               }
               if (snapshot.hasError) {
                 return Text(snapshot.error.toString());

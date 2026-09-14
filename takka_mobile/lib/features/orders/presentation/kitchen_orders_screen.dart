@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/location/maps_links.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../auth/data/mobile_me_service.dart';
 import '../../cart/data/order_service.dart';
 
@@ -79,7 +80,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const ListScreenSkeleton(titleWidth: 140);
           }
 
           if (snapshot.hasError) {

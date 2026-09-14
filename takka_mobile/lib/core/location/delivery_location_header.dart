@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
+import '../ui/takka_skeletons.dart';
 import 'obour_areas.dart';
 
 const _selectedDistrictKey = 'takka.selectedObourDistrict';
@@ -267,9 +268,16 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
             ),
             const SizedBox(height: 12),
             if (_loadingDistricts)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              const Column(
+                children: [
+                  TakkaBone(height: 48, radius: 16),
+                  SizedBox(height: 8),
+                  TakkaBone(height: 48, radius: 16),
+                  SizedBox(height: 8),
+                  TakkaBone(height: 48, radius: 16),
+                  SizedBox(height: 8),
+                  TakkaBone(height: 48, radius: 16),
+                ],
               )
             else
               ConstrainedBox(

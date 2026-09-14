@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/session_token.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/presentation/addresses_screen.dart';
 import '../../home/data/customer_discovery_service.dart';
 import '../../notifications/presentation/notifications_screen.dart';
@@ -89,35 +90,7 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
           future: _profileFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-                children: [
-                  const Text(
-                    'حسابي',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _ProfileCardSkeleton(fallbackName: widget.fallbackName),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'الحساب',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                ],
-              );
+              return const AccountScreenSkeleton();
             }
 
             if (snapshot.hasError) {
@@ -323,59 +296,6 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _ProfileCardSkeleton extends StatelessWidget {
-  const _ProfileCardSkeleton({required this.fallbackName});
-
-  final String fallbackName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: TakkaColors.primary,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  fallbackName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'جاري تحميل بيانات الحساب…',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              color: Colors.white,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -9,6 +9,7 @@ import 'features/auth/presentation/apply_pending_role_screen.dart';
 import 'features/auth/presentation/auth_flow_screen.dart';
 import 'features/auth/presentation/customer_become_kitchen_prompt.dart';
 import 'features/auth/presentation/role_setup_screen.dart';
+import 'core/ui/takka_skeletons.dart';
 import 'features/home/presentation/kitchen_home_screen.dart';
 import 'features/kitchen_management/presentation/kitchen_onboarding_screen.dart';
 import 'features/orders/presentation/customer_shell_screen.dart';
@@ -323,7 +324,7 @@ class _LoginKitchenGateState extends State<_LoginKitchenGate> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: CustomerHomeSkeleton(),
       );
     }
 

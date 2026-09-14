@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
 
 const SELECTED_KEY = "takka.selectedObourDistrict";
@@ -182,9 +183,11 @@ export function DeliveryLocationHeader({
                     : "اختر حيًا آخر للتوصيل / الاستلام"}
                 </p>
                 {loadingDistricts ? (
-                  <p className="py-6 text-center text-sm text-[#6b4a3a]">
-                    جارٍ تحميل الأحياء...
-                  </p>
+                  <div className="space-y-2 py-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full rounded-2xl" />
+                    ))}
+                  </div>
                 ) : (
                   <div className="max-h-[45vh] space-y-2 overflow-y-auto">
                     {districts.map((district) => {

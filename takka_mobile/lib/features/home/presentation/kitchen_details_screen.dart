@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/orders/order_readiness.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/data/cart_store.dart';
 import '../../cart/presentation/cart_screen.dart';
 import '../data/customer_discovery_service.dart';
@@ -115,9 +116,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const DetailScreenSkeleton();
           }
 
           if (snapshot.hasError) {

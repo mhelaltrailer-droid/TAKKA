@@ -9,6 +9,7 @@ import '../../../core/location/obour_areas.dart';
 import '../../../core/location/obour_location_picker.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../data/kitchen_management_service.dart';
 
 class KitchenOnboardingScreen extends StatefulWidget {
@@ -289,7 +290,7 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
         title: const Text(kitchenOnboardingScreenTitle),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const FormScreenSkeleton()
           : (!_showWizard && _hasServerProfile)
               ? _buildStatusGate()
               : Form(

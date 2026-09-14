@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/takka_skeletons.dart';
 import '../data/kitchen_management_service.dart';
 
 class KitchenDealsPanel extends StatefulWidget {
@@ -198,8 +199,14 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
     if (_loading) {
       return const Card(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+              TakkaCardSkeleton(lines: 2),
+              SizedBox(height: 12),
+              TakkaCardSkeleton(lines: 1),
+            ],
+          ),
         ),
       );
     }

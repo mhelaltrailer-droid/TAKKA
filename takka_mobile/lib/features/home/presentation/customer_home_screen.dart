@@ -5,6 +5,7 @@ import '../../../core/location/delivery_location_header.dart';
 import '../../../core/location/food_categories.dart';
 import '../../../core/location/obour_nearby_districts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/widgets/food_categories_strip.dart';
 import '../../../core/widgets/promo_carousel.dart';
 import '../../cart/presentation/addresses_screen.dart';
@@ -211,9 +212,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         future: _bootstrapFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const CustomerHomeSkeleton();
           }
 
           if (snapshot.hasError) {

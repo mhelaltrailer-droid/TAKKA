@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { AddressManager } from "@/components/address-manager";
 import { AppShell } from "@/components/app-shell";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { requireAppAccount } from "@/lib/app-gate";
 import { db } from "@/lib/db";
 
@@ -35,11 +36,7 @@ export default async function AddressesPage() {
       subtitle="أضف عناوينك، اختر الافتراضي، واحذف ما لا تحتاجه لتسهيل الطلبات."
       activeNav="account"
     >
-      <Suspense
-        fallback={
-          <p className="text-sm text-zinc-500">جارٍ تحميل العناوين...</p>
-        }
-      >
+      <Suspense fallback={<PageSkeleton variant="list" />}>
         <AddressManager
           initialAddresses={addresses.map((address) => ({
             id: address.id,

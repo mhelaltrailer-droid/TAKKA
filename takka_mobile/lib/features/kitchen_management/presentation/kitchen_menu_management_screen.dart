@@ -6,6 +6,7 @@ import '../../../core/location/food_categories.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../data/kitchen_management_service.dart';
 import 'kitchen_deals_panel.dart';
 import 'kitchen_onboarding_screen.dart';
@@ -69,7 +70,7 @@ class _KitchenMenuManagementScreenState
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const ListScreenSkeleton(titleWidth: 130, itemCount: 4);
           }
 
           if (snapshot.hasError) {

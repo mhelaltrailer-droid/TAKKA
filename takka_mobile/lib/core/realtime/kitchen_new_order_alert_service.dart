@@ -1,19 +1,17 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
 import 'pusher_realtime_service.dart';
 
-/// Foreground-only kitchen alert: plays a system ringtone when a new order arrives.
+/// Foreground-only kitchen alert: plays a system sound when a new order arrives.
 class KitchenNewOrderAlertService {
   KitchenNewOrderAlertService._();
 
   static final KitchenNewOrderAlertService instance =
       KitchenNewOrderAlertService._();
 
-  final _ringtone = FlutterRingtonePlayer();
   String? _channelName;
   var _active = false;
 
@@ -43,9 +41,6 @@ class KitchenNewOrderAlertService {
         onEvent: _onEvent,
       );
     }
-    try {
-      await _ringtone.stop();
-    } catch (_) {}
   }
 
   void _onEvent(PusherEvent event) {
@@ -77,16 +72,7 @@ class KitchenNewOrderAlertService {
   Future<void> playNewOrderSound() async {
     try {
       await HapticFeedback.heavyImpact();
-      // Short notification chime; asAlarm helps Android play loudly in foreground.
-      await _ringtone.playNotification(
-        looping: false,
-        volume: 1,
-        asAlarm: true,
-      );
-    } catch (_) {
-      try {
-        await SystemSound.play(SystemSoundType.alert);
-      } catch (_) {}
-    }
+      await SystemSound.play(SystemSoundType.alert);
+    } catch (_) {}
   }
 }

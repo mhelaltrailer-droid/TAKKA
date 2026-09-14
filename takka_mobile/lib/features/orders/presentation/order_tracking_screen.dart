@@ -5,6 +5,7 @@ import '../../../core/auth/session_token.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/validation/phone.dart';
 import '../../cart/data/order_service.dart';
 
@@ -72,7 +73,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const DetailScreenSkeleton();
           }
 
           if (snapshot.hasError) {

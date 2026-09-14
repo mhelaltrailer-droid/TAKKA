@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { SubmitButton } from "@/components/submit-button";
+import { PageSkeleton } from "@/components/ui/skeleton";
 
 type MenuOption = {
   id: string;
@@ -196,7 +197,7 @@ export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
   if (loading) {
     return (
       <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <p className="text-sm text-zinc-600">جارٍ تحميل العروض...</p>
+        <PageSkeleton variant="form" />
       </section>
     );
   }

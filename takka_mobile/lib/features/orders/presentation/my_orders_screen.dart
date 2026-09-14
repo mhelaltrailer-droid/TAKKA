@@ -4,6 +4,7 @@ import '../../../core/auth/session_token.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/orders/order_status.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/data/order_service.dart';
 import 'order_tracking_screen.dart';
 
@@ -41,7 +42,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       future: _ordersFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const ListScreenSkeleton(titleWidth: 110);
         }
 
         if (snapshot.hasError) {

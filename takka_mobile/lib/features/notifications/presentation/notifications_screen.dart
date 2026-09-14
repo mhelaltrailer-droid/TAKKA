@@ -1,9 +1,10 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/realtime/pusher_realtime_service.dart';
+import '../../../core/ui/takka_skeletons.dart';
 import '../../auth/data/mobile_me_service.dart';
 import '../../cart/data/order_service.dart';
-import '../../../core/realtime/pusher_realtime_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -74,7 +75,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const ListScreenSkeleton(titleWidth: 100);
           }
 
           if (snapshot.hasError) {
