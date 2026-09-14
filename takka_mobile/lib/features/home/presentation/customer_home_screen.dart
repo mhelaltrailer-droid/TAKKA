@@ -198,7 +198,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 IconButton(
                   onPressed: widget.onSwitchRole,
                   icon: const Icon(Icons.swap_horiz_rounded),
-                  tooltip: 'التحول إلى مسار المطبخ',
+                  tooltip: 'إنشاء حساب مطبخ / العودة للمطبخ',
                 ),
                 IconButton(
                   onPressed: widget.onSignOut,

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { syncAppUserFromClerkData } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ROLE_SWITCH_COPY } from "@/lib/role-switch-copy";
 
 const bodySchema = z.object({
   role: z.enum(["customer", "kitchen_owner"]),
@@ -56,6 +57,35 @@ export async function POST(request: NextRequest) {
       : typeof clerkUser.unsafeMetadata?.egyptianPhone === "string"
         ? clerkUser.unsafeMetadata.egyptianPhone
         : null;
+  const rawMetaRole = clerkUser.publicMetadata?.role;
+  const hasMetadataRole =
+    rawMetaRole === "customer" || rawMetaRole === "kitchen_owner";
+
+  const existingAppUser = await db.user.findUnique({
+    where: { clerkUserId: userId },
+    select: { id: true, role: true },
+  });
+
+  if (role === "kitchen_owner" && existingAppUser) {
+    const kitchen = await db.kitchen.findUnique({
+      where: { ownerUserId: existingAppUser.id },
+      select: { id: true },
+    });
+
+    // Existing customer without a kitchen must complete onboarding — not a bare role flip.
+    const isExistingCustomer =
+      existingAppUser.role === UserRole.CUSTOMER || rawMetaRole === "customer";
+    if (!kitchen && isExistingCustomer && hasMetadataRole) {
+      return NextResponse.json(
+        {
+          error: "NEEDS_KITCHEN_ONBOARDING",
+          message: ROLE_SWITCH_COPY.customerAccountBody,
+          onboardingPath: ROLE_SWITCH_COPY.kitchenOnboardingPath,
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   const syncedUser = await syncAppUserFromClerkData({
     clerkUserId: userId,

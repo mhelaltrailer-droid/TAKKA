@@ -47,6 +47,7 @@ class CustomerDiscoveryService {
       role: 'customer',
       email: null,
       phoneNumber: null,
+      hasKitchen: false,
     );
 
     try {
@@ -165,6 +166,7 @@ class MobileAppUser {
     required this.role,
     required this.email,
     required this.phoneNumber,
+    this.hasKitchen = false,
   });
 
   factory MobileAppUser.fromJson(Map<String, dynamic> json) {
@@ -175,6 +177,7 @@ class MobileAppUser {
       role: json['role']?.toString() ?? 'customer',
       email: json['email']?.toString(),
       phoneNumber: json['phoneNumber']?.toString(),
+      hasKitchen: json['hasKitchen'] == true,
     );
   }
 
@@ -184,6 +187,7 @@ class MobileAppUser {
   final String role;
   final String? email;
   final String? phoneNumber;
+  final bool hasKitchen;
 }
 
 class KitchenSummary {

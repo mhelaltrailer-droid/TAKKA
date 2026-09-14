@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/community/takka_partners_community.dart';
+import '../../../core/realtime/kitchen_new_order_alert_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/data/mobile_me_service.dart';
 import '../../kitchen_management/data/kitchen_management_service.dart';
 import '../../kitchen_management/presentation/kitchen_menu_management_screen.dart';
 import '../../kitchen_management/presentation/kitchen_onboarding_screen.dart';
@@ -28,12 +30,32 @@ class KitchenHomeScreen extends StatefulWidget {
 
 class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
   final _service = const KitchenManagementService();
+  final _meService = const MobileMeService();
   Future<KitchenProfileData?>? _profileFuture;
 
   @override
   void initState() {
     super.initState();
     _profileFuture = _loadProfile();
+    _startNewOrderAlerts();
+  }
+
+  @override
+  void dispose() {
+    KitchenNewOrderAlertService.instance.stop();
+    super.dispose();
+  }
+
+  Future<void> _startNewOrderAlerts() async {
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      final appUserId = await _meService.loadAppUserId(sessionToken: token.jwt);
+      if (!mounted || appUserId.isEmpty) {
+        return;
+      }
+      await KitchenNewOrderAlertService.instance.start(appUserId: appUserId);
+    } catch (_) {}
   }
 
   Future<KitchenProfileData?> _loadProfile() async {

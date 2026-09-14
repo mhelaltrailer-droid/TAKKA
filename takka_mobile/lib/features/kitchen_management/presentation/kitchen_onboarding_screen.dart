@@ -12,7 +12,17 @@ import '../../../core/theme/app_theme.dart';
 import '../data/kitchen_management_service.dart';
 
 class KitchenOnboardingScreen extends StatefulWidget {
-  const KitchenOnboardingScreen({super.key});
+  const KitchenOnboardingScreen({
+    super.key,
+    this.onCompleted,
+    this.embeddedAsRoot = false,
+  });
+
+  /// Called after a successful submit (after the success dialog closes).
+  final VoidCallback? onCompleted;
+
+  /// When true, do not pop the onboarding route (it is the signed-in root).
+  final bool embeddedAsRoot;
 
   @override
   State<KitchenOnboardingScreen> createState() =>
@@ -794,8 +804,21 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       return;
     }
 
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      await authState.refreshClient();
+    } catch (_) {}
+
+    if (!mounted) {
+      return;
+    }
+
     Navigator.of(context).pop(); // close dialog
-    Navigator.of(context).pop(); // back to kitchen dashboard
+    if (!widget.embeddedAsRoot && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(); // leave onboarding route
+    }
+
+    widget.onCompleted?.call();
   }
 
   Future<void> _uploadImage(

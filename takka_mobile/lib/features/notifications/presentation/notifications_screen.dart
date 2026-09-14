@@ -18,6 +18,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<List<AppNotification>>? _future;
   String? _userChannelName;
 
+  void _onRealtimeEvent(event) {
+    if (!mounted || event.eventName != 'notification:new') {
+      return;
+    }
+    setState(() => _future = _load());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -29,7 +36,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void dispose() {
     final channelName = _userChannelName;
     if (channelName != null) {
-      PusherRealtimeService.instance.unsubscribe(channelName);
+      PusherRealtimeService.instance.unsubscribe(
+        channelName,
+        onEvent: _onRealtimeEvent,
+      );
     }
     super.dispose();
   }
@@ -49,12 +59,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _userChannelName = channelName;
       await PusherRealtimeService.instance.subscribe(
         channelName: channelName,
-        onEvent: (event) {
-          if (!mounted || event.eventName != 'notification:new') {
-            return;
-          }
-          setState(() => _future = _load());
-        },
+        onEvent: _onRealtimeEvent,
       );
     } catch (_) {}
   }

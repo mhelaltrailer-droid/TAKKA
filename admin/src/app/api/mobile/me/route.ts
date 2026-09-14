@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { isAppRole } from "@/lib/roles";
 import { syncAppUserFromClerkData } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 export async function GET() {
   const { userId } = await auth({ acceptsToken: "session_token" });
@@ -38,7 +39,19 @@ export async function GET() {
     roleFromMetadata: isAppRole(rawRole) ? rawRole : null,
   });
 
+  const kitchen = await db.kitchen.findUnique({
+    where: {
+      ownerUserId: user.appUserId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
   return NextResponse.json({
-    user,
+    user: {
+      ...user,
+      hasKitchen: Boolean(kitchen),
+    },
   });
 }

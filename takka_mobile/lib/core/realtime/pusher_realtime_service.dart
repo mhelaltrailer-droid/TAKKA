@@ -2,12 +2,15 @@ import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
 import '../config/app_config.dart';
 
+typedef PusherEventHandler = void Function(PusherEvent event);
+
 class PusherRealtimeService {
   PusherRealtimeService._();
 
   static final PusherRealtimeService instance = PusherRealtimeService._();
 
   final PusherChannelsFlutter _client = PusherChannelsFlutter.getInstance();
+  final Map<String, Set<PusherEventHandler>> _listeners = {};
   bool _initialized = false;
   bool _connected = false;
 
@@ -36,24 +39,59 @@ class PusherRealtimeService {
 
   Future<void> subscribe({
     required String channelName,
-    required void Function(PusherEvent event) onEvent,
+    required PusherEventHandler onEvent,
   }) async {
     if (!AppConfig.hasPusher) {
       return;
     }
 
     await _ensureReady();
+
+    final listeners = _listeners.putIfAbsent(channelName, () => <PusherEventHandler>{});
+    final isFirst = listeners.isEmpty;
+    listeners.add(onEvent);
+
+    if (!isFirst) {
+      return;
+    }
+
     await _client.subscribe(
       channelName: channelName,
-      onEvent: onEvent,
+      onEvent: (event) {
+        final handlers = _listeners[channelName];
+        if (handlers == null || handlers.isEmpty) {
+          return;
+        }
+        for (final handler in List<PusherEventHandler>.from(handlers)) {
+          handler(event);
+        }
+      },
     );
   }
 
-  Future<void> unsubscribe(String channelName) async {
+  /// Remove one listener, or all listeners for [channelName] when [onEvent] is null.
+  Future<void> unsubscribe(
+    String channelName, {
+    PusherEventHandler? onEvent,
+  }) async {
     if (!AppConfig.hasPusher || !_initialized) {
       return;
     }
 
-    await _client.unsubscribe(channelName: channelName);
+    final listeners = _listeners[channelName];
+    if (listeners == null) {
+      return;
+    }
+
+    if (onEvent != null) {
+      listeners.remove(onEvent);
+    } else {
+      listeners.clear();
+    }
+
+    if (listeners.isEmpty) {
+      _listeners.remove(channelName);
+      await _client.unsubscribe(channelName: channelName);
+    }
   }
 }

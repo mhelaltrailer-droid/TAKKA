@@ -23,6 +23,13 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
   Future<List<KitchenOrderSummary>>? _future;
   String? _userChannelName;
 
+  void _onRealtimeEvent(event) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _future = _load());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -34,7 +41,10 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
   void dispose() {
     final channelName = _userChannelName;
     if (channelName != null) {
-      PusherRealtimeService.instance.unsubscribe(channelName);
+      PusherRealtimeService.instance.unsubscribe(
+        channelName,
+        onEvent: _onRealtimeEvent,
+      );
     }
     super.dispose();
   }
@@ -54,12 +64,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
       _userChannelName = channelName;
       await PusherRealtimeService.instance.subscribe(
         channelName: channelName,
-        onEvent: (event) {
-          if (!mounted) {
-            return;
-          }
-          setState(() => _future = _load());
-        },
+        onEvent: _onRealtimeEvent,
       );
     } catch (_) {}
   }

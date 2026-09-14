@@ -1,8 +1,10 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../kitchen_management/presentation/kitchen_onboarding_screen.dart';
 import '../data/app_role.dart';
 import '../data/mobile_role_service.dart';
+import '../data/role_switch_copy.dart';
 
 class RoleSetupScreen extends StatefulWidget {
   const RoleSetupScreen({
@@ -94,12 +96,30 @@ class _RoleSetupScreenState extends State<RoleSetupScreen> {
                         height: 1.5,
                       ),
                     ),
+                    if (_errorMessage!.contains('عميل') ||
+                        _errorMessage!.contains('المطبخ')) ...[
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _openKitchenOnboarding,
+                        child: const Text(RoleSwitchCopy.becomeKitchenCta),
+                      ),
+                    ],
                   ],
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openKitchenOnboarding() async {
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => KitchenOnboardingScreen(
+          onCompleted: () => widget.onRoleSaved(AppRole.kitchenOwner),
+        ),
       ),
     );
   }
@@ -130,7 +150,15 @@ class _RoleSetupScreenState extends State<RoleSetupScreen> {
       setState(() {
         _isSaving = false;
       });
-    } catch (error) {
+    } on NeedsKitchenOnboardingException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSaving = false;
+        _errorMessage = error.message;
+      });
+    } catch (_) {
       if (!mounted) {
         return;
       }

@@ -64,22 +64,20 @@ export default async function DashboardPage() {
     },
   });
 
-  const kitchen =
-    user.role === "kitchen_owner"
-      ? await db.kitchen.findUnique({
-          where: {
-            ownerUserId: user.appUserId,
-          },
-          include: {
-            _count: {
-              select: {
-                menuItems: true,
-                orders: true,
-              },
-            },
-          },
-        })
-      : null;
+  const kitchen = await db.kitchen.findUnique({
+    where: {
+      ownerUserId: user.appUserId,
+    },
+    include: {
+      _count: {
+        select: {
+          menuItems: true,
+          orders: true,
+        },
+      },
+    },
+  });
+  const hasKitchen = Boolean(kitchen);
 
   const customerStats =
     user.role === "customer"
@@ -161,7 +159,7 @@ export default async function DashboardPage() {
                 <h2 className="text-xl font-bold">
                   {kitchen?.kitchenName ?? "ملف المطبخ"}
                 </h2>
-                {kitchen ? (
+                {hasKitchen && kitchen ? (
                   <>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <StatusPill
@@ -238,7 +236,16 @@ export default async function DashboardPage() {
                 <ActionLink href="/orders" label="طلباتي" />
                 <ActionLink href="/addresses" label="إدارة العناوين" />
                 <ActionLink href="/notifications" label="الإشعارات" />
-                <ActionLink href="/role-setup" label="تبديل الدور" />
+                <ActionLink
+                  href={
+                    hasKitchen
+                      ? "/role-setup"
+                      : "/dashboard/kitchen/onboarding"
+                  }
+                  label={
+                    hasKitchen ? "العودة لمسار المطبخ" : "إنشاء حساب مطبخ"
+                  }
+                />
               </div>
             </section>
           </>
