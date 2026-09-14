@@ -14,6 +14,10 @@ export type WebCartState = {
   kitchenId: string | null;
   kitchenName: string | null;
   kitchenSlug: string | null;
+  kitchenLatitude: number | null;
+  kitchenLongitude: number | null;
+  kitchenAddressLine: string | null;
+  kitchenRegionLabel: string | null;
   items: WebCartItem[];
 };
 
@@ -25,6 +29,10 @@ let memory: WebCartState = {
   kitchenId: null,
   kitchenName: null,
   kitchenSlug: null,
+  kitchenLatitude: null,
+  kitchenLongitude: null,
+  kitchenAddressLine: null,
+  kitchenRegionLabel: null,
   items: [],
 };
 
@@ -50,6 +58,16 @@ function readStorage(): WebCartState {
       kitchenId: parsed.kitchenId ?? null,
       kitchenName: parsed.kitchenName ?? null,
       kitchenSlug: parsed.kitchenSlug ?? null,
+      kitchenLatitude:
+        typeof parsed.kitchenLatitude === "number"
+          ? parsed.kitchenLatitude
+          : null,
+      kitchenLongitude:
+        typeof parsed.kitchenLongitude === "number"
+          ? parsed.kitchenLongitude
+          : null,
+      kitchenAddressLine: parsed.kitchenAddressLine ?? null,
+      kitchenRegionLabel: parsed.kitchenRegionLabel ?? null,
       items: Array.isArray(parsed.items) ? parsed.items : [],
     };
   } catch {
@@ -82,6 +100,10 @@ export function clearWebCart() {
     kitchenId: null,
     kitchenName: null,
     kitchenSlug: null,
+    kitchenLatitude: null,
+    kitchenLongitude: null,
+    kitchenAddressLine: null,
+    kitchenRegionLabel: null,
     items: [],
   });
 }
@@ -90,6 +112,10 @@ export function addWebCartItem(params: {
   kitchenId: string;
   kitchenName: string;
   kitchenSlug: string;
+  kitchenLatitude?: number | null;
+  kitchenLongitude?: number | null;
+  kitchenAddressLine?: string | null;
+  kitchenRegionLabel?: string | null;
   item: Omit<WebCartItem, "id" | "quantity"> & { quantity?: number };
 }) {
   const current = readStorage();
@@ -129,6 +155,12 @@ export function addWebCartItem(params: {
     kitchenId: params.kitchenId,
     kitchenName: params.kitchenName,
     kitchenSlug: params.kitchenSlug,
+    kitchenLatitude: params.kitchenLatitude ?? current.kitchenLatitude,
+    kitchenLongitude: params.kitchenLongitude ?? current.kitchenLongitude,
+    kitchenAddressLine:
+      params.kitchenAddressLine ?? current.kitchenAddressLine,
+    kitchenRegionLabel:
+      params.kitchenRegionLabel ?? current.kitchenRegionLabel,
     items,
   });
 }
@@ -142,6 +174,10 @@ export function updateWebCartQuantity(itemId: string, quantity: number) {
       kitchenId: items.length ? current.kitchenId : null,
       kitchenName: items.length ? current.kitchenName : null,
       kitchenSlug: items.length ? current.kitchenSlug : null,
+      kitchenLatitude: items.length ? current.kitchenLatitude : null,
+      kitchenLongitude: items.length ? current.kitchenLongitude : null,
+      kitchenAddressLine: items.length ? current.kitchenAddressLine : null,
+      kitchenRegionLabel: items.length ? current.kitchenRegionLabel : null,
       items,
     });
     return;

@@ -18,6 +18,7 @@ import {
   deleteMenuItem,
   toggleMenuItemAvailability,
 } from "./actions";
+import { KitchenDealsPanel } from "./kitchen-deals-panel";
 
 export default async function MenuManagementPage() {
   const user = await requireAuth();
@@ -121,6 +122,16 @@ export default async function MenuManagementPage() {
             />
           </div>
         </header>
+
+        <KitchenDealsPanel
+          menuItems={kitchen.menuItems.map((item) => ({
+            id: item.id,
+            name: item.name,
+            basePrice: Number(item.basePrice),
+            approvalStatus: item.approvalStatus,
+            isAvailable: item.isAvailable,
+          }))}
+        />
 
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <form
@@ -306,6 +317,14 @@ export default async function MenuManagementPage() {
                             {getFoodCategoryById(item.categoryId)?.label ??
                               item.categoryId}
                           </span>
+                          {item.isDishOfTheDay ? (
+                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-800">
+                              طبق اليوم
+                              {item.dishOfTheDayPrice
+                                ? ` · ${String(item.dishOfTheDayPrice)} ج`
+                                : ""}
+                            </span>
+                          ) : null}
                           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700">
                             {item.isAvailable ? "متاح" : "غير متاح"}
                           </span>

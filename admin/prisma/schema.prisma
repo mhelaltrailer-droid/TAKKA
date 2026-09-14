@@ -82,6 +82,11 @@ enum NotificationType {
   SYSTEM
 }
 
+enum FlashOfferStatus {
+  ACTIVE
+  ENDED
+}
+
 model User {
   id                String            @id @default(cuid())
   clerkUserId       String?           @unique
@@ -165,6 +170,7 @@ model Kitchen {
   gallery            KitchenGalleryImage[]
   paymentMethods     KitchenPaymentMethod[]
   menuItems          MenuItem[]
+  flashOffers        FlashOffer[]
   orders             Order[]
   reviews            Review[]
 }
@@ -217,6 +223,11 @@ model MenuItem {
   orderReadiness OrderReadiness @default(AVAILABLE_NOW)
   isAvailable   Boolean        @default(true)
   sortOrder     Int            @default(0)
+  /// Unified ready meal at a lower price; shown to nearby customers.
+  isDishOfTheDay      Boolean  @default(false)
+  dishOfTheDayPrice   Decimal? @db.Decimal(10, 2)
+  /// Remaining servings for dish of the day; null = unlimited.
+  dishOfTheDayQty     Int?
   /// New items start PENDING; existing rows default APPROVED via db push default.
   approvalStatus ApprovalStatus @default(APPROVED)
   rejectionReason String?
@@ -236,6 +247,29 @@ model MenuItem {
   kitchen       Kitchen        @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
   sizes         MenuItemSize[]
   orderItems    OrderItem[]
+  flashOffers   FlashOffer[]
+}
+
+/// Time-limited flash deal on a menu item (1–2 hours, limited qty).
+model FlashOffer {
+  id            String           @id @default(cuid())
+  kitchenId     String
+  menuItemId    String
+  offerPrice    Decimal          @db.Decimal(10, 2)
+  quantityLeft  Int
+  startsAt      DateTime
+  endsAt        DateTime
+  status        FlashOfferStatus @default(ACTIVE)
+  /// EXPIRED | SOLD_OUT | MANUAL
+  endedReason   String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  kitchen       Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([kitchenId, status])
+  @@index([menuItemId, status])
+  @@index([endsAt])
 }
 
 model MenuItemSize {

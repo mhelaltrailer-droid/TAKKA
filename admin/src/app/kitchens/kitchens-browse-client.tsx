@@ -9,6 +9,7 @@ import {
   PromoCarousel,
   type PromoSlide,
 } from "@/components/promo-carousel";
+import { NearbyDealsStrip } from "@/components/nearby-deals-strip";
 import { FOOD_CATEGORIES, getFoodCategoryByLabel } from "@/lib/food-categories";
 import {
   getNearbyDistrictNames,
@@ -171,6 +172,8 @@ export function KitchensBrowseClient({
       <DeliveryLocationHeader onDistrictChange={setDistrict} />
 
       <PromoCarousel slides={promos} />
+
+      <NearbyDealsStrip district={district} />
 
       {!isSignedIn ? (
         <p className="mb-6 text-sm leading-7 text-[#6b4a3a]">

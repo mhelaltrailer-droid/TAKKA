@@ -7,6 +7,7 @@ import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/kitchen_management_service.dart';
+import 'kitchen_deals_panel.dart';
 import 'kitchen_onboarding_screen.dart';
 
 class KitchenMenuManagementScreen extends StatefulWidget {
@@ -131,6 +132,8 @@ class _KitchenMenuManagementScreenState
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              KitchenDealsPanel(items: items),
+              const SizedBox(height: 16),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(18),
@@ -263,7 +266,8 @@ class _KitchenMenuManagementScreenState
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          '${_categoryLabel(item.categoryId)} · ${_approvalLabel(item)}\n'
+                          '${_categoryLabel(item.categoryId)} · ${_approvalLabel(item)}'
+                          '${item.isDishOfTheDay ? ' · طبق اليوم' : ''}\n'
                           '$orderReadinessFieldLabel: ${orderReadinessLabel(item.orderReadiness)}\n'
                           'السعر: ${item.basePrice.toStringAsFixed(0)} ج.م | العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م'
                           '${item.rejectionReason != null && item.rejectionReason!.isNotEmpty ? '\nسبب الرفض: ${item.rejectionReason}' : ''}'

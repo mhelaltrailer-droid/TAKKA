@@ -1,9 +1,11 @@
-import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/auth/session_token.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
+import '../../../core/validation/phone.dart';
 import '../../cart/data/order_service.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
@@ -53,10 +55,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Future<CustomerOrderDetails> _load() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken();
+    final jwt = await requireSessionJwt(context);
     return _orderService.loadOrderDetails(
-      sessionToken: token.jwt,
+      sessionToken: jwt,
       orderId: widget.orderId,
     );
   }
@@ -141,6 +142,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                   ),
                 ),
+                if (order.kitchenPhone != null &&
+                    order.kitchenPhone!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _KitchenContactCard(
+                    kitchenName: order.kitchenName,
+                    phone: order.kitchenPhone!,
+                  ),
+                ],
                 if (order.status == 'ACCEPTED_AWAITING_DEPOSIT' ||
                     order.status == 'DEPOSIT_PROOF_SUBMITTED') ...[
                   const SizedBox(height: 14),
@@ -514,10 +523,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       await _orderService.submitDepositProof(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         orderId: orderId,
         imageUrl: _depositUrlController.text.trim(),
         submittedAmount: double.tryParse(_depositAmountController.text.trim()),
@@ -536,10 +544,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       await _orderService.sendOrderMessage(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         orderId: orderId,
         text: _chatTextController.text.trim(),
       );
@@ -558,10 +565,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _pickDepositImage() async {
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       final url = await _uploadService.pickAndUploadImage(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         purpose: 'depositProofImage',
       );
 
@@ -575,10 +581,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _sendChatImage(String orderId) async {
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       final url = await _uploadService.pickAndUploadImage(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         purpose: 'chatImage',
       );
 
@@ -587,7 +592,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       }
 
       await _orderService.sendOrderMessage(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         orderId: orderId,
         imageUrl: url,
       );
@@ -600,10 +605,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _confirmReceived(String orderId) async {
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       await _orderService.confirmReceived(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         orderId: orderId,
       );
       setState(() => _future = _load());
@@ -646,10 +650,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       await _orderService.cancelOrder(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         orderId: orderId,
       );
       setState(() => _future = _load());
@@ -660,10 +663,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _submitReview(String orderId, int ratingValue) async {
     try {
-      final authState = ClerkAuth.of(context, listen: false);
-      final token = await authState.sessionToken();
+      final tokenJwt = await requireSessionJwt(context);
       await _orderService.submitReview(
-        sessionToken: token.jwt,
+        sessionToken: tokenJwt,
         orderId: orderId,
         ratingValue: ratingValue,
         comment: _reviewCommentController.text.trim().isEmpty
@@ -798,6 +800,92 @@ class _SummaryText extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _KitchenContactCard extends StatelessWidget {
+  const _KitchenContactCard({
+    required this.kitchenName,
+    required this.phone,
+  });
+
+  final String kitchenName;
+  final String phone;
+
+  String get _local => normalizePhone(phone);
+
+  Uri? get _telUri {
+    if (_local.isEmpty) return null;
+    if (isValidPhone(_local)) {
+      return Uri.parse('tel:+20${_local.substring(1)}');
+    }
+    return Uri.parse('tel:$_local');
+  }
+
+  Uri? get _whatsAppUri {
+    if (!isValidPhone(_local)) return null;
+    return Uri.parse('https://wa.me/20${_local.substring(1)}');
+  }
+
+  Future<void> _launch(Uri? uri) async {
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFFECFDF5),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'تواصل مع المطبخ',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'تم قبول طلبك من «$kitchenName». يمكنك التواصل عبر شات الطلب، أو الاتصال / واتساب مباشرة.',
+              style: const TextStyle(height: 1.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _local,
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _launch(_telUri),
+                    icon: const Icon(Icons.call_outlined),
+                    label: const Text('اتصال'),
+                  ),
+                ),
+                if (_whatsAppUri != null) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _launch(_whatsAppUri),
+                      icon: const Icon(Icons.chat_outlined),
+                      label: const Text('واتساب'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

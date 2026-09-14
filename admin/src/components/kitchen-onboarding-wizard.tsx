@@ -8,10 +8,13 @@ import { StatusPill } from "@/components/status-pill";
 import { SubmitButton } from "@/components/submit-button";
 import { UploadField } from "@/components/upload-field";
 import {
+  KITCHEN_COORDS_REQUIRED,
+  KITCHEN_LOCATION_HINT,
   KITCHEN_ONBOARDING_DRAFT_KEY,
   KITCHEN_ONBOARDING_STEPS,
   KITCHEN_UPLOAD_CRITERIA,
 } from "@/lib/kitchen-onboarding-copy";
+import { isValidLatLng } from "@/lib/maps";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 import { getApprovalStatusLabel } from "@/lib/status-labels";
 
@@ -148,6 +151,9 @@ export function KitchenOnboardingWizard({
       }
       if (!draft.regionName.trim() || !draft.addressLine.trim()) {
         return "اختر الحي وأدخل العنوان التفصيلي.";
+      }
+      if (!isValidLatLng(draft.latitude, draft.longitude)) {
+        return KITCHEN_COORDS_REQUIRED;
       }
     }
     return null;
@@ -326,10 +332,10 @@ export function KitchenOnboardingWizard({
               })
             }
             submitFields={false}
+            coordsRequired
           />
           <p className="text-sm leading-6 text-zinc-500">
-            اختر الحي الذي يعمل فيه المطبخ. العملاء في نفس الحي يرونه ضمن
-            «مطابخ قريبة منك».
+            {KITCHEN_LOCATION_HINT}
           </p>
           <Field
             label="العنوان التفصيلي"

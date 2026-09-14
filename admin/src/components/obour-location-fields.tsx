@@ -16,6 +16,8 @@ type ObourLocationFieldsProps = {
   onRegionChange?: (regionName: string) => void;
   onCoordsChange?: (coords: { latitude: number; longitude: number } | null) => void;
   showDetectButton?: boolean;
+  /** When true, show that GPS pin is required (kitchen onboarding). */
+  coordsRequired?: boolean;
   /** When false, location values are not posted (parent supplies hidden inputs). */
   submitFields?: boolean;
   className?: string;
@@ -33,6 +35,7 @@ export function ObourLocationFields({
   onRegionChange,
   onCoordsChange,
   showDetectButton = true,
+  coordsRequired = false,
   submitFields = true,
   className,
 }: ObourLocationFieldsProps) {
@@ -169,8 +172,17 @@ export function ObourLocationFields({
             disabled={detecting}
             className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-50 disabled:opacity-60"
           >
-            {detecting ? "جارٍ تحديد الموقع..." : "تحديد موقعي الحالي"}
+            {detecting
+              ? "جارٍ تحديد الموقع..."
+              : coordsRequired
+                ? "تحديد موقع المطبخ (إلزامي)"
+                : "تحديد موقعي الحالي"}
           </button>
+          {coordsRequired && latitude == null && longitude == null ? (
+            <p className="text-xs leading-6 text-amber-800">
+              مطلوب لتحديد موقع المطبخ على الخريطة للعملاء.
+            </p>
+          ) : null}
           {detectStatus ? (
             <p className="text-xs leading-6 text-zinc-600">{detectStatus}</p>
           ) : null}

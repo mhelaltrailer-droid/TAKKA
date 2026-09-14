@@ -7,6 +7,10 @@ class CartStore extends ChangeNotifier {
 
   String? kitchenId;
   String? kitchenName;
+  double? kitchenLatitude;
+  double? kitchenLongitude;
+  String? kitchenAddressLine;
+  String? kitchenRegionLabel;
   final List<CartItem> _items = [];
 
   List<CartItem> get items => List.unmodifiable(_items);
@@ -24,6 +28,10 @@ class CartStore extends ChangeNotifier {
   void addItem({
     required String kitchenId,
     required String kitchenName,
+    double? kitchenLatitude,
+    double? kitchenLongitude,
+    String? kitchenAddressLine,
+    String? kitchenRegionLabel,
     required CartItem item,
   }) {
     if (_items.isNotEmpty && this.kitchenId != kitchenId) {
@@ -32,6 +40,10 @@ class CartStore extends ChangeNotifier {
 
     this.kitchenId = kitchenId;
     this.kitchenName = kitchenName;
+    this.kitchenLatitude = kitchenLatitude ?? this.kitchenLatitude;
+    this.kitchenLongitude = kitchenLongitude ?? this.kitchenLongitude;
+    this.kitchenAddressLine = kitchenAddressLine ?? this.kitchenAddressLine;
+    this.kitchenRegionLabel = kitchenRegionLabel ?? this.kitchenRegionLabel;
 
     final existingIndex = _items.indexWhere(
       (existing) =>
@@ -70,17 +82,24 @@ class CartStore extends ChangeNotifier {
   void removeItem(String itemId) {
     _items.removeWhere((item) => item.id == itemId);
     if (_items.isEmpty) {
-      kitchenId = null;
-      kitchenName = null;
+      _clearKitchenMeta();
     }
     notifyListeners();
   }
 
   void clear() {
-    kitchenId = null;
-    kitchenName = null;
+    _clearKitchenMeta();
     _items.clear();
     notifyListeners();
+  }
+
+  void _clearKitchenMeta() {
+    kitchenId = null;
+    kitchenName = null;
+    kitchenLatitude = null;
+    kitchenLongitude = null;
+    kitchenAddressLine = null;
+    kitchenRegionLabel = null;
   }
 }
 

@@ -5,6 +5,7 @@ import { ConfirmReceiptButton } from "@/components/confirm-receipt-button";
 import { CancelOrderButton } from "@/components/cancel-order-button";
 import { CustomerChatForm } from "@/components/customer-chat-form";
 import { DepositProofForm } from "@/components/deposit-proof-form";
+import { KitchenContactCard } from "@/components/kitchen-contact-card";
 import { LiveRefreshListener } from "@/components/live-refresh-listener";
 import { OrderTimeline } from "@/components/order-timeline";
 import { ReviewForm } from "@/components/review-form";
@@ -14,6 +15,7 @@ import {
   getCustomerOrderStatusHint,
   getCustomerOrderStatusLabel,
 } from "@/lib/customer-order-status";
+import { canCustomerSeeKitchenPhone } from "@/lib/kitchen-contact";
 import { db } from "@/lib/db";
 
 export default async function CustomerOrderDetailsPage({
@@ -33,6 +35,7 @@ export default async function CustomerOrderDetailsPage({
       kitchen: {
         select: {
           kitchenName: true,
+          phoneNumber: true,
         },
       },
       customerAddress: true,
@@ -79,6 +82,10 @@ export default async function CustomerOrderDetailsPage({
   }
 
   const latestProof = order.depositProofs[0];
+  const showKitchenPhone = canCustomerSeeKitchenPhone({
+    acceptedAt: order.acceptedAt,
+    status: order.status,
+  });
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
@@ -105,6 +112,13 @@ export default async function CustomerOrderDetailsPage({
             {getCustomerOrderStatusHint(order.status, order.deliveryType)}
           </p>
         </header>
+
+        {showKitchenPhone && order.kitchen.phoneNumber ? (
+          <KitchenContactCard
+            kitchenName={order.kitchen.kitchenName}
+            phoneNumber={order.kitchen.phoneNumber}
+          />
+        ) : null}
 
         <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">

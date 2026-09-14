@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:clerk_flutter/clerk_flutter.dart';
 
+import '../../../core/auth/session_token.dart';
 import '../../../core/location/delivery_location_header.dart';
 import '../../../core/location/food_categories.dart';
 import '../../../core/location/obour_nearby_districts.dart';
@@ -12,6 +12,7 @@ import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/my_orders_screen.dart';
 import '../data/customer_discovery_service.dart';
 import 'kitchen_details_screen.dart';
+import 'nearby_deals_strip.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({
@@ -54,14 +55,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Future<CustomerBootstrapData> _loadBootstrap() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken().timeout(
-      const Duration(seconds: 20),
-      onTimeout: () => throw Exception('انتهت مهلة جلب جلسة الدخول.'),
-    );
+    final jwt = await requireSessionJwt(context);
     // Load city-wide kitchens once; nearby list is filtered locally by district.
     return _service.loadBootstrap(
-      sessionToken: token.jwt,
+      sessionToken: jwt,
       regionName: null,
     );
   }
@@ -263,6 +260,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                NearbyDealsStrip(regionName: _selectedDistrict),
                 FoodCategoriesStrip(
                   selectedLabel: foodCategories.any(
                     (item) => item.label == _selectedCategory,

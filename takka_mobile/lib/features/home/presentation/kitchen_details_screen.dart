@@ -1,9 +1,65 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../cart/data/cart_store.dart';
 import '../../cart/presentation/cart_screen.dart';
 import '../data/customer_discovery_service.dart';
+
+class _FlashCountdownLabel extends StatefulWidget {
+  const _FlashCountdownLabel({required this.endsAt});
+
+  final DateTime endsAt;
+
+  @override
+  State<_FlashCountdownLabel> createState() => _FlashCountdownLabelState();
+}
+
+class _FlashCountdownLabelState extends State<_FlashCountdownLabel> {
+  Timer? _timer;
+  Duration _left = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  void _tick() {
+    final left = widget.endsAt.difference(DateTime.now());
+    if (!mounted) return;
+    setState(() {
+      _left = left.isNegative ? Duration.zero : left;
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = _left;
+    final label = d.inSeconds <= 0
+        ? 'انتهى'
+        : d.inHours > 0
+            ? '${d.inHours}:${d.inMinutes.remainder(60).toString().padLeft(2, '0')}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}'
+            : '${d.inMinutes.remainder(60).toString().padLeft(2, '0')}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+    return Text(
+      'ينتهي خلال $label',
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF9A3412),
+      ),
+    );
+  }
+}
 
 class KitchenDetailsScreen extends StatefulWidget {
   const KitchenDetailsScreen({
@@ -180,6 +236,16 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 14),
+                KitchenLocationActions(
+                  latitude: kitchen.latitude,
+                  longitude: kitchen.longitude,
+                  addressLine: kitchen.addressLine,
+                  regionLabel: [
+                    kitchen.cityName,
+                    kitchen.regionName,
+                  ].where((part) => part.trim().isNotEmpty).join(' - '),
+                ),
                 const SizedBox(height: 20),
                 Text(
                   'المنيو',
@@ -231,6 +297,15 @@ class _MenuItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final flash = kitchen.activeFlashOffer;
+    final isFlash = flash != null && flash.menuItemId == item.id;
+    final isDish = item.isDishOfTheDay &&
+        item.dishOfTheDayPrice != null &&
+        (item.dishOfTheDayQty == null || item.dishOfTheDayQty! > 0);
+    final dealPrice = isFlash
+        ? flash.offerPrice
+        : (isDish ? item.dishOfTheDayPrice! : null);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -249,14 +324,52 @@ class _MenuItemCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(
-                  '${item.basePrice.toStringAsFixed(0)} ج.م',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
+                if (dealPrice != null) ...[
+                  Text(
+                    '${item.basePrice.toStringAsFixed(0)} ج.م',
+                    style: TextStyle(
+                      fontSize: 12,
+                      decoration: TextDecoration.lineThrough,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${dealPrice.toStringAsFixed(0)} ج.م',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: isFlash
+                          ? const Color(0xFF9A3412)
+                          : const Color(0xFF065F46),
+                    ),
+                  ),
+                ] else
+                  Text(
+                    '${item.basePrice.toStringAsFixed(0)} ج.م',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
               ],
             ),
+            if (isFlash || isDish) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (isFlash)
+                    const Chip(
+                      label: Text('عرض سريع'),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  if (isDish)
+                    const Chip(
+                      label: Text('طبق اليوم'),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ],
             if (item.description case final description?
                 when description.trim().isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -276,6 +389,14 @@ class _MenuItemCard extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
+            if (isFlash) ...[
+              const SizedBox(height: 6),
+              _FlashCountdownLabel(endsAt: flash.endsAt),
+              Text(
+                'متبقي من العرض: ${flash.quantityLeft}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -512,10 +633,21 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     super.dispose();
   }
 
+  double _dealBasePrice() {
+    final flash = widget.kitchen.activeFlashOffer;
+    if (flash != null && flash.menuItemId == widget.item.id) {
+      return flash.offerPrice;
+    }
+    if (widget.item.isDishOfTheDay && widget.item.dishOfTheDayPrice != null) {
+      return widget.item.dishOfTheDayPrice!;
+    }
+    return widget.item.basePrice;
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedSize = widget.item.sizes.where((size) => size.id == _selectedSizeId).firstOrNull;
-    final unitPrice = selectedSize?.price ?? widget.item.basePrice;
+    final unitPrice = selectedSize?.price ?? _dealBasePrice();
     final depositAmount = selectedSize?.depositAmount ?? widget.item.depositAmount;
 
     return Padding(
@@ -613,13 +745,20 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
 
   void _addToCart() {
     final selectedSize = widget.item.sizes.where((size) => size.id == _selectedSizeId).firstOrNull;
-    final unitPrice = selectedSize?.price ?? widget.item.basePrice;
+    final unitPrice = selectedSize?.price ?? _dealBasePrice();
     final depositAmount = selectedSize?.depositAmount ?? widget.item.depositAmount;
 
     try {
       CartStore.instance.addItem(
         kitchenId: widget.kitchen.id,
         kitchenName: widget.kitchen.kitchenName,
+        kitchenLatitude: widget.kitchen.latitude,
+        kitchenLongitude: widget.kitchen.longitude,
+        kitchenAddressLine: widget.kitchen.addressLine,
+        kitchenRegionLabel: [
+          widget.kitchen.cityName,
+          widget.kitchen.regionName,
+        ].where((part) => part.trim().isNotEmpty).join(' - '),
         item: CartItem(
           id: '${widget.item.id}-${selectedSize?.id ?? 'base'}-${DateTime.now().microsecondsSinceEpoch}',
           menuItemId: widget.item.id,

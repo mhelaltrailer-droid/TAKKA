@@ -23,6 +23,15 @@ class CustomerShellScreen extends StatefulWidget {
 
 class _CustomerShellScreenState extends State<CustomerShellScreen> {
   var _index = 0;
+  /// Only mount a tab after the user opens it (home starts visited).
+  final _visited = <int>{0};
+
+  void _selectTab(int value) {
+    setState(() {
+      _index = value;
+      _visited.add(value);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,16 +45,20 @@ class _CustomerShellScreenState extends State<CustomerShellScreen> {
             onSwitchRole: widget.onSwitchRole,
             embeddedInShell: true,
           ),
-          const MyOrdersScreen(embeddedInShell: true),
-          CustomerAccountScreen(
-            fallbackName: widget.displayName,
-            onSignOut: widget.onSignOut,
-          ),
+          _visited.contains(1)
+              ? const MyOrdersScreen(embeddedInShell: true)
+              : const SizedBox.shrink(),
+          _visited.contains(2)
+              ? CustomerAccountScreen(
+                  fallbackName: widget.displayName,
+                  onSignOut: widget.onSignOut,
+                )
+              : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: _selectTab,
         backgroundColor: Colors.white,
         indicatorColor: const Color(0xFFF0E8E0),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,

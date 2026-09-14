@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { ApprovalStatus, AvailabilityStatus } from "@prisma/client";
+import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
 
+import { KitchenLocationActions } from "@/components/kitchen-location-actions";
 import { KitchenMenuCart } from "@/components/kitchen-menu-cart";
 import { db } from "@/lib/db";
+import { expireStaleFlashOffers } from "@/lib/deals";
 
 export default async function KitchenDetailsPage({
   params,
@@ -43,6 +45,15 @@ export default async function KitchenDetailsPage({
           createdAt: "desc",
         },
       },
+      flashOffers: {
+        where: {
+          status: FlashOfferStatus.ACTIVE,
+          endsAt: { gt: new Date() },
+          quantityLeft: { gt: 0 },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       reviews: {
         where: {
           visibility: "VISIBLE",
@@ -77,6 +88,8 @@ export default async function KitchenDetailsPage({
     );
   }
 
+  await expireStaleFlashOffers([kitchen.id]);
+  const activeFlash = kitchen.flashOffers[0] ?? null;
   const paymentMethod = kitchen.paymentMethods[0];
 
   return (
@@ -93,10 +106,16 @@ export default async function KitchenDetailsPage({
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-600">
             {kitchen.description || "لا يوجد وصف لهذا المطبخ بعد."}
           </p>
-          <div className="mt-4 text-sm text-zinc-600">
+          <div className="mt-4 space-y-4 text-sm text-zinc-600">
             <p>
               الموقع: {kitchen.region.cityName} - {kitchen.region.regionName}
             </p>
+            <KitchenLocationActions
+              latitude={kitchen.latitude}
+              longitude={kitchen.longitude}
+              addressLine={kitchen.addressLine}
+              regionLabel={`${kitchen.region.cityName} - ${kitchen.region.regionName}`}
+            />
             <p>
               التقييم: {kitchen.averageRating.toFixed(1)} | عدد التقييمات:{" "}
               {kitchen.reviewsCount}
@@ -126,22 +145,42 @@ export default async function KitchenDetailsPage({
               kitchenId={kitchen.id}
               kitchenName={kitchen.kitchenName}
               kitchenSlug={kitchen.slug}
-              menuItems={kitchen.menuItems.map((item) => ({
-                id: item.id,
-                name: item.name,
-                description: item.description,
-                basePrice: String(item.basePrice),
-                depositAmount: String(item.depositAmount),
-                orderReadiness: item.orderReadiness,
-                sizes: item.sizes.map((size) => ({
-                  id: size.id,
-                  sizeName: size.sizeName,
-                  price: String(size.price),
-                  depositAmount: size.depositAmount
-                    ? String(size.depositAmount)
+              kitchenLatitude={kitchen.latitude}
+              kitchenLongitude={kitchen.longitude}
+              kitchenAddressLine={kitchen.addressLine}
+              kitchenRegionLabel={`${kitchen.region.cityName} - ${kitchen.region.regionName}`}
+              menuItems={kitchen.menuItems.map((item) => {
+                const isFlash =
+                  activeFlash && activeFlash.menuItemId === item.id;
+                return {
+                  id: item.id,
+                  name: item.name,
+                  description: item.description,
+                  basePrice: String(item.basePrice),
+                  depositAmount: String(item.depositAmount),
+                  orderReadiness: item.orderReadiness,
+                  isDishOfTheDay: item.isDishOfTheDay,
+                  dishOfTheDayPrice: item.dishOfTheDayPrice
+                    ? String(item.dishOfTheDayPrice)
                     : null,
-                })),
-              }))}
+                  dishOfTheDayQty: item.dishOfTheDayQty,
+                  flashOfferPrice: isFlash
+                    ? String(activeFlash.offerPrice)
+                    : null,
+                  flashOfferEndsAt: isFlash
+                    ? activeFlash.endsAt.toISOString()
+                    : null,
+                  flashQuantityLeft: isFlash ? activeFlash.quantityLeft : null,
+                  sizes: item.sizes.map((size) => ({
+                    id: size.id,
+                    sizeName: size.sizeName,
+                    price: String(size.price),
+                    depositAmount: size.depositAmount
+                      ? String(size.depositAmount)
+                      : null,
+                  })),
+                };
+              })}
             />
           </div>
 

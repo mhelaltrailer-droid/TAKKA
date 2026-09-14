@@ -8,6 +8,8 @@ import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { assertObourLocation } from "@/lib/districts";
+import { KITCHEN_COORDS_REQUIRED } from "@/lib/kitchen-onboarding-copy";
+import { isValidLatLng } from "@/lib/maps";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 import { slugify } from "@/lib/slug";
 
@@ -48,6 +50,10 @@ export async function saveKitchenOnboarding(formData: FormData) {
   const locationError = await assertObourLocation(cityName, regionName);
   if (locationError) {
     throw new Error(locationError);
+  }
+
+  if (!isValidLatLng(latitude, longitude)) {
+    throw new Error(KITCHEN_COORDS_REQUIRED);
   }
 
   const region = await db.region.upsert({

@@ -10,6 +10,8 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { assertObourLocation } from "@/lib/districts";
+import { KITCHEN_COORDS_REQUIRED } from "@/lib/kitchen-onboarding-copy";
+import { isValidLatLng } from "@/lib/maps";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 import { slugify } from "@/lib/slug";
 
@@ -94,6 +96,13 @@ export async function POST(request: Request) {
       typeof payload.latitude === "number" ? payload.latitude : null;
     const longitude =
       typeof payload.longitude === "number" ? payload.longitude : null;
+
+    if (!isValidLatLng(latitude, longitude)) {
+      return NextResponse.json(
+        { error: KITCHEN_COORDS_REQUIRED },
+        { status: 400 },
+      );
+    }
 
     const region = await db.region.upsert({
       where: {

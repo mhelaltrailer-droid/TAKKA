@@ -26,6 +26,7 @@ class ObourLocationPicker extends StatefulWidget {
     this.initialLongitude,
     required this.onChanged,
     this.showDetectButton = true,
+    this.coordsRequired = false,
   });
 
   final String initialRegionName;
@@ -33,6 +34,7 @@ class ObourLocationPicker extends StatefulWidget {
   final double? initialLongitude;
   final ValueChanged<ObourLocationSelection> onChanged;
   final bool showDetectButton;
+  final bool coordsRequired;
 
   @override
   State<ObourLocationPicker> createState() => _ObourLocationPickerState();
@@ -196,9 +198,22 @@ class _ObourLocationPickerState extends State<ObourLocationPicker> {
                   )
                 : const Icon(Icons.my_location_rounded),
             label: Text(
-              _detecting ? 'جارٍ تحديد الموقع...' : 'تحديد موقعي الحالي',
+              _detecting
+                  ? 'جارٍ تحديد الموقع...'
+                  : widget.coordsRequired
+                      ? 'تحديد موقع المطبخ (إلزامي)'
+                      : 'تحديد موقعي الحالي',
             ),
           ),
+          if (widget.coordsRequired &&
+              _latitude == null &&
+              _longitude == null) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'مطلوب لتحديد موقع المطبخ على الخريطة للعملاء.',
+              style: TextStyle(color: Color(0xFF92400E), height: 1.45),
+            ),
+          ],
           if (_status != null) ...[
             const SizedBox(height: 8),
             Text(

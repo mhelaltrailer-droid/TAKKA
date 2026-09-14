@@ -1,6 +1,6 @@
-import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/auth/session_token.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/orders/order_status.dart';
 import '../../../core/theme/app_theme.dart';
@@ -31,9 +31,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   }
 
   Future<List<CustomerOrderSummary>> _loadOrders() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken();
-    return _orderService.loadMyOrders(sessionToken: token.jwt);
+    final jwt = await requireSessionJwt(context);
+    return _orderService.loadMyOrders(sessionToken: jwt);
   }
 
   @override

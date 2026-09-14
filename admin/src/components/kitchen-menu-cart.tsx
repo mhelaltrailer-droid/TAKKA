@@ -14,6 +14,36 @@ import {
   webCartTotals,
 } from "@/lib/web-cart";
 
+function FlashEndsAt({ endsAt }: { endsAt: string }) {
+  const [label, setLabel] = useState("...");
+  useEffect(() => {
+    function tick() {
+      const ms = new Date(endsAt).getTime() - Date.now();
+      if (ms <= 0) {
+        setLabel("انتهى العرض");
+        return;
+      }
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      setLabel(
+        h > 0
+          ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+          : `${m}:${String(s).padStart(2, "0")}`,
+      );
+    }
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [endsAt]);
+  return (
+    <p className="font-mono text-xs font-semibold text-orange-800">
+      ينتهي خلال {label}
+    </p>
+  );
+}
+
 type MenuSize = {
   id: string;
   sizeName: string;
@@ -28,6 +58,12 @@ type MenuItem = {
   basePrice: string;
   depositAmount: string;
   orderReadiness: string;
+  isDishOfTheDay?: boolean;
+  dishOfTheDayPrice?: string | null;
+  dishOfTheDayQty?: number | null;
+  flashOfferPrice?: string | null;
+  flashOfferEndsAt?: string | null;
+  flashQuantityLeft?: number | null;
   sizes: MenuSize[];
 };
 
@@ -35,11 +71,19 @@ export function KitchenMenuCart({
   kitchenId,
   kitchenName,
   kitchenSlug,
+  kitchenLatitude,
+  kitchenLongitude,
+  kitchenAddressLine,
+  kitchenRegionLabel,
   menuItems,
 }: {
   kitchenId: string;
   kitchenName: string;
   kitchenSlug: string;
+  kitchenLatitude?: number | null;
+  kitchenLongitude?: number | null;
+  kitchenAddressLine?: string | null;
+  kitchenRegionLabel?: string | null;
   menuItems: MenuItem[];
 }) {
   const [cartCount, setCartCount] = useState(0);
@@ -57,6 +101,16 @@ export function KitchenMenuCart({
     return subscribeWebCart(sync);
   }, []);
 
+  function dealUnitPrice(item: MenuItem) {
+    if (item.flashOfferPrice) {
+      return Number(item.flashOfferPrice);
+    }
+    if (item.isDishOfTheDay && item.dishOfTheDayPrice) {
+      return Number(item.dishOfTheDayPrice);
+    }
+    return Number(item.basePrice);
+  }
+
   function addItem(item: MenuItem) {
     const sizeId = selectedSizes[item.id] || "";
     const size = item.sizes.find((entry) => entry.id === sizeId);
@@ -65,12 +119,16 @@ export function KitchenMenuCart({
         kitchenId,
         kitchenName,
         kitchenSlug,
+        kitchenLatitude,
+        kitchenLongitude,
+        kitchenAddressLine,
+        kitchenRegionLabel,
         item: {
           menuItemId: item.id,
           menuItemName: item.name,
           menuItemSizeId: size?.id ?? null,
           sizeName: size?.sizeName ?? null,
-          unitPrice: Number(size?.price ?? item.basePrice),
+          unitPrice: Number(size?.price ?? dealUnitPrice(item)),
           depositAmount: Number(size?.depositAmount ?? item.depositAmount),
           orderReadiness: item.orderReadiness,
           quantity: 1,
@@ -114,17 +172,55 @@ export function KitchenMenuCart({
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h3 className="text-lg font-semibold">{item.name}</h3>
-              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-900">
-                {ORDER_READINESS_CUSTOMER_QUESTION}{" "}
-                {getOrderReadinessLabel(item.orderReadiness)}
-              </span>
+              <div className="flex flex-wrap gap-2">
+                {item.flashOfferPrice ? (
+                  <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-900">
+                    عرض سريع
+                  </span>
+                ) : null}
+                {item.isDishOfTheDay ? (
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-900">
+                    طبق اليوم
+                  </span>
+                ) : null}
+                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-900">
+                  {ORDER_READINESS_CUSTOMER_QUESTION}{" "}
+                  {getOrderReadinessLabel(item.orderReadiness)}
+                </span>
+              </div>
             </div>
             <p className="mt-2 text-sm leading-7 text-zinc-600">
               {item.description || "لا يوجد وصف للصنف."}
             </p>
             <div className="mt-3 text-sm text-zinc-700">
-              <p>السعر: {item.basePrice} جنيه</p>
+              {item.flashOfferPrice ||
+              (item.isDishOfTheDay && item.dishOfTheDayPrice) ? (
+                <p>
+                  السعر:{" "}
+                  <strong>
+                    {item.flashOfferPrice ?? item.dishOfTheDayPrice} جنيه
+                  </strong>{" "}
+                  <span className="text-zinc-400 line-through">
+                    {item.basePrice} جنيه
+                  </span>
+                </p>
+              ) : (
+                <p>السعر: {item.basePrice} جنيه</p>
+              )}
               <p>العربون: {item.depositAmount} جنيه</p>
+              {item.flashOfferEndsAt ? (
+                <FlashEndsAt endsAt={item.flashOfferEndsAt} />
+              ) : null}
+              {item.flashQuantityLeft != null ? (
+                <p className="text-xs text-orange-800">
+                  متبقي من العرض: {item.flashQuantityLeft}
+                </p>
+              ) : null}
+              {item.isDishOfTheDay && item.dishOfTheDayQty != null ? (
+                <p className="text-xs text-emerald-800">
+                  متبقي من طبق اليوم: {item.dishOfTheDayQty}
+                </p>
+              ) : null}
             </div>
             {item.sizes.length ? (
               <div className="mt-3 space-y-2">

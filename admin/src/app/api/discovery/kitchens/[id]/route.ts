@@ -1,7 +1,12 @@
-import { ApprovalStatus, AvailabilityStatus } from "@prisma/client";
+import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import {
+  expireStaleFlashOffers,
+  serializeDishOfTheDay,
+  serializeFlashOffer,
+} from "@/lib/deals";
 
 export async function GET(
   _request: Request,
@@ -42,6 +47,20 @@ export async function GET(
           createdAt: "desc",
         },
       },
+      flashOffers: {
+        where: {
+          status: FlashOfferStatus.ACTIVE,
+          endsAt: { gt: new Date() },
+          quantityLeft: { gt: 0 },
+        },
+        include: {
+          menuItem: {
+            select: { name: true, imageUrl: true, basePrice: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       reviews: {
         where: {
           visibility: "VISIBLE",
@@ -65,5 +84,41 @@ export async function GET(
     return NextResponse.json({ error: "المطبخ غير موجود." }, { status: 404 });
   }
 
-  return NextResponse.json({ kitchen });
+  await expireStaleFlashOffers([kitchen.id]);
+
+  const dishItem = kitchen.menuItems.find(
+    (item) =>
+      item.isDishOfTheDay &&
+      item.dishOfTheDayPrice != null &&
+      (item.dishOfTheDayQty == null || item.dishOfTheDayQty > 0),
+  );
+  const flash = kitchen.flashOffers[0];
+
+  const { flashOffers: _ignored, ...kitchenRest } = kitchen;
+
+  return NextResponse.json({
+    kitchen: {
+      ...kitchenRest,
+      dishOfTheDay: dishItem
+        ? serializeDishOfTheDay({
+            ...dishItem,
+            kitchen: {
+              kitchenName: kitchen.kitchenName,
+              slug: kitchen.slug,
+              region: kitchen.region,
+            },
+          })
+        : null,
+      activeFlashOffer: flash
+        ? serializeFlashOffer({
+            ...flash,
+            kitchen: {
+              kitchenName: kitchen.kitchenName,
+              slug: kitchen.slug,
+              region: kitchen.region,
+            },
+          })
+        : null,
+    },
+  });
 }

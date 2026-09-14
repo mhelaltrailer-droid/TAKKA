@@ -16,3 +16,10 @@ export const KITCHEN_UPLOAD_CRITERIA = {
 } as const;
 
 export const KITCHEN_ONBOARDING_DRAFT_KEY = "takka_kitchen_onboarding_draft";
+
+/** Shown when kitchen GPS coords are missing (required for customer map). */
+export const KITCHEN_COORDS_REQUIRED =
+  "حدّد موقع المطبخ على الخريطة بزر «تحديد موقعي الحالي». الموقع إلزامي ويظهر للعملاء قبل الطلب ليقرروا التوصيل أو الاستلام.";
+
+export const KITCHEN_LOCATION_HINT =
+  "اختر الحي، ثم حدّد موقع المطبخ على الخريطة. العملاء يرونه ضمن «مطابخ قريبة» في نفس الحي، ويفتحون موقعه على الخريطة قبل الطلب.";

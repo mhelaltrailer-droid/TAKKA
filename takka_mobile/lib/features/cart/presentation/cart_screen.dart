@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/validation/phone.dart';
 import '../../home/data/customer_discovery_service.dart';
 import '../../orders/presentation/order_tracking_screen.dart';
@@ -185,7 +186,23 @@ class _CartScreenState extends State<CartScreen> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'شوف موقع المطبخ أولًا عشان تقرر: توصيل ولا استلام بنفسك؟',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          height: 1.4,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(height: 10),
+                      KitchenLocationActions(
+                        latitude: _cart.kitchenLatitude,
+                        longitude: _cart.kitchenLongitude,
+                        addressLine: _cart.kitchenAddressLine,
+                        regionLabel: _cart.kitchenRegionLabel,
+                      ),
+                      const SizedBox(height: 12),
                       SegmentedButton<String>(
                         segments: const [
                           ButtonSegment<String>(

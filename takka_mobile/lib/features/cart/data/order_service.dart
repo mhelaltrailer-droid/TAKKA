@@ -8,6 +8,8 @@ import 'cart_store.dart';
 class OrderService {
   const OrderService();
 
+  static const _httpTimeout = Duration(seconds: 25);
+
   Uri _buildUri(String path) {
     final base = AppConfig.apiBaseUrl.endsWith('/')
         ? AppConfig.apiBaseUrl.substring(0, AppConfig.apiBaseUrl.length - 1)
@@ -16,15 +18,22 @@ class OrderService {
     return Uri.parse('$base$path');
   }
 
+  Future<http.Response> _send(Future<http.Response> request) {
+    return request.timeout(
+      _httpTimeout,
+      onTimeout: () => throw Exception('انتهت مهلة الاتصال بالخادم.'),
+    );
+  }
+
   Future<List<CustomerAddress>> loadAddresses({
     required String sessionToken,
   }) async {
-    final response = await http.get(
+    final response = await _send(http.get(
       _buildUri('/api/customer/addresses'),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
-    );
+    ));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to load addresses: ${response.body}');
@@ -128,12 +137,12 @@ class OrderService {
   Future<List<CustomerOrderSummary>> loadMyOrders({
     required String sessionToken,
   }) async {
-    final response = await http.get(
+    final response = await _send(http.get(
       _buildUri('/api/orders/my'),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
-    );
+    ));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to load my orders: ${response.body}');
@@ -149,12 +158,12 @@ class OrderService {
     required String sessionToken,
     required String orderId,
   }) async {
-    final response = await http.get(
+    final response = await _send(http.get(
       _buildUri('/api/orders/$orderId'),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
-    );
+    ));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to load order details: ${response.body}');
@@ -381,12 +390,12 @@ class OrderService {
     required String sessionToken,
     required String orderId,
   }) async {
-    final response = await http.post(
+    final response = await _send(http.post(
       _buildUri('/api/orders/$orderId/confirm-received'),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
-    );
+    ));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to confirm received: ${response.body}');
@@ -397,12 +406,12 @@ class OrderService {
     required String sessionToken,
     required String orderId,
   }) async {
-    final response = await http.post(
+    final response = await _send(http.post(
       _buildUri('/api/orders/$orderId/cancel'),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
-    );
+    ));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to cancel order: ${response.body}');
@@ -533,6 +542,7 @@ class CustomerOrderDetails {
     required this.totalAmount,
     required this.depositAmount,
     required this.kitchenName,
+    required this.kitchenPhone,
     required this.addressLine,
     required this.items,
     required this.depositProofs,
@@ -563,6 +573,7 @@ class CustomerOrderDetails {
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
       kitchenName: kitchen['kitchenName']?.toString() ?? 'مطبخ',
+      kitchenPhone: kitchen['phoneNumber']?.toString(),
       addressLine: address['addressLine']?.toString(),
       items: (json['items'] as List<dynamic>? ?? const [])
           .map((item) => OrderLineItem.fromJson(item as Map<String, dynamic>))
@@ -593,6 +604,7 @@ class CustomerOrderDetails {
   final double totalAmount;
   final double depositAmount;
   final String kitchenName;
+  final String? kitchenPhone;
   final String? addressLine;
   final List<OrderLineItem> items;
   final List<DepositProofInfo> depositProofs;

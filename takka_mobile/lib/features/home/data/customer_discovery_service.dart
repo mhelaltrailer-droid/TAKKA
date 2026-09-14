@@ -108,9 +108,11 @@ class CustomerDiscoveryService {
   Future<KitchenDetails> loadKitchenDetails({
     required String kitchenIdOrSlug,
   }) async {
-    final response = await http.get(
-      _buildUri('/api/discovery/kitchens/$kitchenIdOrSlug'),
-    );
+    final response = await http
+        .get(
+          _buildUri('/api/discovery/kitchens/$kitchenIdOrSlug'),
+        )
+        .timeout(const Duration(seconds: 25));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to load kitchen details: ${response.body}');
@@ -118,6 +120,30 @@ class CustomerDiscoveryService {
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return KitchenDetails.fromJson(json['kitchen'] as Map<String, dynamic>);
+  }
+
+  Future<NearbyDealsData> loadNearbyDeals({
+    String? regionName,
+  }) async {
+    final params = <String, String>{
+      'cityName': 'مدينة العبور',
+    };
+    if (regionName != null && regionName.trim().isNotEmpty) {
+      params['regionName'] = regionName.trim();
+    }
+
+    final response = await http
+        .get(
+          _buildUri('/api/discovery/deals').replace(queryParameters: params),
+        )
+        .timeout(const Duration(seconds: 25));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to load deals: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return NearbyDealsData.fromJson(json);
   }
 }
 
@@ -234,14 +260,20 @@ class KitchenDetails {
     required this.addressLine,
     required this.cityName,
     required this.regionName,
+    required this.latitude,
+    required this.longitude,
     required this.averageRating,
     required this.reviewsCount,
     required this.menuItems,
     required this.reviews,
+    required this.dishOfTheDay,
+    required this.activeFlashOffer,
   });
 
   factory KitchenDetails.fromJson(Map<String, dynamic> json) {
     final region = (json['region'] as Map<String, dynamic>?) ?? const {};
+    final dishRaw = json['dishOfTheDay'];
+    final flashRaw = json['activeFlashOffer'];
 
     return KitchenDetails(
       id: json['id']?.toString() ?? '',
@@ -253,6 +285,8 @@ class KitchenDetails {
       addressLine: json['addressLine']?.toString() ?? '',
       cityName: json['cityName']?.toString() ?? '',
       regionName: region['regionName']?.toString() ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0,
       reviewsCount: (json['reviewsCount'] as num?)?.toInt() ?? 0,
       menuItems: (json['menuItems'] as List<dynamic>? ?? const [])
@@ -261,6 +295,12 @@ class KitchenDetails {
       reviews: (json['reviews'] as List<dynamic>? ?? const [])
           .map((item) => KitchenReview.fromJson(item as Map<String, dynamic>))
           .toList(),
+      dishOfTheDay: dishRaw is Map<String, dynamic>
+          ? DealDishOfTheDay.fromJson(dishRaw)
+          : null,
+      activeFlashOffer: flashRaw is Map<String, dynamic>
+          ? DealFlashOffer.fromJson(flashRaw)
+          : null,
     );
   }
 
@@ -273,10 +313,14 @@ class KitchenDetails {
   final String addressLine;
   final String cityName;
   final String regionName;
+  final double? latitude;
+  final double? longitude;
   final double averageRating;
   final int reviewsCount;
   final List<MenuItemSummary> menuItems;
   final List<KitchenReview> reviews;
+  final DealDishOfTheDay? dishOfTheDay;
+  final DealFlashOffer? activeFlashOffer;
 }
 
 class MenuItemSummary {
@@ -289,6 +333,9 @@ class MenuItemSummary {
     required this.depositAmount,
     required this.orderReadiness,
     required this.sizes,
+    required this.isDishOfTheDay,
+    required this.dishOfTheDayPrice,
+    required this.dishOfTheDayQty,
   });
 
   factory MenuItemSummary.fromJson(Map<String, dynamic> json) {
@@ -305,6 +352,10 @@ class MenuItemSummary {
       sizes: (json['sizes'] as List<dynamic>? ?? const [])
           .map((item) => MenuItemSizeSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
+      isDishOfTheDay: json['isDishOfTheDay'] == true,
+      dishOfTheDayPrice:
+          double.tryParse(json['dishOfTheDayPrice']?.toString() ?? ''),
+      dishOfTheDayQty: (json['dishOfTheDayQty'] as num?)?.toInt(),
     );
   }
 
@@ -316,6 +367,9 @@ class MenuItemSummary {
   final double depositAmount;
   final String orderReadiness;
   final List<MenuItemSizeSummary> sizes;
+  final bool isDishOfTheDay;
+  final double? dishOfTheDayPrice;
+  final int? dishOfTheDayQty;
 }
 
 class MenuItemSizeSummary {
@@ -365,4 +419,109 @@ class KitchenReview {
   final int ratingValue;
   final String? comment;
   final String customerName;
+}
+
+class NearbyDealsData {
+  const NearbyDealsData({
+    required this.dishesOfTheDay,
+    required this.flashOffers,
+  });
+
+  factory NearbyDealsData.fromJson(Map<String, dynamic> json) {
+    return NearbyDealsData(
+      dishesOfTheDay: (json['dishesOfTheDay'] as List<dynamic>? ?? const [])
+          .map((item) => DealDishOfTheDay.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      flashOffers: (json['flashOffers'] as List<dynamic>? ?? const [])
+          .map((item) => DealFlashOffer.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  final List<DealDishOfTheDay> dishesOfTheDay;
+  final List<DealFlashOffer> flashOffers;
+}
+
+class DealDishOfTheDay {
+  const DealDishOfTheDay({
+    required this.menuItemId,
+    required this.name,
+    required this.basePrice,
+    required this.dishOfTheDayPrice,
+    required this.dishOfTheDayQty,
+    required this.kitchenId,
+    required this.kitchenName,
+    required this.kitchenSlug,
+    required this.regionName,
+  });
+
+  factory DealDishOfTheDay.fromJson(Map<String, dynamic> json) {
+    return DealDishOfTheDay(
+      menuItemId: json['menuItemId']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
+      dishOfTheDayPrice:
+          double.tryParse(json['dishOfTheDayPrice']?.toString() ?? '') ?? 0,
+      dishOfTheDayQty: (json['dishOfTheDayQty'] as num?)?.toInt(),
+      kitchenId: json['kitchenId']?.toString() ?? '',
+      kitchenName: json['kitchenName']?.toString(),
+      kitchenSlug: json['kitchenSlug']?.toString(),
+      regionName: json['regionName']?.toString(),
+    );
+  }
+
+  final String menuItemId;
+  final String name;
+  final double basePrice;
+  final double dishOfTheDayPrice;
+  final int? dishOfTheDayQty;
+  final String kitchenId;
+  final String? kitchenName;
+  final String? kitchenSlug;
+  final String? regionName;
+}
+
+class DealFlashOffer {
+  const DealFlashOffer({
+    required this.id,
+    required this.menuItemId,
+    required this.itemName,
+    required this.basePrice,
+    required this.offerPrice,
+    required this.quantityLeft,
+    required this.endsAt,
+    required this.kitchenId,
+    required this.kitchenName,
+    required this.kitchenSlug,
+    required this.regionName,
+  });
+
+  factory DealFlashOffer.fromJson(Map<String, dynamic> json) {
+    return DealFlashOffer(
+      id: json['id']?.toString() ?? '',
+      menuItemId: json['menuItemId']?.toString() ?? '',
+      itemName: json['itemName']?.toString() ?? '',
+      basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
+      offerPrice: double.tryParse(json['offerPrice']?.toString() ?? '') ?? 0,
+      quantityLeft: (json['quantityLeft'] as num?)?.toInt() ?? 0,
+      endsAt: DateTime.tryParse(json['endsAt']?.toString() ?? '') ??
+          DateTime.now(),
+      kitchenId: json['kitchenId']?.toString() ?? '',
+      kitchenName: json['kitchenName']?.toString(),
+      kitchenSlug: json['kitchenSlug']?.toString(),
+      regionName: json['regionName']?.toString(),
+    );
+  }
+
+  final String id;
+  final String menuItemId;
+  final String itemName;
+  final double basePrice;
+  final double offerPrice;
+  final int quantityLeft;
+  final DateTime endsAt;
+  final String kitchenId;
+  final String? kitchenName;
+  final String? kitchenSlug;
+  final String? regionName;
 }

@@ -231,6 +231,17 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     setState(() => _step = next.clamp(1, 4));
   }
 
+  bool _hasValidKitchenCoords() {
+    final lat = _location.latitude;
+    final lng = _location.longitude;
+    return lat != null &&
+        lng != null &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180;
+  }
+
   bool _validateCurrentStep() {
     if (_step == 1) {
       if (_kitchenNameController.text.trim().isEmpty ||
@@ -248,6 +259,12 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       if (locationError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(locationError)),
+        );
+        return false;
+      }
+      if (!_hasValidKitchenCoords()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(kitchenCoordsRequired)),
         );
         return false;
       }
@@ -422,14 +439,14 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'موقع المطبخ (يظهر للعملاء في نفس الحي)',
+              'موقع المطبخ (إلزامي — يظهر للعملاء على الخريطة)',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
             ),
             const SizedBox(height: 6),
             Text(
-              'اختر الحي الذي يعمل فيه المطبخ. العملاء الذين يختارون نفس الحي سيرون مطبخك ضمن «مطابخ قريبة منك».',
+              kitchenLocationHint,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: TakkaColors.muted,
                     height: 1.5,
@@ -440,6 +457,7 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
               initialRegionName: _location.regionName,
               initialLatitude: _location.latitude,
               initialLongitude: _location.longitude,
+              coordsRequired: true,
               onChanged: (selection) {
                 setState(() => _location = selection);
                 _saveDraft();
@@ -661,6 +679,13 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     if (locationError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(locationError)),
+      );
+      return;
+    }
+
+    if (!_hasValidKitchenCoords()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(kitchenCoordsRequired)),
       );
       return;
     }

@@ -29,6 +29,13 @@ const kitchenUploadCriteriaNationalId =
 
 const kitchenOnboardingDraftKey = 'takka_kitchen_onboarding_draft';
 
+/// Shown when kitchen GPS coords are missing (required for customer map).
+const kitchenCoordsRequired =
+    'حدّد موقع المطبخ على الخريطة بزر «تحديد موقعي الحالي». الموقع إلزامي ويظهر للعملاء قبل الطلب ليقرروا التوصيل أو الاستلام.';
+
+const kitchenLocationHint =
+    'اختر الحي، ثم حدّد موقع المطبخ على الخريطة. العملاء يرونه ضمن «مطابخ قريبة» في نفس الحي، ويفتحون موقعه على الخريطة قبل الطلب.';
+
 const kitchenOnboardingScreenTitle = 'إعداد المطبخ';
 const kitchenOnboardingSaveDraft = 'حفظ المسودة';
 const kitchenOnboardingNext = 'التالي';

@@ -7,6 +7,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { CheckoutPricingSummary } from "@/components/checkout-pricing-summary";
 import type { DeliveryCoords } from "@/components/delivery-location-picker";
+import { KitchenLocationActions } from "@/components/kitchen-location-actions";
 import {
   ORDER_READINESS_CUSTOMER_QUESTION,
   getOrderReadinessLabel,
@@ -54,6 +55,10 @@ const emptyCart: WebCartState = {
   kitchenId: null,
   kitchenName: null,
   kitchenSlug: null,
+  kitchenLatitude: null,
+  kitchenLongitude: null,
+  kitchenAddressLine: null,
+  kitchenRegionLabel: null,
   items: [],
 };
 
@@ -316,6 +321,29 @@ export function WebCartCheckout({
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">طريقة الاستلام</h2>
+          <p className="mt-2 text-sm leading-7 text-zinc-600">
+            شوف موقع المطبخ أولًا عشان تقرر: توصيل ولا استلام بنفسك؟
+          </p>
+          <div className="mt-4">
+            <KitchenLocationActions
+              latitude={cart.kitchenLatitude}
+              longitude={cart.kitchenLongitude}
+              addressLine={cart.kitchenAddressLine}
+              regionLabel={cart.kitchenRegionLabel}
+            />
+          </div>
+          {cart.kitchenSlug ? (
+            <p className="mt-3 text-xs text-zinc-500">
+              أو راجع تفاصيل المطبخ من{" "}
+              <Link
+                href={`/kitchens/${cart.kitchenSlug}`}
+                className="font-semibold text-[var(--brand-secondary)] underline underline-offset-4"
+              >
+                هنا
+              </Link>
+              .
+            </p>
+          ) : null}
           <div className="mt-4 space-y-3 text-sm">
             <label className="flex items-center gap-3">
               <input

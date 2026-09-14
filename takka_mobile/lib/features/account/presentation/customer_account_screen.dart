@@ -1,7 +1,7 @@
-import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/auth/session_token.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../cart/presentation/addresses_screen.dart';
 import '../../home/data/customer_discovery_service.dart';
@@ -51,15 +51,20 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
   }
 
   Future<_AccountProfile> _loadProfile() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken();
-    final user = await _service.loadMe(sessionToken: token.jwt);
+    final jwt = await requireSessionJwt(context);
+    final user = await _service.loadMe(sessionToken: jwt);
     return _AccountProfile(
       fullName: user.fullName.trim().isEmpty
           ? widget.fallbackName
           : user.fullName,
       phoneNumber: user.phoneNumber,
     );
+  }
+
+  void _retry() {
+    setState(() {
+      _profileFuture = _loadProfile();
+    });
   }
 
   String _formatPhone(String? phone) {
@@ -83,11 +88,99 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
         child: FutureBuilder<_AccountProfile>(
           future: _profileFuture,
           builder: (context, snapshot) {
-            final profile = snapshot.data;
-            final name = profile?.fullName ?? widget.fallbackName;
-            final phone = _formatPhone(profile?.phoneNumber);
-            final loading =
-                snapshot.connectionState != ConnectionState.done;
+            if (snapshot.connectionState != ConnectionState.done) {
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                children: [
+                  const Text(
+                    'حسابي',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _ProfileCardSkeleton(fallbackName: widget.fallbackName),
+                  const SizedBox(height: 28),
+                  const Text(
+                    'الحساب',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            if (snapshot.hasError) {
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                children: [
+                  const Text(
+                    'حسابي',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.wifi_off_rounded, size: 40),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'تعذر تحميل الحساب',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            snapshot.error.toString(),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              height: 1.45,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: _retry,
+                            child: const Text('إعادة المحاولة'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _AccountRow(
+                    icon: Icons.logout_rounded,
+                    iconBg: const Color(0xFFFFEBEE),
+                    iconColor: const Color(0xFFC62828),
+                    title: 'تسجيل الخروج',
+                    titleColor: const Color(0xFFC62828),
+                    onTap: widget.onSignOut,
+                  ),
+                ],
+              );
+            }
+
+            final profile = snapshot.data!;
+            final name = profile.fullName;
+            final phone = _formatPhone(profile.phoneNumber);
 
             return RefreshIndicator(
               onRefresh: () async {
@@ -112,81 +205,66 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
                       color: TakkaColors.primary,
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (loading)
-                                    const SizedBox(
-                                      height: 22,
-                                      width: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  else
-                                    Text(
-                                      name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    phone,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                phone,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Text(
+                                    'حساب مشتري',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.92),
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  const SizedBox(height: 10),
-                                  Align(
-                                    alignment: AlignmentDirectional.centerStart,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(999),
-                                      ),
-                                      child: const Text(
-                                        'حساب مشتري',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.person_rounded,
-                                size: 34,
-                                color: TakkaColors.ink,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            size: 34,
+                            color: TakkaColors.ink,
+                          ),
                         ),
                       ],
                     ),
@@ -245,6 +323,59 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileCardSkeleton extends StatelessWidget {
+  const _ProfileCardSkeleton({required this.fallbackName});
+
+  final String fallbackName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: TakkaColors.primary,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fallbackName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'جاري تحميل بيانات الحساب…',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

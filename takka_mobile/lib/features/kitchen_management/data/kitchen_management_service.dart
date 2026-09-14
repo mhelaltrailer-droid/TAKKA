@@ -136,6 +136,123 @@ class KitchenManagementService {
       throw Exception('Failed to delete menu item: ${response.body}');
     }
   }
+
+  Future<KitchenDishOfTheDay?> loadDishOfTheDay({
+    required String sessionToken,
+  }) async {
+    final response = await http.get(
+      _buildUri('/api/kitchen/dish-of-the-day'),
+      headers: {'Authorization': 'Bearer $sessionToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to load dish of the day: ${response.body}');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = json['dishOfTheDay'];
+    if (raw == null) return null;
+    return KitchenDishOfTheDay.fromJson(raw as Map<String, dynamic>);
+  }
+
+  Future<KitchenDishOfTheDay?> saveDishOfTheDay({
+    required String sessionToken,
+    required String menuItemId,
+    required double dishOfTheDayPrice,
+    int? dishOfTheDayQty,
+  }) async {
+    final response = await http.post(
+      _buildUri('/api/kitchen/dish-of-the-day'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'menuItemId': menuItemId,
+        'dishOfTheDayPrice': dishOfTheDayPrice,
+        'dishOfTheDayQty': dishOfTheDayQty,
+      }),
+    );
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(json['error']?.toString() ?? 'تعذر حفظ طبق اليوم');
+    }
+    final raw = json['dishOfTheDay'];
+    if (raw == null) return null;
+    return KitchenDishOfTheDay.fromJson(raw as Map<String, dynamic>);
+  }
+
+  Future<void> clearDishOfTheDay({required String sessionToken}) async {
+    final response = await http.post(
+      _buildUri('/api/kitchen/dish-of-the-day'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'clear': true}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(json['error']?.toString() ?? 'تعذر إلغاء طبق اليوم');
+    }
+  }
+
+  Future<KitchenFlashOffer?> loadActiveFlashOffer({
+    required String sessionToken,
+  }) async {
+    final response = await http.get(
+      _buildUri('/api/kitchen/flash-offers'),
+      headers: {'Authorization': 'Bearer $sessionToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to load flash offers: ${response.body}');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = json['activeFlashOffer'];
+    if (raw == null) return null;
+    return KitchenFlashOffer.fromJson(raw as Map<String, dynamic>);
+  }
+
+  Future<KitchenFlashOffer> createFlashOffer({
+    required String sessionToken,
+    required String menuItemId,
+    required double offerPrice,
+    required int quantity,
+    required int durationHours,
+  }) async {
+    final response = await http.post(
+      _buildUri('/api/kitchen/flash-offers'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'menuItemId': menuItemId,
+        'offerPrice': offerPrice,
+        'quantity': quantity,
+        'durationHours': durationHours,
+      }),
+    );
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(json['error']?.toString() ?? 'تعذر إنشاء العرض');
+    }
+    return KitchenFlashOffer.fromJson(
+      json['activeFlashOffer'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> endFlashOffer({
+    required String sessionToken,
+    required String offerId,
+  }) async {
+    final response = await http.post(
+      _buildUri('/api/kitchen/flash-offers/$offerId/end'),
+      headers: {'Authorization': 'Bearer $sessionToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(json['error']?.toString() ?? 'تعذر إنهاء العرض');
+    }
+  }
 }
 
 class KitchenProfileData {
@@ -212,6 +329,7 @@ class KitchenManagedMenuItem {
     required this.rejectionReason,
     required this.draftStatus,
     required this.draftRejectionReason,
+    required this.isDishOfTheDay,
   });
 
   factory KitchenManagedMenuItem.fromJson(Map<String, dynamic> json) {
@@ -229,6 +347,7 @@ class KitchenManagedMenuItem {
       rejectionReason: json['rejectionReason']?.toString(),
       draftStatus: json['draftStatus']?.toString(),
       draftRejectionReason: json['draftRejectionReason']?.toString(),
+      isDishOfTheDay: json['isDishOfTheDay'] == true,
     );
   }
 
@@ -243,4 +362,65 @@ class KitchenManagedMenuItem {
   final String? rejectionReason;
   final String? draftStatus;
   final String? draftRejectionReason;
+  final bool isDishOfTheDay;
+}
+
+class KitchenDishOfTheDay {
+  const KitchenDishOfTheDay({
+    required this.menuItemId,
+    required this.name,
+    required this.basePrice,
+    required this.dishOfTheDayPrice,
+    required this.dishOfTheDayQty,
+  });
+
+  factory KitchenDishOfTheDay.fromJson(Map<String, dynamic> json) {
+    return KitchenDishOfTheDay(
+      menuItemId: json['menuItemId']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
+      dishOfTheDayPrice:
+          double.tryParse(json['dishOfTheDayPrice']?.toString() ?? '') ?? 0,
+      dishOfTheDayQty: (json['dishOfTheDayQty'] as num?)?.toInt(),
+    );
+  }
+
+  final String menuItemId;
+  final String name;
+  final double basePrice;
+  final double dishOfTheDayPrice;
+  final int? dishOfTheDayQty;
+}
+
+class KitchenFlashOffer {
+  const KitchenFlashOffer({
+    required this.id,
+    required this.menuItemId,
+    required this.itemName,
+    required this.basePrice,
+    required this.offerPrice,
+    required this.quantityLeft,
+    required this.endsAt,
+  });
+
+  factory KitchenFlashOffer.fromJson(Map<String, dynamic> json) {
+    return KitchenFlashOffer(
+      id: json['id']?.toString() ?? '',
+      menuItemId: json['menuItemId']?.toString() ?? '',
+      itemName: json['itemName']?.toString() ?? '',
+      basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
+      offerPrice: double.tryParse(json['offerPrice']?.toString() ?? '') ?? 0,
+      quantityLeft: (json['quantityLeft'] as num?)?.toInt() ?? 0,
+      endsAt: DateTime.tryParse(json['endsAt']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  final String id;
+  final String menuItemId;
+  final String itemName;
+  final double basePrice;
+  final double offerPrice;
+  final int quantityLeft;
+  final DateTime endsAt;
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveDealUnitPrice } from "@/lib/deals";
 import { createNotification } from "@/lib/notifications";
 import {
   isValidEgyptianPhone,
@@ -150,7 +151,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const orderItemsData = payload.items.map((requestedItem) => {
+    const orderItemsData: Array<{
+      menuItemId: string;
+      menuItemSizeId: string | null;
+      itemNameSnapshot: string;
+      sizeNameSnapshot: string | null;
+      unitPrice: Prisma.Decimal;
+      depositAmount: Prisma.Decimal;
+      quantity: number;
+      lineTotal: Prisma.Decimal;
+      customerNote: string | null;
+    }> = [];
+
+    for (const requestedItem of payload.items) {
       const menuItem = menuItems.find((item) => item.id === requestedItem.menuItemId);
 
       if (!menuItem) {
@@ -161,7 +174,7 @@ export async function POST(request: Request) {
         ? menuItem.sizes.find((size) => size.id === requestedItem.menuItemSizeId)
         : null;
 
-      const unitPrice = selectedSize?.price ?? menuItem.basePrice;
+      const regularUnitPrice = selectedSize?.price ?? menuItem.basePrice;
       const depositAmount = selectedSize?.depositAmount ?? menuItem.depositAmount;
       const quantity = requestedItem.quantity;
 
@@ -169,7 +182,20 @@ export async function POST(request: Request) {
         throw new Error(`الكمية غير صحيحة للصنف "${menuItem.name}".`);
       }
 
-      return {
+      // Flash / dish-of-the-day apply to base item price (no size variant deals).
+      const { unitPrice } = selectedSize
+        ? { unitPrice: regularUnitPrice }
+        : await resolveDealUnitPrice({
+            kitchenId: kitchen.id,
+            menuItemId: menuItem.id,
+            quantity,
+            regularUnitPrice,
+            isDishOfTheDay: menuItem.isDishOfTheDay,
+            dishOfTheDayPrice: menuItem.dishOfTheDayPrice,
+            dishOfTheDayQty: menuItem.dishOfTheDayQty,
+          });
+
+      orderItemsData.push({
         menuItemId: menuItem.id,
         menuItemSizeId: selectedSize?.id ?? null,
         itemNameSnapshot: menuItem.name,
@@ -179,8 +205,8 @@ export async function POST(request: Request) {
         quantity,
         lineTotal: unitPrice.mul(quantity),
         customerNote: requestedItem.customerNote?.trim() || null,
-      };
-    });
+      });
+    }
 
     const subtotalAmount = orderItemsData.reduce(
       (sum, item) => sum.add(item.lineTotal),
