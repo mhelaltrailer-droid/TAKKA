@@ -1,17 +1,12 @@
 import Link from "next/link";
 import { UserRole } from "@prisma/client";
 
-import { SubmitButton } from "@/components/submit-button";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getRoleLabel, type AppRole } from "@/lib/roles";
 
-import {
-  createAdminManagedUser,
-  deleteAdminManagedUser,
-  toggleAdminManagedUserActive,
-  updateAdminManagedUser,
-} from "./actions";
+import { CreateUserForm, UpdateUserForm } from "./user-forms";
+import { UserRowActions } from "./user-row-actions";
 
 function dbRoleToAppRole(role: UserRole): AppRole {
   switch (role) {
@@ -66,6 +61,7 @@ export default async function AdminUsersPage({
           <h1 className="mt-2 text-3xl font-bold">المستخدمون</h1>
           <p className="mt-3 text-sm leading-7 text-zinc-600">
             عرض الحسابات، إضافة مستخدم، تعديل الدور والبيانات، تعطيل أو حذف.
+            الحساب المرتبط بمطبخ أو طلبات يُعطَّل عند الحذف بدل المسح النهائي.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
@@ -79,50 +75,7 @@ export default async function AdminUsersPage({
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">إضافة مستخدم</h2>
-          <form
-            action={createAdminManagedUser}
-            className="mt-4 grid gap-3 md:grid-cols-2"
-          >
-            <input
-              name="fullName"
-              required
-              placeholder="الاسم الكامل"
-              className="rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-            />
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="البريد الإلكتروني"
-              className="rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-            />
-            <input
-              name="phoneNumber"
-              placeholder="رقم الهاتف (01xxxxxxxxx)"
-              className="rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-            />
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              placeholder="كلمة المرور (8 أحرف على الأقل)"
-              className="rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-            />
-            <select
-              name="role"
-              required
-              defaultValue="CUSTOMER"
-              className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
-            >
-              <option value="CUSTOMER">عميل</option>
-              <option value="KITCHEN_OWNER">صاحب مطبخ</option>
-              <option value="ADMIN">إدارة</option>
-            </select>
-            <div className="flex items-center">
-              <SubmitButton label="إنشاء الحساب" pendingLabel="جارٍ الإنشاء..." />
-            </div>
-          </form>
+          <CreateUserForm />
         </section>
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -197,62 +150,19 @@ export default async function AdminUsersPage({
                         : ""}
                     </p>
 
-                    <form
-                      action={updateAdminManagedUser}
-                      className="mt-4 grid gap-3 md:grid-cols-4"
-                    >
-                      <input type="hidden" name="userId" value={user.id} />
-                      <input
-                        name="fullName"
-                        required
-                        defaultValue={user.fullName}
-                        className="rounded-2xl border border-zinc-300 px-3 py-2 text-sm outline-none"
-                      />
-                      <input
-                        name="phoneNumber"
-                        defaultValue={user.phoneNumber ?? ""}
-                        placeholder="الهاتف"
-                        className="rounded-2xl border border-zinc-300 px-3 py-2 text-sm outline-none"
-                      />
-                      <select
-                        name="role"
-                        defaultValue={user.role}
-                        className="rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-sm outline-none"
-                      >
-                        <option value="CUSTOMER">عميل</option>
-                        <option value="KITCHEN_OWNER">صاحب مطبخ</option>
-                        <option value="ADMIN">إدارة</option>
-                      </select>
-                      <SubmitButton label="حفظ التعديل" pendingLabel="جارٍ الحفظ..." />
-                    </form>
+                    <UpdateUserForm
+                      userId={user.id}
+                      fullName={user.fullName}
+                      phoneNumber={user.phoneNumber ?? ""}
+                      role={user.role}
+                    />
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <form action={toggleAdminManagedUserActive}>
-                        <input type="hidden" name="userId" value={user.id} />
-                        <button
-                          type="submit"
-                          disabled={isSelf}
-                          className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium disabled:opacity-50"
-                        >
-                          {user.isActive ? "تعطيل" : "تفعيل"}
-                        </button>
-                      </form>
-                      <form action={deleteAdminManagedUser}>
-                        <input type="hidden" name="userId" value={user.id} />
-                        <button
-                          type="submit"
-                          disabled={isSelf || hasLinkedData}
-                          title={
-                            hasLinkedData
-                              ? "لا يمكن الحذف لوجود مطبخ أو طلبات — استخدم التعطيل"
-                              : undefined
-                          }
-                          className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-50"
-                        >
-                          حذف
-                        </button>
-                      </form>
-                    </div>
+                    <UserRowActions
+                      userId={user.id}
+                      isActive={user.isActive}
+                      isSelf={isSelf}
+                      hasLinkedData={hasLinkedData}
+                    />
                   </article>
                 );
               })
