@@ -127,14 +127,23 @@ export async function GET(request: Request) {
 
   await expireStaleFlashOffers(kitchens.map((k) => k.id));
 
+  const kitchenIds = kitchens.map((k) => k.id);
+  const dishItems = kitchenIds.length
+    ? await db.menuItem.findMany({
+        where: {
+          kitchenId: { in: kitchenIds },
+          isDishOfTheDay: true,
+          approvalStatus: ApprovalStatus.APPROVED,
+          dishOfTheDayPrice: { not: null },
+          OR: [{ dishOfTheDayQty: null }, { dishOfTheDayQty: { gt: 0 } }],
+        },
+      })
+    : [];
+  const dishByKitchen = new Map(dishItems.map((item) => [item.kitchenId, item]));
+
   return NextResponse.json({
     kitchens: kitchens.map((kitchen) => {
-      const dishItem = kitchen.menuItems.find(
-        (item) =>
-          item.isDishOfTheDay &&
-          item.dishOfTheDayPrice != null &&
-          (item.dishOfTheDayQty == null || item.dishOfTheDayQty > 0),
-      );
+      const dishItem = dishByKitchen.get(kitchen.id) ?? null;
       const flash = kitchen.flashOffers[0];
 
       return {

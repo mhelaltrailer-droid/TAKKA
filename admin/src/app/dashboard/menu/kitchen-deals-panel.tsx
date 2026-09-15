@@ -3,14 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { SubmitButton } from "@/components/submit-button";
+import { UploadField } from "@/components/upload-field";
 import { PageSkeleton } from "@/components/ui/skeleton";
+import { FOOD_CATEGORIES } from "@/lib/food-categories";
 
 type MenuOption = {
   id: string;
   name: string;
+  description?: string | null;
+  categoryId?: string;
   basePrice: number;
+  depositAmount?: number;
+  imageUrl?: string | null;
   approvalStatus: string;
   isAvailable: boolean;
+  draftStatus?: string | null;
 };
 
 type DishOfTheDay = {
@@ -59,14 +66,23 @@ function useCountdown(endsAt: string | null) {
   }, [endsAt, now]);
 }
 
-export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
-  const approved = menuItems.filter(
-    (item) => item.approvalStatus === "APPROVED" && item.isAvailable,
-  );
+function statusLabel(item: MenuOption) {
+  if (item.approvalStatus === "PENDING") return "بانتظار الاعتماد";
+  if (item.approvalStatus === "REJECTED") return "مرفوض";
+  if (item.draftStatus === "PENDING") return "تعديل بانتظار الاعتماد";
+  return item.isAvailable ? "ظاهر في المنيو" : "مخفي عن المنيو";
+}
 
+export function KitchenDealsPanel({
+  menuItems: initialItems,
+}: {
+  menuItems: MenuOption[];
+}) {
+  const [items, setItems] = useState<MenuOption[]>(initialItems);
   const [dish, setDish] = useState<DishOfTheDay | null>(null);
   const [flash, setFlash] = useState<FlashOffer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [dishItemId, setDishItemId] = useState("");
@@ -78,10 +94,45 @@ export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
   const [flashQty, setFlashQty] = useState("10");
   const [flashHours, setFlashHours] = useState<"1" | "2">("1");
 
+  const [showCreate, setShowCreate] = useState(false);
+  const [editItemId, setEditItemId] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formCategoryId, setFormCategoryId] = useState("meals");
+  const [formBasePrice, setFormBasePrice] = useState("");
+  const [formDeposit, setFormDeposit] = useState("0");
+  const [formImageUrl, setFormImageUrl] = useState("");
+
   const countdown = useCountdown(flash?.endsAt ?? null);
+
+  const approved = items.filter((item) => item.approvalStatus === "APPROVED");
+  const pending = items.filter((item) => item.approvalStatus === "PENDING");
+
+  const loadMenu = useCallback(async () => {
+    const res = await fetch("/api/kitchen/menu-items");
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "تعذر تحميل المنيو");
+    const mapped = (json.menuItems as Array<Record<string, unknown>>).map(
+      (item) => ({
+        id: String(item.id),
+        name: String(item.name ?? ""),
+        description: (item.description as string | null) ?? null,
+        categoryId: String(item.categoryId ?? "meals"),
+        basePrice: Number(item.basePrice ?? 0),
+        depositAmount: Number(item.depositAmount ?? 0),
+        imageUrl: (item.imageUrl as string | null) ?? null,
+        approvalStatus: String(item.approvalStatus ?? "PENDING"),
+        isAvailable: item.isAvailable === true,
+        draftStatus: (item.draftStatus as string | null) ?? null,
+      }),
+    );
+    setItems(mapped);
+    return mapped;
+  }, []);
 
   const refresh = useCallback(async () => {
     setError(null);
+    await loadMenu();
     const [dishRes, flashRes] = await Promise.all([
       fetch("/api/kitchen/dish-of-the-day"),
       fetch("/api/kitchen/flash-offers"),
@@ -101,7 +152,7 @@ export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
           : "",
       );
     }
-  }, []);
+  }, [loadMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +171,110 @@ export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
       cancelled = true;
     };
   }, [refresh]);
+
+  function fillEditForm(itemId: string) {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    setEditItemId(item.id);
+    setFormName(item.name);
+    setFormDescription(item.description ?? "");
+    setFormCategoryId(item.categoryId ?? "meals");
+    setFormBasePrice(String(item.basePrice));
+    setFormDeposit(String(item.depositAmount ?? 0));
+    setFormImageUrl(item.imageUrl ?? "");
+    setShowCreate(false);
+  }
+
+  function resetItemForm() {
+    setEditItemId("");
+    setFormName("");
+    setFormDescription("");
+    setFormCategoryId("meals");
+    setFormBasePrice("");
+    setFormDeposit("0");
+    setFormImageUrl("");
+  }
+
+  async function createHiddenItem(event: React.FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setInfo(null);
+    const res = await fetch("/api/kitchen/menu-items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: formName,
+        description: formDescription,
+        categoryId: formCategoryId,
+        orderReadiness: "AVAILABLE_NOW",
+        basePrice: Number(formBasePrice),
+        depositAmount: Number(formDeposit),
+        imageUrl: formImageUrl || undefined,
+        startHidden: true,
+        sizes: [],
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "تعذر إضافة الصنف");
+      return;
+    }
+    setInfo(
+      "تم حفظ الصنف مخفيًا وإرساله للاعتماد. بعد الاعتماد يمكنك تعيينه كطبق يوم أو عرض سريع.",
+    );
+    resetItemForm();
+    setShowCreate(false);
+    await refresh();
+  }
+
+  async function saveItemEdits(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editItemId) return;
+    setError(null);
+    setInfo(null);
+    const res = await fetch("/api/kitchen/menu-items", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editItemId,
+        name: formName,
+        description: formDescription,
+        categoryId: formCategoryId,
+        orderReadiness: "AVAILABLE_NOW",
+        basePrice: Number(formBasePrice),
+        depositAmount: Number(formDeposit),
+        imageUrl: formImageUrl || undefined,
+        sizes: [],
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "تعذر حفظ التعديل");
+      return;
+    }
+    setInfo(
+      "تم إرسال التعديل للاعتماد. النسخة الحالية تبقى كما هي حتى يعتمد الأدمن.",
+    );
+    resetItemForm();
+    await refresh();
+  }
+
+  async function toggleVisibility(item: MenuOption) {
+    setError(null);
+    const res = await fetch(`/api/kitchen/menu-items/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isAvailable: !item.isAvailable }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(
+        (json as { error?: string }).error || "تعذر تحديث ظهور الصنف",
+      );
+      return;
+    }
+    await refresh();
+  }
 
   async function saveDish(event: React.FormEvent) {
     event.preventDefault();
@@ -203,42 +358,74 @@ export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
   }
 
   return (
-    <section className="grid gap-6 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-2">
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">طبق اليوم</h2>
-          <p className="mt-1 text-sm leading-7 text-zinc-600">
-            وجبة موحدة جاهزة للتسليم بسعر أقل، تظهر للعملاء القريبين من حيك.
-          </p>
-        </div>
+    <section className="space-y-6 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-semibold">طبق اليوم والعروض السريعة</h2>
+        <p className="mt-1 text-sm leading-7 text-zinc-600">
+          اختر صنفًا معتمدًا (ظاهر أو مخفي)، أو أضف صنفًا جديدًا يُحفظ مخفيًا
+          ويُرسل للاعتماد. يمكنك تعديل التفاصيل قبل التعيين — التعديل يمر
+          باعتماد الإدارة.
+        </p>
+      </div>
 
-        {dish ? (
-          <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            النشط: <strong>{dish.name}</strong> — {formatMoney(dish.dishOfTheDayPrice)}{" "}
-            (بدل {formatMoney(dish.basePrice)})
-            {dish.dishOfTheDayQty != null
-              ? ` · متبقي ${dish.dishOfTheDayQty}`
-              : ""}
-          </div>
-        ) : (
-          <div className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
-            لا يوجد طبق يوم مفعّل حاليًا.
-          </div>
-        )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            resetItemForm();
+            setShowCreate(true);
+          }}
+          className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white"
+        >
+          إضافة صنف جديد للعروض
+        </button>
+        {editItemId || showCreate ? (
+          <button
+            type="button"
+            onClick={() => {
+              resetItemForm();
+              setShowCreate(false);
+            }}
+            className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+          >
+            إلغاء النموذج
+          </button>
+        ) : null}
+      </div>
 
-        <form onSubmit={saveDish} className="grid gap-3">
+      {(showCreate || editItemId) && (
+        <form
+          onSubmit={showCreate ? createHiddenItem : saveItemEdits}
+          className="grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+        >
+          <h3 className="font-semibold">
+            {showCreate
+              ? "صنف جديد (مخفي + بانتظار الاعتماد)"
+              : "تعديل تفاصيل الصنف"}
+          </h3>
+          <input
+            required
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="اسم الصنف"
+            className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
+          />
+          <textarea
+            value={formDescription}
+            onChange={(e) => setFormDescription(e.target.value)}
+            placeholder="الوصف"
+            rows={3}
+            className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
+          />
           <select
             required
-            value={dishItemId}
-            onChange={(e) => setDishItemId(e.target.value)}
+            value={formCategoryId}
+            onChange={(e) => setFormCategoryId(e.target.value)}
             className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
           >
-            <option value="" disabled>
-              اختر صنفًا معتمدًا
-            </option>
-            {approved.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} ({formatMoney(item.basePrice)})
+            {FOOD_CATEGORIES.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.thumb} {category.label}
               </option>
             ))}
           </select>
@@ -248,124 +435,239 @@ export function KitchenDealsPanel({ menuItems }: { menuItems: MenuOption[] }) {
               type="number"
               min="0.01"
               step="0.01"
-              placeholder="سعر طبق اليوم"
-              value={dishPrice}
-              onChange={(e) => setDishPrice(e.target.value)}
-              className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+              value={formBasePrice}
+              onChange={(e) => setFormBasePrice(e.target.value)}
+              placeholder="السعر الأساسي"
+              className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
             />
             <input
+              required
               type="number"
               min="0"
-              step="1"
-              placeholder="الكمية (اختياري)"
-              value={dishQty}
-              onChange={(e) => setDishQty(e.target.value)}
-              className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+              step="0.01"
+              value={formDeposit}
+              onChange={(e) => setFormDeposit(e.target.value)}
+              placeholder="العربون"
+              className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <SubmitButton label="حفظ طبق اليوم" pendingLabel="جارٍ الحفظ..." />
-            {dish ? (
-              <button
-                type="button"
-                onClick={clearDish}
-                className="rounded-full border border-zinc-300 px-5 py-3 text-sm font-medium"
-              >
-                إلغاء طبق اليوم
-              </button>
-            ) : null}
-          </div>
+          <UploadField
+            endpoint="menuItemImage"
+            label="صورة الصنف"
+            includeHiddenInput={false}
+            defaultValue={formImageUrl || null}
+            onUploaded={(url) => setFormImageUrl(url)}
+          />
+          <SubmitButton
+            label={showCreate ? "حفظ وإرسال للاعتماد" : "حفظ التعديل للاعتماد"}
+            pendingLabel="جارٍ الحفظ..."
+          />
         </form>
+      )}
+
+      <div className="rounded-2xl border border-zinc-200 p-4">
+        <h3 className="font-semibold">أصناف المطبخ</h3>
+        <div className="mt-3 space-y-2">
+          {items.length === 0 ? (
+            <p className="text-sm text-zinc-500">لا توجد أصناف بعد.</p>
+          ) : (
+            items.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-sm"
+              >
+                <div>
+                  <p className="font-medium">
+                    {item.name} · {formatMoney(item.basePrice)}
+                  </p>
+                  <p className="text-xs text-zinc-500">{statusLabel(item)}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fillEditForm(item.id)}
+                    className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium"
+                  >
+                    تعديل
+                  </button>
+                  {item.approvalStatus === "APPROVED" ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleVisibility(item)}
+                      className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium"
+                    >
+                      {item.isAvailable ? "إخفاء" : "إظهار في المنيو"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {pending.length > 0 ? (
+          <p className="mt-3 text-xs text-amber-700">
+            أصناف بانتظار الاعتماد لا يمكن تعيينها كطبق يوم أو فلاش حتى تُعتمد.
+          </p>
+        ) : null}
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">عرض سريع (Flash)</h2>
-          <p className="mt-1 text-sm leading-7 text-zinc-600">
-            خصم لمدة ساعة أو ساعتين مع عدّاد. ينتهي تلقائيًا أو عند نفاذ الكمية أو
-            يدويًا.
-          </p>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">طبق اليوم</h3>
+          {dish ? (
+            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              النشط: <strong>{dish.name}</strong> —{" "}
+              {formatMoney(dish.dishOfTheDayPrice)} (بدل{" "}
+              {formatMoney(dish.basePrice)})
+              {dish.dishOfTheDayQty != null
+                ? ` · متبقي ${dish.dishOfTheDayQty}`
+                : ""}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+              لا يوجد طبق يوم مفعّل حاليًا.
+            </div>
+          )}
 
-        {flash ? (
-          <div className="rounded-2xl bg-orange-50 px-4 py-3 text-sm text-orange-950">
-            <p>
-              النشط: <strong>{flash.itemName}</strong> —{" "}
-              {formatMoney(flash.offerPrice)} (بدل {formatMoney(flash.basePrice)})
-            </p>
-            <p className="mt-1">
-              متبقي {flash.quantityLeft} · العدّاد:{" "}
-              <strong className="font-mono">{countdown}</strong>
-            </p>
-            <button
-              type="button"
-              onClick={endFlash}
-              className="mt-3 rounded-full border border-orange-300 bg-white px-4 py-2 text-sm font-medium"
-            >
-              إنهاء العرض الآن
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={createFlash} className="grid gap-3">
+          <form onSubmit={saveDish} className="grid gap-3">
             <select
               required
-              value={flashItemId}
-              onChange={(e) => setFlashItemId(e.target.value)}
+              value={dishItemId}
+              onChange={(e) => setDishItemId(e.target.value)}
               className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
             >
               <option value="" disabled>
-                اختر صنفًا للعرض
+                اختر صنفًا معتمدًا
               </option>
               {approved.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name} ({formatMoney(item.basePrice)})
+                  {item.isAvailable ? "" : " · مخفي"}
                 </option>
               ))}
             </select>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <input
                 required
                 type="number"
                 min="0.01"
                 step="0.01"
-                placeholder="سعر العرض"
-                value={flashPrice}
-                onChange={(e) => setFlashPrice(e.target.value)}
+                placeholder="سعر طبق اليوم"
+                value={dishPrice}
+                onChange={(e) => setDishPrice(e.target.value)}
                 className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
               />
               <input
-                required
                 type="number"
-                min="1"
+                min="0"
                 step="1"
-                placeholder="الكمية"
-                value={flashQty}
-                onChange={(e) => setFlashQty(e.target.value)}
+                placeholder="الكمية (اختياري)"
+                value={dishQty}
+                onChange={(e) => setDishQty(e.target.value)}
                 className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
               />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <SubmitButton label="حفظ طبق اليوم" pendingLabel="جارٍ الحفظ..." />
+              {dish ? (
+                <button
+                  type="button"
+                  onClick={clearDish}
+                  className="rounded-full border border-zinc-300 px-5 py-3 text-sm font-medium"
+                >
+                  إلغاء طبق اليوم
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">عرض سريع (Flash)</h3>
+          {flash ? (
+            <div className="rounded-2xl bg-orange-50 px-4 py-3 text-sm text-orange-950">
+              <p>
+                النشط: <strong>{flash.itemName}</strong> —{" "}
+                {formatMoney(flash.offerPrice)} (بدل{" "}
+                {formatMoney(flash.basePrice)})
+              </p>
+              <p className="mt-1">
+                متبقي {flash.quantityLeft} · العدّاد:{" "}
+                <strong className="font-mono">{countdown}</strong>
+              </p>
+              <button
+                type="button"
+                onClick={endFlash}
+                className="mt-3 rounded-full border border-orange-300 bg-white px-4 py-2 text-sm font-medium"
+              >
+                إنهاء العرض الآن
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={createFlash} className="grid gap-3">
               <select
-                value={flashHours}
-                onChange={(e) => setFlashHours(e.target.value as "1" | "2")}
+                required
+                value={flashItemId}
+                onChange={(e) => setFlashItemId(e.target.value)}
                 className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
               >
-                <option value="1">ساعة واحدة</option>
-                <option value="2">ساعتان</option>
+                <option value="" disabled>
+                  اختر صنفًا معتمدًا للعرض
+                </option>
+                {approved.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ({formatMoney(item.basePrice)})
+                    {item.isAvailable ? "" : " · مخفي"}
+                  </option>
+                ))}
               </select>
-            </div>
-            <SubmitButton label="بدء العرض السريع" pendingLabel="جارٍ الإنشاء..." />
-          </form>
-        )}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <input
+                  required
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="سعر العرض"
+                  value={flashPrice}
+                  onChange={(e) => setFlashPrice(e.target.value)}
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+                />
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="الكمية"
+                  value={flashQty}
+                  onChange={(e) => setFlashQty(e.target.value)}
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+                />
+                <select
+                  value={flashHours}
+                  onChange={(e) => setFlashHours(e.target.value as "1" | "2")}
+                  className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
+                >
+                  <option value="1">ساعة واحدة</option>
+                  <option value="2">ساعتان</option>
+                </select>
+              </div>
+              <SubmitButton
+                label="بدء العرض السريع"
+                pendingLabel="جارٍ الإنشاء..."
+              />
+            </form>
+          )}
+        </div>
       </div>
 
-      {error ? (
-        <p className="lg:col-span-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+      {info ? (
+        <p className="rounded-2xl bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          {info}
         </p>
       ) : null}
-
-      {approved.length === 0 ? (
-        <p className="lg:col-span-2 text-sm text-zinc-500">
-          أضف أصنافًا معتمدة ومتاحة أولًا قبل تعيين طبق اليوم أو عرض سريع.
+      {error ? (
+        <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </p>
       ) : null}
     </section>

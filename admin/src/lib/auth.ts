@@ -74,6 +74,14 @@ export async function syncAppUserFromClerkData({
       phoneNumber,
       role: toDatabaseRole(effectiveRole),
     },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      phoneNumber: true,
+      role: true,
+      isActive: true,
+    },
   });
 
   const resolvedRole = fromDatabaseRole(appUser.role);
@@ -89,6 +97,7 @@ export async function syncAppUserFromClerkData({
     role: resolvedRole,
     roleFromMetadata,
     needsRoleSetup,
+    isActive: appUser.isActive,
   };
 }
 
@@ -133,6 +142,10 @@ export async function requireAuth() {
 
   if (!user) {
     redirect("/sign-in");
+  }
+
+  if (!user.isActive) {
+    redirect("/forbidden");
   }
 
   return user;

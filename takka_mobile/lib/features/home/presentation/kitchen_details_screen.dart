@@ -253,15 +253,24 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (kitchen.menuItems.isEmpty)
-                  const _EmptyMenuState()
-                else
-                  ...kitchen.menuItems.map(
-                    (item) => _MenuItemCard(
-                      kitchen: kitchen,
-                      item: item,
-                    ),
-                  ),
+                Builder(
+                  builder: (context) {
+                    final displayItems = _menuItemsForCustomer(kitchen);
+                    if (displayItems.isEmpty) {
+                      return const _EmptyMenuState();
+                    }
+                    return Column(
+                      children: displayItems
+                          .map(
+                            (item) => _MenuItemCard(
+                              kitchen: kitchen,
+                              item: item,
+                            ),
+                          )
+                          .toList(),
+                    );
+                  },
+                ),
                 const SizedBox(height: 20),
                 Text(
                   'آخر التقييمات',
@@ -285,6 +294,48 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
   }
 }
 
+List<MenuItemSummary> _menuItemsForCustomer(KitchenDetails kitchen) {
+  final byId = <String, MenuItemSummary>{
+    for (final item in kitchen.menuItems) item.id: item,
+  };
+
+  final dish = kitchen.dishOfTheDay;
+  if (dish != null && !byId.containsKey(dish.menuItemId)) {
+    byId[dish.menuItemId] = MenuItemSummary(
+      id: dish.menuItemId,
+      name: dish.name,
+      description: null,
+      imageUrl: null,
+      basePrice: dish.basePrice,
+      depositAmount: 0,
+      orderReadiness: 'AVAILABLE_NOW',
+      sizes: const [],
+      isDishOfTheDay: true,
+      dishOfTheDayPrice: dish.dishOfTheDayPrice,
+      dishOfTheDayQty: dish.dishOfTheDayQty,
+    );
+  }
+
+  final flash = kitchen.activeFlashOffer;
+  if (flash != null && !byId.containsKey(flash.menuItemId)) {
+    byId[flash.menuItemId] = MenuItemSummary(
+      id: flash.menuItemId,
+      name: flash.itemName,
+      description: null,
+      imageUrl: null,
+      basePrice: flash.basePrice,
+      depositAmount: 0,
+      orderReadiness: 'AVAILABLE_NOW',
+      sizes: const [],
+      isDishOfTheDay: false,
+      dishOfTheDayPrice: null,
+      dishOfTheDayQty: null,
+    );
+  }
+
+  return byId.values.toList();
+}
+
 class _MenuItemCard extends StatelessWidget {
   const _MenuItemCard({
     required this.kitchen,
@@ -298,12 +349,18 @@ class _MenuItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final flash = kitchen.activeFlashOffer;
     final isFlash = flash != null && flash.menuItemId == item.id;
-    final isDish = item.isDishOfTheDay &&
-        item.dishOfTheDayPrice != null &&
-        (item.dishOfTheDayQty == null || item.dishOfTheDayQty! > 0);
+    final dish = kitchen.dishOfTheDay;
+    final isDish = (item.isDishOfTheDay &&
+            item.dishOfTheDayPrice != null &&
+            (item.dishOfTheDayQty == null || item.dishOfTheDayQty! > 0)) ||
+        (dish != null &&
+            dish.menuItemId == item.id &&
+            (dish.dishOfTheDayQty == null || dish.dishOfTheDayQty! > 0));
     final dealPrice = isFlash
         ? flash.offerPrice
-        : (isDish ? item.dishOfTheDayPrice! : null);
+        : (isDish
+            ? (item.dishOfTheDayPrice ?? dish?.dishOfTheDayPrice)
+            : null);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -636,6 +693,10 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     final flash = widget.kitchen.activeFlashOffer;
     if (flash != null && flash.menuItemId == widget.item.id) {
       return flash.offerPrice;
+    }
+    final dish = widget.kitchen.dishOfTheDay;
+    if (dish != null && dish.menuItemId == widget.item.id) {
+      return dish.dishOfTheDayPrice;
     }
     if (widget.item.isDishOfTheDay && widget.item.dishOfTheDayPrice != null) {
       return widget.item.dishOfTheDayPrice!;

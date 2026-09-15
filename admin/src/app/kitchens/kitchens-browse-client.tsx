@@ -61,6 +61,48 @@ function matchesTextSearch(kitchen: BrowseKitchen, query: string) {
   return kitchen.menuItemNames.some((name) => name.toLowerCase().includes(q));
 }
 
+function withCategory(kitchens: BrowseKitchen[], categoryLabel: string) {
+  if (!categoryLabel) {
+    return kitchens;
+  }
+  return kitchens.filter((kitchen) => matchesCategory(kitchen, categoryLabel));
+}
+
+/**
+ * Cascade: selected district → adjacent districts → city-wide.
+ * No explanatory banners — just return the kitchens to show.
+ */
+function resolveDiscoveryKitchens(
+  kitchens: BrowseKitchen[],
+  district: string,
+  categoryLabel: string,
+): BrowseKitchen[] {
+  const scoped = withCategory(kitchens, categoryLabel);
+
+  if (!district) {
+    return scoped;
+  }
+
+  const inDistrict = scoped.filter((kitchen) =>
+    kitchenMatchesDistrict(kitchen.region.regionName, district),
+  );
+  if (inDistrict.length > 0) {
+    return inDistrict;
+  }
+
+  const adjacentNames = getNearbyDistrictNames(district);
+  if (adjacentNames.length > 0) {
+    const adjacent = scoped.filter((kitchen) =>
+      kitchenMatchesAnyDistrict(kitchen.region.regionName, adjacentNames),
+    );
+    if (adjacent.length > 0) {
+      return adjacent;
+    }
+  }
+
+  return scoped;
+}
+
 function KitchenCard({ kitchen }: { kitchen: BrowseKitchen }) {
   return (
     <article className="border border-[#ead9c8] bg-white p-6">
@@ -118,48 +160,14 @@ export function KitchensBrowseClient({
   const [categoryLabel, setCategoryLabel] = useState("");
   const [search, setSearch] = useState("");
 
-  const nearbyKitchens = useMemo(() => {
-    if (!district) {
-      return kitchens.filter(
-        (kitchen) =>
-          !categoryLabel || matchesCategory(kitchen, categoryLabel),
-      );
-    }
-    return kitchens.filter(
-      (kitchen) =>
-        kitchenMatchesDistrict(kitchen.region.regionName, district) &&
-        (!categoryLabel || matchesCategory(kitchen, categoryLabel)),
-    );
-  }, [categoryLabel, district, kitchens]);
-
-  const adjacentKitchens = useMemo(() => {
-    if (!district || nearbyKitchens.length > 0) {
-      return [];
-    }
-    const adjacentNames = getNearbyDistrictNames(district);
-    if (adjacentNames.length === 0) {
-      return [];
-    }
-    return kitchens.filter(
-      (kitchen) =>
-        kitchenMatchesAnyDistrict(kitchen.region.regionName, adjacentNames) &&
-        (!categoryLabel || matchesCategory(kitchen, categoryLabel)),
-    );
-  }, [categoryLabel, district, kitchens, nearbyKitchens.length]);
+  const discoveryKitchens = useMemo(
+    () => resolveDiscoveryKitchens(kitchens, district, categoryLabel),
+    [categoryLabel, district, kitchens],
+  );
 
   const allKitchens = useMemo(() => {
     return kitchens.filter((kitchen) => matchesTextSearch(kitchen, search));
   }, [kitchens, search]);
-
-  const showAdjacentFallback =
-    Boolean(district) &&
-    nearbyKitchens.length === 0 &&
-    adjacentKitchens.length > 0;
-  const showCityFallback =
-    Boolean(district) &&
-    nearbyKitchens.length === 0 &&
-    adjacentKitchens.length === 0 &&
-    allKitchens.length > 0;
 
   function scrollToAllKitchens() {
     document
@@ -226,44 +234,20 @@ export function KitchensBrowseClient({
                 استعراض كل المطابخ
               </button>
             </div>
-            {nearbyKitchens.length > 0 ? (
-              <KitchenGrid kitchens={nearbyKitchens} />
+            {discoveryKitchens.length > 0 ? (
+              <KitchenGrid kitchens={discoveryKitchens} />
             ) : (
               <div className="border border-[#ead9c8] bg-white p-6 text-sm text-[#6b4a3a]">
                 لا توجد مطابخ متاحة حاليًا.
               </div>
             )}
           </div>
-        ) : nearbyKitchens.length === 0 ? (
-          <div className="space-y-4">
-            <div className="border border-amber-200 bg-amber-50 p-6 text-sm leading-7 text-amber-950">
-              <p className="font-semibold">
-                {categoryLabel
-                  ? `مفيش مطابخ في ${district} لفئة «${categoryLabel}».`
-                  : `مفيش مطابخ في الحي المختار (${district}).`}
-              </p>
-              <p className="mt-2">
-                {showAdjacentFallback
-                  ? "نعرض مطابخ من أحياء قريبة من حيّك."
-                  : showCityFallback
-                    ? "مفيش مطابخ في الأحياء القريبة حاليًا — نعرض كل المطابخ المتاحة."
-                    : "لا توجد مطابخ متاحة حاليًا."}
-              </p>
-              <button
-                type="button"
-                onClick={scrollToAllKitchens}
-                className="mt-4 inline-flex rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
-              >
-                استعراض كل المطابخ
-              </button>
-            </div>
-            {showAdjacentFallback ? (
-              <KitchenGrid kitchens={adjacentKitchens} />
-            ) : null}
-            {showCityFallback ? <KitchenGrid kitchens={allKitchens} /> : null}
-          </div>
+        ) : discoveryKitchens.length > 0 ? (
+          <KitchenGrid kitchens={discoveryKitchens} />
         ) : (
-          <KitchenGrid kitchens={nearbyKitchens} />
+          <div className="border border-[#ead9c8] bg-white p-6 text-sm text-[#6b4a3a]">
+            لا توجد مطابخ متاحة حاليًا.
+          </div>
         )}
       </section>
 

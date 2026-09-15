@@ -94,10 +94,7 @@ export async function getActiveFlashOfferForKitchen(kitchenId: string) {
   });
 
   if (!offer) return null;
-  if (
-    !offer.menuItem.isAvailable ||
-    offer.menuItem.approvalStatus !== "APPROVED"
-  ) {
+  if (offer.menuItem.approvalStatus !== "APPROVED") {
     return null;
   }
 

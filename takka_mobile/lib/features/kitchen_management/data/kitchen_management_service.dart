@@ -100,6 +100,31 @@ class KitchenManagementService {
     }
   }
 
+  Future<void> updateMenuItem({
+    required String sessionToken,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await http.put(
+      _buildUri('/api/kitchen/menu-items'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      String message = 'Failed to update menu item';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        message = body['error']?.toString() ?? message;
+      } catch (_) {
+        message = 'Failed to update menu item: ${response.body}';
+      }
+      throw Exception(message);
+    }
+  }
+
   Future<void> updateAvailability({
     required String sessionToken,
     required String menuItemId,
@@ -320,6 +345,8 @@ class KitchenManagedMenuItem {
   const KitchenManagedMenuItem({
     required this.id,
     required this.name,
+    required this.description,
+    required this.imageUrl,
     required this.categoryId,
     required this.orderReadiness,
     required this.basePrice,
@@ -336,6 +363,8 @@ class KitchenManagedMenuItem {
     return KitchenManagedMenuItem(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      imageUrl: json['imageUrl']?.toString(),
       categoryId: json['categoryId']?.toString() ?? 'meals',
       orderReadiness:
           json['orderReadiness']?.toString() ?? 'AVAILABLE_NOW',
@@ -353,6 +382,8 @@ class KitchenManagedMenuItem {
 
   final String id;
   final String name;
+  final String? description;
+  final String? imageUrl;
   final String categoryId;
   final String orderReadiness;
   final double basePrice;

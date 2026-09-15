@@ -93,11 +93,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       return const [];
     }
 
-    final inDistrict = _nearbyKitchens(kitchens);
-    if (inDistrict.isNotEmpty) {
-      return const [];
-    }
-
     final adjacentNames = getNearbyDistrictNames(_selectedDistrict);
     if (adjacentNames.isEmpty) {
       return const [];
@@ -113,6 +108,25 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         .toList();
 
     return _filterByCategory(adjacent);
+  }
+
+  /// Cascade: district → adjacent → city-wide. No explanatory UI.
+  List<KitchenSummary> _discoveryKitchens(List<KitchenSummary> kitchens) {
+    if (_selectedDistrict.isEmpty) {
+      return _filterByCategory(kitchens);
+    }
+
+    final inDistrict = _nearbyKitchens(kitchens);
+    if (inDistrict.isNotEmpty) {
+      return inDistrict;
+    }
+
+    final adjacent = _adjacentKitchens(kitchens);
+    if (adjacent.isNotEmpty) {
+      return adjacent;
+    }
+
+    return _filterByCategory(kitchens);
   }
 
   List<KitchenSummary> _filterByCategory(List<KitchenSummary> kitchens) {
@@ -227,11 +241,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           }
 
           final data = snapshot.data!;
-          final nearby = _nearbyKitchens(data.kitchens);
-          final adjacent = _adjacentKitchens(data.kitchens);
+          final discovery = _discoveryKitchens(data.kitchens);
           final allKitchens = _allKitchens(data.kitchens);
-          final emptyFallback = adjacent.isNotEmpty ? adjacent : allKitchens;
-          final emptyUsesAdjacent = adjacent.isNotEmpty;
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -317,21 +328,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 if (_selectedDistrict.isEmpty) ...[
                   const _SelectDistrictHint(),
                   const SizedBox(height: 12),
-                  if (nearby.isEmpty)
+                  if (discovery.isEmpty)
                     const _EmptyAllKitchensState()
                   else
-                    ...nearby.map(
+                    ...discovery.map(
                       (kitchen) => _KitchenCard(kitchen: kitchen),
                     ),
-                ] else if (nearby.isEmpty) ...[
-                  _EmptyKitchensState(
-                    district: _selectedDistrict,
-                    categoryLabel: _selectedCategory,
-                    fallbackKitchens: emptyFallback,
-                    usesAdjacentDistricts: emptyUsesAdjacent,
-                  ),
-                ] else
-                  ...nearby.map(
+                ] else if (discovery.isEmpty)
+                  const _EmptyAllKitchensState()
+                else
+                  ...discovery.map(
                     (kitchen) => _KitchenCard(kitchen: kitchen),
                   ),
                 const SizedBox(height: 24),
@@ -649,72 +655,6 @@ class _SelectDistrictHint extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _EmptyKitchensState extends StatelessWidget {
-  const _EmptyKitchensState({
-    required this.district,
-    this.categoryLabel = '',
-    this.fallbackKitchens = const [],
-    this.usesAdjacentDistricts = false,
-  });
-
-  final String district;
-  final String categoryLabel;
-  final List<KitchenSummary> fallbackKitchens;
-  final bool usesAdjacentDistricts;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasCategory = categoryLabel.trim().isNotEmpty;
-    final subtitle = fallbackKitchens.isEmpty
-        ? 'لا توجد مطابخ متاحة حاليًا.'
-        : usesAdjacentDistricts
-            ? 'نعرض مطابخ من أحياء قريبة من حيّك.'
-            : 'مفيش مطابخ في الأحياء القريبة حاليًا — نعرض كل المطابخ المتاحة.';
-
-    return Column(
-      children: [
-        Card(
-          color: const Color(0xFFFFFBEB),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const Icon(Icons.store_mall_directory_outlined, size: 40),
-                const SizedBox(height: 12),
-                Text(
-                  hasCategory
-                      ? 'مفيش مطابخ في $district لفئة «${categoryLabel.trim()}»'
-                      : 'مفيش مطابخ في الحي المختار ($district)',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (fallbackKitchens.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          ...fallbackKitchens.map(
-            (kitchen) => _KitchenCard(kitchen: kitchen),
-          ),
-        ],
-      ],
     );
   }
 }

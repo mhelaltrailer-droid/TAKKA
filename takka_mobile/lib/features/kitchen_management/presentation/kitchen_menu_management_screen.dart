@@ -133,7 +133,12 @@ class _KitchenMenuManagementScreenState
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              KitchenDealsPanel(items: items),
+              KitchenDealsPanel(
+                items: items,
+                onChanged: () {
+                  setState(() => _future = _load());
+                },
+              ),
               const SizedBox(height: 16),
               Card(
                 child: Padding(

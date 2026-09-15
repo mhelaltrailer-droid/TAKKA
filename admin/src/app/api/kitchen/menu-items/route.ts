@@ -18,6 +18,8 @@ type MenuPayload = {
   basePrice: number;
   depositAmount: number;
   imageUrl?: string;
+  /** When true (e.g. created for deals), item stays hidden from normal menu until kitchen unhides. */
+  startHidden?: boolean;
   sizes?: Array<{
     sizeName: string;
     price: number;
@@ -124,9 +126,12 @@ export async function POST(request: Request) {
         orderReadiness,
         basePrice: payload.basePrice.toFixed(2),
         depositAmount: payload.depositAmount.toFixed(2),
-        isAvailable: true,
+        isAvailable: payload.startHidden === true ? false : true,
         approvalStatus: ApprovalStatus.PENDING,
         rejectionReason: null,
+      },
+      include: {
+        sizes: true,
       },
     });
 
@@ -159,7 +164,10 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    return NextResponse.json(
+      { success: true, menuItem: createdItem },
+      { status: 201 },
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "تعذر إنشاء الصنف.";

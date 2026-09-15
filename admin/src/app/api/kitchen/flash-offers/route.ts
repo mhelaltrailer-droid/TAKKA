@@ -110,7 +110,6 @@ export async function POST(request: Request) {
         id: payload.menuItemId,
         kitchenId: kitchen.id,
         approvalStatus: ApprovalStatus.APPROVED,
-        isAvailable: true,
       },
     });
 

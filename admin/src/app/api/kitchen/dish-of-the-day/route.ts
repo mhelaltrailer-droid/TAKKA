@@ -31,7 +31,6 @@ export async function GET() {
       where: {
         kitchenId: kitchen.id,
         isDishOfTheDay: true,
-        isAvailable: true,
         approvalStatus: ApprovalStatus.APPROVED,
       },
     });
@@ -109,7 +108,6 @@ export async function POST(request: Request) {
         id: payload.menuItemId,
         kitchenId: kitchen.id,
         approvalStatus: ApprovalStatus.APPROVED,
-        isAvailable: true,
       },
     });
 

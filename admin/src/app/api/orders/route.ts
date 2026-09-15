@@ -132,8 +132,20 @@ export async function POST(request: Request) {
           in: requestedItemIds,
         },
         kitchenId: kitchen.id,
-        isAvailable: true,
         approvalStatus: "APPROVED",
+        OR: [
+          { isAvailable: true },
+          { isDishOfTheDay: true },
+          {
+            flashOffers: {
+              some: {
+                status: "ACTIVE",
+                endsAt: { gt: new Date() },
+                quantityLeft: { gt: 0 },
+              },
+            },
+          },
+        ],
       },
       include: {
         sizes: {

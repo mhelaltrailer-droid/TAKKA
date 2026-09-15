@@ -127,9 +127,14 @@ export default async function MenuManagementPage() {
           menuItems={kitchen.menuItems.map((item) => ({
             id: item.id,
             name: item.name,
+            description: item.description,
+            categoryId: item.categoryId,
             basePrice: Number(item.basePrice),
+            depositAmount: Number(item.depositAmount),
+            imageUrl: item.imageUrl,
             approvalStatus: item.approvalStatus,
             isAvailable: item.isAvailable,
+            draftStatus: item.draftStatus,
           }))}
         />
 

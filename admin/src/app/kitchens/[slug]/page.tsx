@@ -92,6 +92,50 @@ export default async function KitchenDetailsPage({
   const activeFlash = kitchen.flashOffers[0] ?? null;
   const paymentMethod = kitchen.paymentMethods[0];
 
+  const dishItem =
+    kitchen.menuItems.find((item) => item.isDishOfTheDay) ??
+    (await db.menuItem.findFirst({
+      where: {
+        kitchenId: kitchen.id,
+        isDishOfTheDay: true,
+        approvalStatus: ApprovalStatus.APPROVED,
+        dishOfTheDayPrice: { not: null },
+        OR: [{ dishOfTheDayQty: null }, { dishOfTheDayQty: { gt: 0 } }],
+      },
+      include: {
+        sizes: {
+          where: { isActive: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    }));
+
+  let flashMenuItem =
+    activeFlash != null
+      ? kitchen.menuItems.find((item) => item.id === activeFlash.menuItemId)
+      : null;
+  if (activeFlash && !flashMenuItem) {
+    flashMenuItem = await db.menuItem.findFirst({
+      where: {
+        id: activeFlash.menuItemId,
+        approvalStatus: ApprovalStatus.APPROVED,
+      },
+      include: {
+        sizes: {
+          where: { isActive: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+  }
+
+  const cartItemsById = new Map(
+    kitchen.menuItems.map((item) => [item.id, item]),
+  );
+  if (dishItem) cartItemsById.set(dishItem.id, dishItem);
+  if (flashMenuItem) cartItemsById.set(flashMenuItem.id, flashMenuItem);
+  const cartMenuItems = Array.from(cartItemsById.values());
+
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
@@ -149,7 +193,7 @@ export default async function KitchenDetailsPage({
               kitchenLongitude={kitchen.longitude}
               kitchenAddressLine={kitchen.addressLine}
               kitchenRegionLabel={`${kitchen.region.cityName} - ${kitchen.region.regionName}`}
-              menuItems={kitchen.menuItems.map((item) => {
+              menuItems={cartMenuItems.map((item) => {
                 const isFlash =
                   activeFlash && activeFlash.menuItemId === item.id;
                 return {

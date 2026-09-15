@@ -86,13 +86,25 @@ export async function GET(
 
   await expireStaleFlashOffers([kitchen.id]);
 
-  const dishItem = kitchen.menuItems.find(
-    (item) =>
-      item.isDishOfTheDay &&
-      item.dishOfTheDayPrice != null &&
-      (item.dishOfTheDayQty == null || item.dishOfTheDayQty > 0),
-  );
-  const flash = kitchen.flashOffers[0];
+  const dishItem = await db.menuItem.findFirst({
+    where: {
+      kitchenId: kitchen.id,
+      isDishOfTheDay: true,
+      approvalStatus: ApprovalStatus.APPROVED,
+      dishOfTheDayPrice: { not: null },
+      OR: [{ dishOfTheDayQty: null }, { dishOfTheDayQty: { gt: 0 } }],
+    },
+  });
+
+  const flashRaw = kitchen.flashOffers[0];
+  const flash =
+    flashRaw &&
+    (await db.menuItem.findFirst({
+      where: { id: flashRaw.menuItemId, approvalStatus: ApprovalStatus.APPROVED },
+      select: { id: true },
+    }))
+      ? flashRaw
+      : null;
 
   const { flashOffers: _ignored, ...kitchenRest } = kitchen;
 

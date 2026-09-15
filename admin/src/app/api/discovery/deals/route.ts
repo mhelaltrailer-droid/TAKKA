@@ -45,7 +45,6 @@ export async function GET(request: Request) {
       where: {
         kitchenId: { in: kitchenIds },
         isDishOfTheDay: true,
-        isAvailable: true,
         approvalStatus: ApprovalStatus.APPROVED,
         dishOfTheDayPrice: { not: null },
         OR: [{ dishOfTheDayQty: null }, { dishOfTheDayQty: { gt: 0 } }],
@@ -69,7 +68,6 @@ export async function GET(request: Request) {
         endsAt: { gt: new Date() },
         quantityLeft: { gt: 0 },
         menuItem: {
-          isAvailable: true,
           approvalStatus: ApprovalStatus.APPROVED,
         },
       },
