@@ -8,6 +8,7 @@ import 'features/auth/data/mobile_me_service.dart';
 import 'features/auth/presentation/apply_pending_role_screen.dart';
 import 'features/auth/presentation/auth_flow_screen.dart';
 import 'features/auth/presentation/customer_become_kitchen_prompt.dart';
+import 'features/auth/presentation/guest_browse_shell.dart';
 import 'features/auth/presentation/role_setup_screen.dart';
 import 'core/ui/takka_skeletons.dart';
 import 'features/home/presentation/kitchen_home_screen.dart';
@@ -70,6 +71,7 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
   var _applyKitchenReturnFromLogin = false;
   /// Customer chose kitchen at login and must complete onboarding.
   var _showKitchenOnboardingFromLogin = false;
+  var _guestBrowse = false;
 
   void _setPendingRole(AppRole role, {bool fromLogin = false}) {
     setState(() {
@@ -156,12 +158,25 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
   Widget build(BuildContext context) {
     return ClerkAuthBuilder(
       signedOutBuilder: (context, authState) {
+        if (_guestBrowse) {
+          return GuestBrowseShell(
+            onExitGuest: () => setState(() => _guestBrowse = false),
+          );
+        }
         return AuthFlowScreen(
           selectedRole: _pendingRole,
           onRoleSelected: (role) => _setPendingRole(role, fromLogin: true),
+          onGuestBrowse: () => setState(() => _guestBrowse = true),
         );
       },
       signedInBuilder: (context, authState) {
+        if (_guestBrowse) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _guestBrowse) {
+              setState(() => _guestBrowse = false);
+            }
+          });
+        }
         final user = authState.client.user;
         final publicRole = user?.publicMetadata?['role']?.toString();
         final metadataRole = AppRoleX.fromApiValue(publicRole);

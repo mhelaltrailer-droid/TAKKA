@@ -130,6 +130,9 @@ export default async function MenuManagementPage() {
             description: item.description,
             categoryId: item.categoryId,
             basePrice: Number(item.basePrice),
+            discountedPrice: item.discountedPrice
+              ? Number(item.discountedPrice)
+              : null,
             depositAmount: Number(item.depositAmount),
             imageUrl: item.imageUrl,
             approvalStatus: item.approvalStatus,
@@ -226,7 +229,7 @@ export default async function MenuManagementPage() {
               />
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-3">
               <div className="space-y-2">
                 <label htmlFor="basePrice" className="block text-sm font-medium">
                   السعر الأساسي
@@ -240,6 +243,27 @@ export default async function MenuManagementPage() {
                   required
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="discountedPrice"
+                  className="block text-sm font-medium"
+                >
+                  السعر بعد الخصم (اختياري)
+                </label>
+                <input
+                  id="discountedPrice"
+                  name="discountedPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+                />
+                <p className="text-xs leading-6 text-zinc-500">
+                  إن وُجد يظهر للعميل مشطوباً على الأساسي. يجب أن يكون أقل من
+                  الأساسي وأكبر من صفر.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -276,12 +300,13 @@ export default async function MenuManagementPage() {
                 id="sizes"
                 name="sizes"
                 rows={5}
-                placeholder={"صغير|80|20\nوسط|120|30\nكبير|160|40"}
+                placeholder={"صغير|80|20|70\nوسط|120|30\nكبير|160|40|140"}
                 className="w-full rounded-2xl border border-zinc-300 px-4 py-3 font-mono text-sm outline-none"
               />
               <p className="text-xs leading-6 text-zinc-500">
-                كل سطر بصيغة: `اسم الحجم|السعر|العربون`. العربون في الحجم
-                اختياري لكن لا يجب أن يتجاوز 60% من سعر الحجم.
+                كل سطر: `اسم الحجم|السعر|العربون|السعر بعد الخصم`. العربون
+                والسعر بعد الخصم اختياريان. العربون ≤ 60% من السعر بعد الخصم إن
+                وُجد وإلا سعر الحجم.
               </p>
             </div>
 
@@ -366,8 +391,11 @@ export default async function MenuManagementPage() {
                           </p>
                         ) : null}
                         <p className="text-sm text-zinc-600">
-                          السعر: {String(item.basePrice)} جنيه | العربون:{" "}
-                          {String(item.depositAmount)} جنيه
+                          السعر:{" "}
+                          {item.discountedPrice
+                            ? `${String(item.discountedPrice)} ج (كان ${String(item.basePrice)})`
+                            : `${String(item.basePrice)} جنيه`}{" "}
+                          | العربون: {String(item.depositAmount)} جنيه
                         </p>
                         <p className="text-sm text-zinc-600">
                           {ORDER_READINESS_FIELD_LABEL}:{" "}
@@ -382,7 +410,10 @@ export default async function MenuManagementPage() {
                           <div className="rounded-xl bg-zinc-50 px-3 py-3 text-xs leading-6 text-zinc-600">
                             {item.sizes.map((size) => (
                               <div key={size.id}>
-                                {size.sizeName}: {String(size.price)} جنيه
+                                {size.sizeName}:{" "}
+                                {size.discountedPrice
+                                  ? `${String(size.discountedPrice)} ج (كان ${String(size.price)})`
+                                  : `${String(size.price)} جنيه`}
                                 {size.depositAmount
                                   ? ` | عربون ${String(size.depositAmount)}`
                                   : ""}

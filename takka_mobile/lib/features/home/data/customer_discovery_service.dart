@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../core/analytics/browse_session.dart';
 import '../../../core/config/app_config.dart';
 
 class CustomerDiscoveryService {
@@ -36,7 +37,7 @@ class CustomerDiscoveryService {
   }
 
   Future<CustomerBootstrapData> loadBootstrap({
-    required String sessionToken,
+    String? sessionToken,
     String? regionName,
     String? query,
   }) async {
@@ -50,14 +51,17 @@ class CustomerDiscoveryService {
       hasKitchen: false,
     );
 
-    try {
-      user = await loadMe(sessionToken: sessionToken);
-    } catch (_) {
-      // Keep browsing kitchens even if profile sync is slow/unavailable.
+    final token = sessionToken?.trim() ?? '';
+    if (token.isNotEmpty) {
+      try {
+        user = await loadMe(sessionToken: token);
+      } catch (_) {
+        // Keep browsing kitchens even if profile sync is slow/unavailable.
+      }
     }
 
     final kitchens = await loadNearbyKitchens(
-      sessionToken: sessionToken,
+      sessionToken: token.isEmpty ? null : token,
       regionName: regionName,
       query: query,
     );
@@ -70,7 +74,7 @@ class CustomerDiscoveryService {
 
   /// Nearby kitchens = kitchens that registered in the customer's selected district.
   Future<List<KitchenSummary>> loadNearbyKitchens({
-    required String sessionToken,
+    String? sessionToken,
     String? regionName,
     String? query,
   }) async {
@@ -84,12 +88,16 @@ class CustomerDiscoveryService {
       params['q'] = query.trim();
     }
 
+    final headers = <String, String>{};
+    final token = sessionToken?.trim() ?? '';
+    if (token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
     final kitchensResponse = await http
         .get(
           _buildUri('/api/discovery/kitchens').replace(queryParameters: params),
-          headers: {
-            'Authorization': 'Bearer $sessionToken',
-          },
+          headers: headers,
         )
         .timeout(const Duration(seconds: 25));
 
@@ -121,6 +129,32 @@ class CustomerDiscoveryService {
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return KitchenDetails.fromJson(json['kitchen'] as Map<String, dynamic>);
+  }
+
+  /// Best-effort kitchen view tracking (guest or signed-in).
+  Future<void> recordKitchenView({
+    required String kitchenIdOrSlug,
+    String? sessionToken,
+  }) async {
+    try {
+      final sessionKey = await getOrCreateBrowseSessionKey();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = sessionToken?.trim() ?? '';
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      await http
+          .post(
+            _buildUri('/api/discovery/kitchens/$kitchenIdOrSlug/view'),
+            headers: headers,
+            body: jsonEncode({'sessionKey': sessionKey}),
+          )
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // Never block browsing on analytics failures.
+    }
   }
 
   Future<NearbyDealsData> loadNearbyDeals({
@@ -334,6 +368,7 @@ class MenuItemSummary {
     required this.description,
     required this.imageUrl,
     required this.basePrice,
+    required this.discountedPrice,
     required this.depositAmount,
     required this.orderReadiness,
     required this.sizes,
@@ -349,6 +384,8 @@ class MenuItemSummary {
       description: json['description']?.toString(),
       imageUrl: json['imageUrl']?.toString(),
       basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
+      discountedPrice:
+          double.tryParse(json['discountedPrice']?.toString() ?? ''),
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
       orderReadiness:
@@ -368,12 +405,21 @@ class MenuItemSummary {
   final String? description;
   final String? imageUrl;
   final double basePrice;
+  final double? discountedPrice;
   final double depositAmount;
   final String orderReadiness;
   final List<MenuItemSizeSummary> sizes;
   final bool isDishOfTheDay;
   final double? dishOfTheDayPrice;
   final int? dishOfTheDayQty;
+
+  double get catalogPrice {
+    final discounted = discountedPrice;
+    if (discounted != null && discounted > 0 && discounted < basePrice) {
+      return discounted;
+    }
+    return basePrice;
+  }
 }
 
 class MenuItemSizeSummary {
@@ -381,6 +427,7 @@ class MenuItemSizeSummary {
     required this.id,
     required this.sizeName,
     required this.price,
+    required this.discountedPrice,
     required this.depositAmount,
   });
 
@@ -389,6 +436,8 @@ class MenuItemSizeSummary {
       id: json['id']?.toString() ?? '',
       sizeName: json['sizeName']?.toString() ?? '',
       price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
+      discountedPrice:
+          double.tryParse(json['discountedPrice']?.toString() ?? ''),
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? ''),
     );
@@ -397,7 +446,16 @@ class MenuItemSizeSummary {
   final String id;
   final String sizeName;
   final double price;
+  final double? discountedPrice;
   final double? depositAmount;
+
+  double get catalogPrice {
+    final discounted = discountedPrice;
+    if (discounted != null && discounted > 0 && discounted < price) {
+      return discounted;
+    }
+    return price;
+  }
 }
 
 class KitchenReview {

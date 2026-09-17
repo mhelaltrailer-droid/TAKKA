@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { GuestSignUpPrompt } from "@/components/guest-sign-up-prompt";
 import {
   ORDER_READINESS_CUSTOMER_QUESTION,
   getOrderReadinessLabel,
 } from "@/lib/order-readiness";
+import { effectiveCatalogPrice } from "@/lib/pricing";
 import {
   addWebCartItem,
   getWebCart,
@@ -48,6 +50,7 @@ type MenuSize = {
   id: string;
   sizeName: string;
   price: string;
+  discountedPrice?: string | null;
   depositAmount: string | null;
 };
 
@@ -56,6 +59,7 @@ type MenuItem = {
   name: string;
   description: string | null;
   basePrice: string;
+  discountedPrice?: string | null;
   depositAmount: string;
   orderReadiness: string;
   isDishOfTheDay?: boolean;
@@ -76,6 +80,7 @@ export function KitchenMenuCart({
   kitchenAddressLine,
   kitchenRegionLabel,
   menuItems,
+  isSignedIn = true,
 }: {
   kitchenId: string;
   kitchenName: string;
@@ -85,9 +90,11 @@ export function KitchenMenuCart({
   kitchenAddressLine?: string | null;
   kitchenRegionLabel?: string | null;
   menuItems: MenuItem[];
+  isSignedIn?: boolean;
 }) {
   const [cartCount, setCartCount] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
+  const [guestPromptOpen, setGuestPromptOpen] = useState(false);
   const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>(
     {},
   );
@@ -101,6 +108,19 @@ export function KitchenMenuCart({
     return subscribeWebCart(sync);
   }, []);
 
+  function catalogUnitPrice(item: MenuItem, size?: MenuSize) {
+    if (size) {
+      return effectiveCatalogPrice(
+        Number(size.price),
+        size.discountedPrice != null ? Number(size.discountedPrice) : null,
+      );
+    }
+    return effectiveCatalogPrice(
+      Number(item.basePrice),
+      item.discountedPrice != null ? Number(item.discountedPrice) : null,
+    );
+  }
+
   function dealUnitPrice(item: MenuItem) {
     if (item.flashOfferPrice) {
       return Number(item.flashOfferPrice);
@@ -108,10 +128,14 @@ export function KitchenMenuCart({
     if (item.isDishOfTheDay && item.dishOfTheDayPrice) {
       return Number(item.dishOfTheDayPrice);
     }
-    return Number(item.basePrice);
+    return catalogUnitPrice(item);
   }
 
   function addItem(item: MenuItem) {
+    if (!isSignedIn) {
+      setGuestPromptOpen(true);
+      return;
+    }
     const sizeId = selectedSizes[item.id] || "";
     const size = item.sizes.find((entry) => entry.id === sizeId);
     try {
@@ -128,7 +152,7 @@ export function KitchenMenuCart({
           menuItemName: item.name,
           menuItemSizeId: size?.id ?? null,
           sizeName: size?.sizeName ?? null,
-          unitPrice: Number(size?.price ?? dealUnitPrice(item)),
+          unitPrice: size ? catalogUnitPrice(item, size) : dealUnitPrice(item),
           depositAmount: Number(size?.depositAmount ?? item.depositAmount),
           orderReadiness: item.orderReadiness,
           quantity: 1,
@@ -144,14 +168,28 @@ export function KitchenMenuCart({
 
   return (
     <div className="space-y-4">
+      <GuestSignUpPrompt
+        open={guestPromptOpen}
+        onClose={() => setGuestPromptOpen(false)}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">المنيو</h2>
-        <Link
-          href="/cart"
-          className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
-        >
-          السلة{cartCount > 0 ? ` (${cartCount})` : ""}
-        </Link>
+        {isSignedIn ? (
+          <Link
+            href="/cart"
+            className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
+          >
+            السلة{cartCount > 0 ? ` (${cartCount})` : ""}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setGuestPromptOpen(true)}
+            className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
+          >
+            السلة
+          </button>
+        )}
       </div>
 
       {message ? (
@@ -204,6 +242,13 @@ export function KitchenMenuCart({
                     {item.basePrice} جنيه
                   </span>
                 </p>
+              ) : item.discountedPrice ? (
+                <p>
+                  السعر: <strong>{item.discountedPrice} جنيه</strong>{" "}
+                  <span className="text-zinc-400 line-through">
+                    {item.basePrice} جنيه
+                  </span>
+                </p>
               ) : (
                 <p>السعر: {item.basePrice} جنيه</p>
               )}
@@ -238,7 +283,11 @@ export function KitchenMenuCart({
                   <option value="">السعر الأساسي</option>
                   {item.sizes.map((size) => (
                     <option key={size.id} value={size.id}>
-                      {size.sizeName} - {size.price} جنيه
+                      {size.sizeName} -{" "}
+                      {size.discountedPrice
+                        ? `${size.discountedPrice} (كان ${size.price})`
+                        : size.price}{" "}
+                      جنيه
                     </option>
                   ))}
                 </select>

@@ -13,12 +13,24 @@ type MenuOption = {
   description?: string | null;
   categoryId?: string;
   basePrice: number;
+  discountedPrice?: number | null;
   depositAmount?: number;
   imageUrl?: string | null;
   approvalStatus: string;
   isAvailable: boolean;
   draftStatus?: string | null;
 };
+
+function catalogOfferDefault(item: MenuOption) {
+  if (
+    item.discountedPrice != null &&
+    item.discountedPrice > 0 &&
+    item.discountedPrice < item.basePrice
+  ) {
+    return item.discountedPrice;
+  }
+  return item.basePrice;
+}
 
 type DishOfTheDay = {
   menuItemId: string;
@@ -100,6 +112,7 @@ export function KitchenDealsPanel({
   const [formDescription, setFormDescription] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("meals");
   const [formBasePrice, setFormBasePrice] = useState("");
+  const [formDiscountedPrice, setFormDiscountedPrice] = useState("");
   const [formDeposit, setFormDeposit] = useState("0");
   const [formImageUrl, setFormImageUrl] = useState("");
 
@@ -119,6 +132,8 @@ export function KitchenDealsPanel({
         description: (item.description as string | null) ?? null,
         categoryId: String(item.categoryId ?? "meals"),
         basePrice: Number(item.basePrice ?? 0),
+        discountedPrice:
+          item.discountedPrice != null ? Number(item.discountedPrice) : null,
         depositAmount: Number(item.depositAmount ?? 0),
         imageUrl: (item.imageUrl as string | null) ?? null,
         approvalStatus: String(item.approvalStatus ?? "PENDING"),
@@ -180,6 +195,9 @@ export function KitchenDealsPanel({
     setFormDescription(item.description ?? "");
     setFormCategoryId(item.categoryId ?? "meals");
     setFormBasePrice(String(item.basePrice));
+    setFormDiscountedPrice(
+      item.discountedPrice != null ? String(item.discountedPrice) : "",
+    );
     setFormDeposit(String(item.depositAmount ?? 0));
     setFormImageUrl(item.imageUrl ?? "");
     setShowCreate(false);
@@ -191,6 +209,7 @@ export function KitchenDealsPanel({
     setFormDescription("");
     setFormCategoryId("meals");
     setFormBasePrice("");
+    setFormDiscountedPrice("");
     setFormDeposit("0");
     setFormImageUrl("");
   }
@@ -208,6 +227,9 @@ export function KitchenDealsPanel({
         categoryId: formCategoryId,
         orderReadiness: "AVAILABLE_NOW",
         basePrice: Number(formBasePrice),
+        discountedPrice: formDiscountedPrice
+          ? Number(formDiscountedPrice)
+          : null,
         depositAmount: Number(formDeposit),
         imageUrl: formImageUrl || undefined,
         startHidden: true,
@@ -242,6 +264,9 @@ export function KitchenDealsPanel({
         categoryId: formCategoryId,
         orderReadiness: "AVAILABLE_NOW",
         basePrice: Number(formBasePrice),
+        discountedPrice: formDiscountedPrice
+          ? Number(formDiscountedPrice)
+          : null,
         depositAmount: Number(formDeposit),
         imageUrl: formImageUrl || undefined,
         sizes: [],
@@ -429,7 +454,7 @@ export function KitchenDealsPanel({
               </option>
             ))}
           </select>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <input
               required
               type="number"
@@ -438,6 +463,15 @@ export function KitchenDealsPanel({
               value={formBasePrice}
               onChange={(e) => setFormBasePrice(e.target.value)}
               placeholder="السعر الأساسي"
+              className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
+            />
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={formDiscountedPrice}
+              onChange={(e) => setFormDiscountedPrice(e.target.value)}
+              placeholder="السعر بعد الخصم (اختياري)"
               className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
             />
             <input
@@ -478,7 +512,10 @@ export function KitchenDealsPanel({
               >
                 <div>
                   <p className="font-medium">
-                    {item.name} · {formatMoney(item.basePrice)}
+                    {item.name} ·{" "}
+                    {item.discountedPrice != null
+                      ? `${formatMoney(item.discountedPrice)} (كان ${formatMoney(item.basePrice)})`
+                      : formatMoney(item.basePrice)}
                   </p>
                   <p className="text-xs text-zinc-500">{statusLabel(item)}</p>
                 </div>
@@ -533,7 +570,14 @@ export function KitchenDealsPanel({
             <select
               required
               value={dishItemId}
-              onChange={(e) => setDishItemId(e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value;
+                setDishItemId(id);
+                const item = items.find((entry) => entry.id === id);
+                if (item) {
+                  setDishPrice(String(catalogOfferDefault(item)));
+                }
+              }}
               className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
             >
               <option value="" disabled>
@@ -541,7 +585,11 @@ export function KitchenDealsPanel({
               </option>
               {approved.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} ({formatMoney(item.basePrice)})
+                  {item.name} (
+                  {item.discountedPrice != null
+                    ? formatMoney(item.discountedPrice)
+                    : formatMoney(item.basePrice)}
+                  )
                   {item.isAvailable ? "" : " · مخفي"}
                 </option>
               ))}
@@ -608,7 +656,14 @@ export function KitchenDealsPanel({
               <select
                 required
                 value={flashItemId}
-                onChange={(e) => setFlashItemId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setFlashItemId(id);
+                  const item = items.find((entry) => entry.id === id);
+                  if (item) {
+                    setFlashPrice(String(catalogOfferDefault(item)));
+                  }
+                }}
                 className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
               >
                 <option value="" disabled>
@@ -616,7 +671,11 @@ export function KitchenDealsPanel({
                 </option>
                 {approved.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name} ({formatMoney(item.basePrice)})
+                    {item.name} (
+                    {item.discountedPrice != null
+                      ? formatMoney(item.discountedPrice)
+                      : formatMoney(item.basePrice)}
+                    )
                     {item.isAvailable ? "" : " · مخفي"}
                   </option>
                 ))}

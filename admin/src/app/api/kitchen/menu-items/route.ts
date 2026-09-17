@@ -9,6 +9,10 @@ import {
   serializePendingSizes,
 } from "@/lib/moderation";
 import { parseOrderReadiness } from "@/lib/order-readiness";
+import {
+  maxDepositAllowed,
+  parseOptionalDiscountedPrice,
+} from "@/lib/pricing";
 
 type MenuPayload = {
   name: string;
@@ -16,6 +20,7 @@ type MenuPayload = {
   categoryId?: string;
   orderReadiness?: string;
   basePrice: number;
+  discountedPrice?: number | null;
   depositAmount: number;
   imageUrl?: string;
   /** When true (e.g. created for deals), item stays hidden from normal menu until kitchen unhides. */
@@ -23,9 +28,46 @@ type MenuPayload = {
   sizes?: Array<{
     sizeName: string;
     price: number;
+    discountedPrice?: number | null;
     depositAmount?: number | null;
   }>;
 };
+
+function normalizeSizes(
+  sizes: MenuPayload["sizes"],
+): Array<{
+  sizeName: string;
+  price: string;
+  discountedPrice: string | null;
+  depositAmount: string | null;
+}> {
+  return (sizes ?? [])
+    .filter((size) => size.sizeName.trim() && Number.isFinite(size.price))
+    .map((size) => {
+      const discountedPrice = parseOptionalDiscountedPrice(
+        size.discountedPrice ?? null,
+        size.price,
+        `السعر بعد الخصم للحجم "${size.sizeName}"`,
+      );
+      if (size.depositAmount !== undefined && size.depositAmount !== null) {
+        const maxDep = maxDepositAllowed(
+          size.price,
+          discountedPrice != null ? Number(discountedPrice) : null,
+        );
+        if (size.depositAmount > maxDep) {
+          throw new Error(
+            `عربون الحجم "${size.sizeName}" لا يجب أن يتجاوز 60% من السعر بعد الخصم إن وُجد وإلا السعر.`,
+          );
+        }
+      }
+      return {
+        sizeName: size.sizeName.trim(),
+        price: size.price.toFixed(2),
+        discountedPrice,
+        depositAmount: size.depositAmount?.toFixed(2) ?? null,
+      };
+    });
+}
 
 export async function GET() {
   try {
@@ -108,13 +150,26 @@ export async function POST(request: Request) {
     }
 
     const orderReadiness = parseOrderReadiness(payload.orderReadiness);
+    const discountedPrice = parseOptionalDiscountedPrice(
+      payload.discountedPrice ?? null,
+      payload.basePrice,
+    );
 
-    if (payload.depositAmount > payload.basePrice * 0.6) {
+    const maxDep = maxDepositAllowed(
+      payload.basePrice,
+      discountedPrice != null ? Number(discountedPrice) : null,
+    );
+    if (payload.depositAmount > maxDep) {
       return NextResponse.json(
-        { error: "العربون لا يجب أن يتجاوز 60% من سعر الصنف." },
+        {
+          error:
+            "العربون لا يجب أن يتجاوز 60% من السعر بعد الخصم إن وُجد وإلا السعر الأساسي.",
+        },
         { status: 400 },
       );
     }
+
+    const sizes = normalizeSizes(payload.sizes);
 
     const createdItem = await db.menuItem.create({
       data: {
@@ -125,6 +180,7 @@ export async function POST(request: Request) {
         categoryId,
         orderReadiness,
         basePrice: payload.basePrice.toFixed(2),
+        discountedPrice,
         depositAmount: payload.depositAmount.toFixed(2),
         isAvailable: payload.startHidden === true ? false : true,
         approvalStatus: ApprovalStatus.PENDING,
@@ -135,30 +191,14 @@ export async function POST(request: Request) {
       },
     });
 
-    const sizes = (payload.sizes ?? []).filter(
-      (size) => size.sizeName.trim() && Number.isFinite(size.price),
-    );
-
     if (sizes.length) {
-      for (const size of sizes) {
-        if (size.depositAmount !== undefined && size.depositAmount !== null) {
-          if (size.depositAmount > size.price * 0.6) {
-            return NextResponse.json(
-              {
-                error: `عربون الحجم "${size.sizeName}" لا يجب أن يتجاوز 60% من السعر.`,
-              },
-              { status: 400 },
-            );
-          }
-        }
-      }
-
       await db.menuItemSize.createMany({
         data: sizes.map((size) => ({
           menuItemId: createdItem.id,
-          sizeName: size.sizeName.trim(),
-          price: size.price.toFixed(2),
-          depositAmount: size.depositAmount?.toFixed(2) ?? null,
+          sizeName: size.sizeName,
+          price: size.price,
+          discountedPrice: size.discountedPrice,
+          depositAmount: size.depositAmount,
           isActive: true,
         })),
       });
@@ -221,14 +261,25 @@ export async function PUT(request: Request) {
     }
 
     const orderReadiness = parseOrderReadiness(payload.orderReadiness);
+    const discountedPrice = parseOptionalDiscountedPrice(
+      payload.discountedPrice ?? null,
+      payload.basePrice,
+    );
+    const maxDep = maxDepositAllowed(
+      payload.basePrice,
+      discountedPrice != null ? Number(discountedPrice) : null,
+    );
+    if (payload.depositAmount > maxDep) {
+      return NextResponse.json(
+        {
+          error:
+            "العربون لا يجب أن يتجاوز 60% من السعر بعد الخصم إن وُجد وإلا السعر الأساسي.",
+        },
+        { status: 400 },
+      );
+    }
 
-    const sizes = (payload.sizes ?? [])
-      .filter((size) => size.sizeName.trim() && Number.isFinite(size.price))
-      .map((size) => ({
-        sizeName: size.sizeName.trim(),
-        price: size.price.toFixed(2),
-        depositAmount: size.depositAmount?.toFixed(2) ?? null,
-      }));
+    const sizes = normalizeSizes(payload.sizes);
 
     if (
       menuItem.approvalStatus === ApprovalStatus.PENDING ||
@@ -243,6 +294,7 @@ export async function PUT(request: Request) {
           categoryId,
           orderReadiness,
           basePrice: payload.basePrice.toFixed(2),
+          discountedPrice,
           depositAmount: payload.depositAmount.toFixed(2),
           approvalStatus: ApprovalStatus.PENDING,
           rejectionReason: null,
@@ -268,6 +320,7 @@ export async function PUT(request: Request) {
           pendingImageUrl: payload.imageUrl?.trim() || null,
           pendingCategoryId: categoryId,
           pendingBasePrice: payload.basePrice.toFixed(2),
+          pendingDiscountedPrice: discountedPrice,
           pendingDepositAmount: payload.depositAmount.toFixed(2),
           pendingSizesJson: serializePendingSizes(sizes),
           draftStatus: ApprovalStatus.PENDING,
@@ -280,6 +333,7 @@ export async function PUT(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "تعذر تحديث الصنف.";
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

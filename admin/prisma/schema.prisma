@@ -107,6 +107,7 @@ model User {
   reviewedDeposits  DepositProof[]    @relation("DepositReviewedBy")
   adminActions      AdminAction[]
   notifications     Notification[]
+  kitchenViews      KitchenViewEvent[]
 }
 
 model Region {
@@ -173,6 +174,25 @@ model Kitchen {
   flashOffers        FlashOffer[]
   orders             Order[]
   reviews            Review[]
+  viewEvents         KitchenViewEvent[]
+}
+
+/// One browse visit per kitchen + session + calendar day (for stats / conversion).
+model KitchenViewEvent {
+  id           String   @id @default(cuid())
+  kitchenId    String
+  viewerUserId String?
+  /// Anonymous/device session id from client (localStorage / SharedPreferences).
+  sessionKey   String
+  /// YYYY-MM-DD in server local day used for unique constraint.
+  viewDay      String
+  createdAt    DateTime @default(now())
+  kitchen      Kitchen  @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  viewer       User?    @relation(fields: [viewerUserId], references: [id], onDelete: SetNull)
+
+  @@unique([kitchenId, sessionKey, viewDay])
+  @@index([kitchenId, createdAt])
+  @@index([createdAt])
 }
 
 model KitchenDocument {
@@ -218,6 +238,8 @@ model MenuItem {
   /// Matches FOOD_CATEGORIES.id (e.g. bakery, poultry) for "تاكل ايه؟" + search.
   categoryId    String         @default("meals")
   basePrice     Decimal        @db.Decimal(10, 2)
+  /// Optional sale price; when set, customers pay this (strikethrough shows basePrice).
+  discountedPrice Decimal?     @db.Decimal(10, 2)
   depositAmount Decimal        @db.Decimal(10, 2)
   /// Kitchen-set: متاح الآن / حجز مسبق / اسأل المطبخ — shown to customers.
   orderReadiness OrderReadiness @default(AVAILABLE_NOW)
@@ -239,8 +261,9 @@ model MenuItem {
   pendingImageUrl String?
   pendingCategoryId String?
   pendingBasePrice Decimal? @db.Decimal(10, 2)
+  pendingDiscountedPrice Decimal? @db.Decimal(10, 2)
   pendingDepositAmount Decimal? @db.Decimal(10, 2)
-  /// JSON array of {sizeName, price, depositAmount?} for draft sizes.
+  /// JSON array of {sizeName, price, discountedPrice?, depositAmount?} for draft sizes.
   pendingSizesJson String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -277,6 +300,8 @@ model MenuItemSize {
   menuItemId    String
   sizeName      String
   price         Decimal   @db.Decimal(10, 2)
+  /// Optional sale price for this size; must be < price when set.
+  discountedPrice Decimal? @db.Decimal(10, 2)
   depositAmount Decimal?  @db.Decimal(10, 2)
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())

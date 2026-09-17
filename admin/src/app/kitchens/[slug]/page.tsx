@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { auth } from "@clerk/nextjs/server";
 
 import { KitchenLocationActions } from "@/components/kitchen-location-actions";
 import { KitchenMenuCart } from "@/components/kitchen-menu-cart";
+import { GuestAwareLink } from "@/components/guest-sign-up-prompt";
+import { RecordKitchenView } from "@/components/record-kitchen-view";
 import { db } from "@/lib/db";
 import { expireStaleFlashOffers } from "@/lib/deals";
 
@@ -12,6 +15,8 @@ export default async function KitchenDetailsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const { userId } = await auth();
+  const isSignedIn = Boolean(userId);
 
   const kitchen = await db.kitchen.findFirst({
     where: {
@@ -138,6 +143,7 @@ export default async function KitchenDetailsPage({
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
+      <RecordKitchenView kitchenId={kitchen.id} />
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <Link
@@ -174,12 +180,13 @@ export default async function KitchenDetailsPage({
             ) : null}
           </div>
           <div className="mt-5">
-            <Link
+            <GuestAwareLink
               href="/cart"
+              isSignedIn={isSignedIn}
               className="inline-flex rounded-full bg-[var(--brand-primary)] px-5 py-3 text-sm font-medium text-white"
             >
               مراجعة السلة
-            </Link>
+            </GuestAwareLink>
           </div>
         </header>
 
@@ -193,6 +200,7 @@ export default async function KitchenDetailsPage({
               kitchenLongitude={kitchen.longitude}
               kitchenAddressLine={kitchen.addressLine}
               kitchenRegionLabel={`${kitchen.region.cityName} - ${kitchen.region.regionName}`}
+              isSignedIn={isSignedIn}
               menuItems={cartMenuItems.map((item) => {
                 const isFlash =
                   activeFlash && activeFlash.menuItemId === item.id;
@@ -201,6 +209,9 @@ export default async function KitchenDetailsPage({
                   name: item.name,
                   description: item.description,
                   basePrice: String(item.basePrice),
+                  discountedPrice: item.discountedPrice
+                    ? String(item.discountedPrice)
+                    : null,
                   depositAmount: String(item.depositAmount),
                   orderReadiness: item.orderReadiness,
                   isDishOfTheDay: item.isDishOfTheDay,
@@ -219,6 +230,9 @@ export default async function KitchenDetailsPage({
                     id: size.id,
                     sizeName: size.sizeName,
                     price: String(size.price),
+                    discountedPrice: size.discountedPrice
+                      ? String(size.discountedPrice)
+                      : null,
                     depositAmount: size.depositAmount
                       ? String(size.depositAmount)
                       : null,

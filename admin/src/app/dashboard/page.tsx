@@ -15,6 +15,11 @@ import {
   getApprovalStatusLabel,
   getAvailabilityStatusLabel,
 } from "@/lib/status-labels";
+import {
+  formatMoneyEg,
+  getOrderStatsSummary,
+  resolveStatsDateRange,
+} from "@/lib/kitchen-order-stats";
 
 function ActionLink({
   href,
@@ -78,6 +83,14 @@ export default async function DashboardPage() {
     },
   });
   const hasKitchen = Boolean(kitchen);
+
+  const kitchenOrderStats =
+    user.role === "kitchen_owner" && kitchen
+      ? await getOrderStatsSummary({
+          range: resolveStatsDateRange(),
+          kitchenId: kitchen.id,
+        })
+      : null;
 
   const customerStats =
     user.role === "customer"
@@ -204,11 +217,69 @@ export default async function DashboardPage() {
                   />
                   <ActionLink href="/dashboard/menu" label="إدارة المنيو" />
                   <ActionLink href="/dashboard/orders" label="إدارة الطلبات" />
+                  <ActionLink href="/dashboard/kitchen/stats" label="إحصائيات" />
                   <ActionLink href="/notifications" label="الإشعارات" />
                   <ActionLink href="/role-setup" label="تبديل الدور" />
                 </div>
               </div>
             </section>
+
+            {kitchenOrderStats ? (
+              <section className="border border-[#ead9c8] bg-white p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold">إحصائيات</h2>
+                    <p className="mt-1 text-sm text-[#6b4a3a]">
+                      آخر 30 يومًا · مطبخك فقط
+                    </p>
+                  </div>
+                  <ActionLink
+                    href="/dashboard/kitchen/stats"
+                    label="عرض التفاصيل"
+                  />
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="rounded-2xl bg-[#fff8f1] px-4 py-4">
+                    <p className="text-sm text-[#6b4a3a]">الطلبات</p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {kitchenOrderStats.totalOrders}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#fff8f1] px-4 py-4">
+                    <p className="text-sm text-[#6b4a3a]">مكتملة</p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {kitchenOrderStats.completed}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#fff8f1] px-4 py-4">
+                    <p className="text-sm text-[#6b4a3a]">ملغاة</p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {kitchenOrderStats.cancelledTotal}
+                    </p>
+                    <p className="mt-1 text-xs text-[#6b4a3a]">
+                      رفض مطبخ {kitchenOrderStats.rejectedByKitchen} · إلغاء
+                      عميل {kitchenOrderStats.cancelledByCustomer}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#fff8f1] px-4 py-4">
+                    <p className="text-sm text-[#6b4a3a]">مبيعات المكتملة</p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {formatMoneyEg(kitchenOrderStats.salesCompleted)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#fff8f1] px-4 py-4">
+                    <p className="text-sm text-[#6b4a3a]">مشاهدات</p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {kitchenOrderStats.viewsTotal}
+                    </p>
+                    <p className="mt-1 text-xs text-[#6b4a3a]">
+                      زوار {kitchenOrderStats.uniqueVisitors} · تحويل{" "}
+                      {kitchenOrderStats.conversionRate}%
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
           </>
         ) : null}
 

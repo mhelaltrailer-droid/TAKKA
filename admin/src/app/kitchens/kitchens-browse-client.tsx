@@ -185,14 +185,14 @@ export function KitchensBrowseClient({
 
       {!isSignedIn ? (
         <p className="mb-6 text-sm leading-7 text-[#6b4a3a]">
-          تصفّح بحرية، و{" "}
+          تصفّح كزائر: المطابخ والأصناف والأسعار فقط.{" "}
           <Link
             href="/sign-up"
-            className="font-semibold text-[var(--brand-secondary)]"
+            className="font-semibold text-[var(--brand-primary)] underline underline-offset-4"
           >
-            أنشئ حسابًا
+            سجل الآن
           </Link>{" "}
-          لإتمام الطلب.
+          لإتمام الطلب أو أي خطوة أخرى.
         </p>
       ) : null}
 

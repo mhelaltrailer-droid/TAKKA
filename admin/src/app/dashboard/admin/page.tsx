@@ -70,6 +70,12 @@ export default async function AdminOperationsPage() {
               {pendingMenuItemsCount > 0 ? ` (${pendingMenuItemsCount})` : ""}
             </Link>
             <Link
+              href="/dashboard/admin/analytics"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              الإحصائيات
+            </Link>
+            <Link
               href="/dashboard/admin/users"
               className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >
@@ -156,6 +162,18 @@ export default async function AdminOperationsPage() {
                 <p className="mt-2 font-semibold">اعتماد الأصناف</p>
                 <p className="mt-1 text-sm text-zinc-600">
                   أصناف جديدة وتعديلات معلّقة قبل النشر
+                </p>
+              </Link>
+              <Link
+                href="/dashboard/admin/analytics"
+                className="rounded-2xl border border-zinc-200 p-5 transition hover:border-[var(--brand-primary)]"
+              >
+                <p className="text-2xl" aria-hidden>
+                  📊
+                </p>
+                <p className="mt-2 font-semibold">الإحصائيات</p>
+                <p className="mt-1 text-sm text-zinc-600">
+                  إجمالي المنصة وتفصيل كل مطبخ مع فلتر المدة
                 </p>
               </Link>
               <Link

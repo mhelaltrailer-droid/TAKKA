@@ -282,6 +282,14 @@ export function AppSignInForm() {
           إنشاء حساب
         </Link>
       </p>
+      <p className="text-center text-sm">
+        <Link
+          href="/kitchens"
+          className="font-semibold text-[var(--brand-primary)] underline underline-offset-4"
+        >
+          دخول كزائر فقط
+        </Link>
+      </p>
     </form>
   );
 }

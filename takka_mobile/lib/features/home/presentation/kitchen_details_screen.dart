@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../../core/ui/takka_skeletons.dart';
+import '../../auth/presentation/guest_sign_up_prompt.dart';
 import '../../cart/data/cart_store.dart';
 import '../../cart/presentation/cart_screen.dart';
 import '../data/customer_discovery_service.dart';
@@ -67,10 +69,12 @@ class KitchenDetailsScreen extends StatefulWidget {
     super.key,
     required this.kitchenIdOrSlug,
     required this.title,
+    this.isGuest = false,
   });
 
   final String kitchenIdOrSlug;
   final String title;
+  final bool isGuest;
 
   @override
   State<KitchenDetailsScreen> createState() => _KitchenDetailsScreenState();
@@ -79,9 +83,34 @@ class KitchenDetailsScreen extends StatefulWidget {
 class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
   final _cart = CartStore.instance;
   final _service = const CustomerDiscoveryService();
-  late Future<KitchenDetails> _future = _service.loadKitchenDetails(
-    kitchenIdOrSlug: widget.kitchenIdOrSlug,
-  );
+  late Future<KitchenDetails> _future = _loadDetails();
+  var _viewRecorded = false;
+
+  Future<KitchenDetails> _loadDetails() async {
+    final details = await _service.loadKitchenDetails(
+      kitchenIdOrSlug: widget.kitchenIdOrSlug,
+    );
+    if (!_viewRecorded && mounted) {
+      _viewRecorded = true;
+      String? token;
+      if (!widget.isGuest) {
+        try {
+          final authState = ClerkAuth.of(context, listen: false);
+          final session = await authState.sessionToken();
+          token = session.jwt;
+        } catch (_) {}
+      }
+      unawaited(
+        _service.recordKitchenView(
+          kitchenIdOrSlug: details.id.isNotEmpty
+              ? details.id
+              : widget.kitchenIdOrSlug,
+          sessionToken: token,
+        ),
+      );
+    }
+    return details;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +125,10 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
             builder: (context, _) {
               return IconButton(
                 onPressed: () {
+                  if (widget.isGuest) {
+                    showGuestSignUpPrompt(context);
+                    return;
+                  }
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const CartScreen(),
@@ -104,7 +137,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                 },
                 icon: Badge.count(
                   count: _cart.totalItems,
-                  isLabelVisible: _cart.totalItems > 0,
+                  isLabelVisible: !widget.isGuest && _cart.totalItems > 0,
                   child: const Icon(Icons.shopping_cart_outlined),
                 ),
               );
@@ -265,6 +298,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                             (item) => _MenuItemCard(
                               kitchen: kitchen,
                               item: item,
+                              isGuest: widget.isGuest,
                             ),
                           )
                           .toList(),
@@ -307,6 +341,7 @@ List<MenuItemSummary> _menuItemsForCustomer(KitchenDetails kitchen) {
       description: null,
       imageUrl: null,
       basePrice: dish.basePrice,
+      discountedPrice: null,
       depositAmount: 0,
       orderReadiness: 'AVAILABLE_NOW',
       sizes: const [],
@@ -324,6 +359,7 @@ List<MenuItemSummary> _menuItemsForCustomer(KitchenDetails kitchen) {
       description: null,
       imageUrl: null,
       basePrice: flash.basePrice,
+      discountedPrice: null,
       depositAmount: 0,
       orderReadiness: 'AVAILABLE_NOW',
       sizes: const [],
@@ -340,10 +376,12 @@ class _MenuItemCard extends StatelessWidget {
   const _MenuItemCard({
     required this.kitchen,
     required this.item,
+    this.isGuest = false,
   });
 
   final KitchenDetails kitchen;
   final MenuItemSummary item;
+  final bool isGuest;
 
   @override
   Widget build(BuildContext context) {
@@ -397,6 +435,24 @@ class _MenuItemCard extends StatelessWidget {
                       color: isFlash
                           ? const Color(0xFF9A3412)
                           : const Color(0xFF065F46),
+                    ),
+                  ),
+                ] else if (item.discountedPrice != null &&
+                    item.discountedPrice! > 0 &&
+                    item.discountedPrice! < item.basePrice) ...[
+                  Text(
+                    '${item.basePrice.toStringAsFixed(0)} ج.م',
+                    style: TextStyle(
+                      fontSize: 12,
+                      decoration: TextDecoration.lineThrough,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${item.discountedPrice!.toStringAsFixed(0)} ج.م',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ] else
@@ -514,6 +570,10 @@ class _MenuItemCard extends StatelessWidget {
   }
 
   void _openAddToCartSheet(BuildContext context) {
+    if (isGuest) {
+      showGuestSignUpPrompt(context);
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -701,13 +761,13 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     if (widget.item.isDishOfTheDay && widget.item.dishOfTheDayPrice != null) {
       return widget.item.dishOfTheDayPrice!;
     }
-    return widget.item.basePrice;
+    return widget.item.catalogPrice;
   }
 
   @override
   Widget build(BuildContext context) {
     final selectedSize = widget.item.sizes.where((size) => size.id == _selectedSizeId).firstOrNull;
-    final unitPrice = selectedSize?.price ?? _dealBasePrice();
+    final unitPrice = selectedSize?.catalogPrice ?? _dealBasePrice();
     final depositAmount = selectedSize?.depositAmount ?? widget.item.depositAmount;
 
     return Padding(
@@ -738,7 +798,13 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
               children: widget.item.sizes
                   .map(
                     (size) => ChoiceChip(
-                      label: Text('${size.sizeName} - ${size.price.toStringAsFixed(0)} ج.م'),
+                      label: Text(
+                        size.discountedPrice != null &&
+                                size.discountedPrice! > 0 &&
+                                size.discountedPrice! < size.price
+                            ? '${size.sizeName} - ${size.discountedPrice!.toStringAsFixed(0)} ج.م (كان ${size.price.toStringAsFixed(0)})'
+                            : '${size.sizeName} - ${size.price.toStringAsFixed(0)} ج.م',
+                      ),
                       selected: _selectedSizeId == size.id,
                       onSelected: (_) {
                         setState(() {
@@ -805,7 +871,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
 
   void _addToCart() {
     final selectedSize = widget.item.sizes.where((size) => size.id == _selectedSizeId).firstOrNull;
-    final unitPrice = selectedSize?.price ?? _dealBasePrice();
+    final unitPrice = selectedSize?.catalogPrice ?? _dealBasePrice();
     final depositAmount = selectedSize?.depositAmount ?? widget.item.depositAmount;
 
     try {

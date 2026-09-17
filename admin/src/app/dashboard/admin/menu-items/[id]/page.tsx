@@ -62,6 +62,9 @@ export default async function AdminMenuItemReviewPage({
   const reviewPrice = isDraft
     ? item.pendingBasePrice ?? item.basePrice
     : item.basePrice;
+  const reviewDiscounted = isDraft
+    ? item.pendingDiscountedPrice
+    : item.discountedPrice;
   const reviewDeposit = isDraft
     ? item.pendingDepositAmount ?? item.depositAmount
     : item.depositAmount;
@@ -112,7 +115,13 @@ export default async function AdminMenuItemReviewPage({
             ) : null}
             <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-700">
               <p>الفئة: {category?.label || reviewCategoryId}</p>
-              <p>السعر: {Number(reviewPrice).toFixed(2)} ج.م</p>
+              <p>السعر الأساسي: {Number(reviewPrice).toFixed(2)} ج.م</p>
+              <p>
+                السعر بعد الخصم:{" "}
+                {reviewDiscounted != null
+                  ? `${Number(reviewDiscounted).toFixed(2)} ج.م`
+                  : "—"}
+              </p>
               <p>العربون: {Number(reviewDeposit).toFixed(2)} ج.م</p>
               <p>
                 {ORDER_READINESS_FIELD_LABEL}:{" "}
@@ -156,7 +165,13 @@ export default async function AdminMenuItemReviewPage({
               <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-700">
                 <p>الاسم: {item.name}</p>
                 <p>الفئة: {getFoodCategoryById(item.categoryId)?.label}</p>
-                <p>السعر: {Number(item.basePrice).toFixed(2)} ج.م</p>
+                <p>السعر الأساسي: {Number(item.basePrice).toFixed(2)} ج.م</p>
+                <p>
+                  السعر بعد الخصم:{" "}
+                  {item.discountedPrice != null
+                    ? `${Number(item.discountedPrice).toFixed(2)} ج.م`
+                    : "—"}
+                </p>
                 <p>العربون: {Number(item.depositAmount).toFixed(2)} ج.م</p>
                 <p>
                   {ORDER_READINESS_FIELD_LABEL}:{" "}

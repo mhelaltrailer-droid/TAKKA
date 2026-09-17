@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/widgets/food_categories_strip.dart';
 import '../../../core/widgets/promo_carousel.dart';
+import '../../auth/presentation/guest_sign_up_prompt.dart';
 import '../../cart/presentation/addresses_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/my_orders_screen.dart';
@@ -22,12 +23,14 @@ class CustomerHomeScreen extends StatefulWidget {
     required this.onSignOut,
     required this.onSwitchRole,
     this.embeddedInShell = false,
+    this.isGuest = false,
   });
 
   final String displayName;
   final VoidCallback onSignOut;
   final VoidCallback onSwitchRole;
   final bool embeddedInShell;
+  final bool isGuest;
 
   @override
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
@@ -56,12 +59,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Future<CustomerBootstrapData> _loadBootstrap() async {
+    if (widget.isGuest) {
+      return _service.loadBootstrap(regionName: null);
+    }
     final jwt = await requireSessionJwt(context);
     // Load city-wide kitchens once; nearby list is filtered locally by district.
     return _service.loadBootstrap(
       sessionToken: jwt,
       regionName: null,
     );
+  }
+
+  Future<void> _requireRegistered(VoidCallback action) async {
+    if (widget.isGuest) {
+      await showGuestSignUpPrompt(context);
+      return;
+    }
+    action();
   }
 
   void _onDistrictChanged(String district) {
@@ -185,11 +199,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               actions: [
                 IconButton(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const NotificationsScreen(),
-                      ),
-                    );
+                    _requireRegistered(() {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      );
+                    });
                   },
                   icon: const Icon(Icons.notifications_none_rounded),
                   tooltip: 'الإشعارات',
@@ -197,28 +213,40 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               ],
             )
           : AppBar(
-              title: const Text('تكة - العميل'),
+              title: Text(widget.isGuest ? 'تكة · زائر' : 'تكة - العميل'),
               actions: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const NotificationsScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.notifications_none_rounded),
-                  tooltip: 'الإشعارات',
-                ),
-                IconButton(
-                  onPressed: widget.onSwitchRole,
-                  icon: const Icon(Icons.swap_horiz_rounded),
-                  tooltip: 'إنشاء حساب مطبخ / العودة للمطبخ',
-                ),
+                if (widget.isGuest)
+                  TextButton(
+                    onPressed: () => showGuestSignUpPrompt(context),
+                    child: const Text(
+                      'سجل الآن',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                if (!widget.isGuest)
+                  IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    tooltip: 'الإشعارات',
+                  ),
+                if (!widget.isGuest)
+                  IconButton(
+                    onPressed: widget.onSwitchRole,
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                    tooltip: 'إنشاء حساب مطبخ / العودة للمطبخ',
+                  ),
                 IconButton(
                   onPressed: widget.onSignOut,
-                  icon: const Icon(Icons.logout_rounded),
-                  tooltip: 'تسجيل الخروج',
+                  icon: Icon(
+                    widget.isGuest ? Icons.close_rounded : Icons.logout_rounded,
+                  ),
+                  tooltip: widget.isGuest ? 'العودة لتسجيل الدخول' : 'تسجيل الخروج',
                 ),
               ],
             ),
@@ -281,11 +309,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
                 const SizedBox(height: 16),
                 _WelcomeCard(
-                  title: 'أهلًا ${data.user.fullName}',
-                  description:
-                      'تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة.',
+                  title: widget.isGuest
+                      ? 'أهلًا بك كزائر'
+                      : 'أهلًا ${data.user.fullName}',
+                  description: widget.isGuest
+                      ? 'يمكنك استعراض المطابخ والأصناف والأسعار. للطلب أو أي خطوة أخرى سجّل كعميل.'
+                      : 'تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة.',
                 ),
-                if (!widget.embeddedInShell) ...[
+                if (!widget.embeddedInShell && !widget.isGuest) ...[
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     onPressed: () {
@@ -311,6 +342,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     label: const Text('عناوين التوصيل'),
                   ),
                 ],
+                if (widget.isGuest) ...[
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => showGuestSignUpPrompt(context),
+                    child: const Text('سجل الآن للمتابعة'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Text(
                   _selectedDistrict.isEmpty
@@ -332,13 +370,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     const _EmptyAllKitchensState()
                   else
                     ...discovery.map(
-                      (kitchen) => _KitchenCard(kitchen: kitchen),
+                      (kitchen) => _KitchenCard(
+                        kitchen: kitchen,
+                        isGuest: widget.isGuest,
+                      ),
                     ),
                 ] else if (discovery.isEmpty)
                   const _EmptyAllKitchensState()
                 else
                   ...discovery.map(
-                    (kitchen) => _KitchenCard(kitchen: kitchen),
+                    (kitchen) => _KitchenCard(
+                      kitchen: kitchen,
+                      isGuest: widget.isGuest,
+                    ),
                   ),
                 const SizedBox(height: 24),
                 Text(
@@ -402,7 +446,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   _EmptyAllKitchensState(searchQuery: _searchQuery)
                 else
                   ...allKitchens.map(
-                    (kitchen) => _KitchenCard(kitchen: kitchen),
+                    (kitchen) => _KitchenCard(
+                      kitchen: kitchen,
+                      isGuest: widget.isGuest,
+                    ),
                   ),
               ],
             ),
@@ -496,9 +543,11 @@ class _WelcomeCard extends StatelessWidget {
 class _KitchenCard extends StatelessWidget {
   const _KitchenCard({
     required this.kitchen,
+    this.isGuest = false,
   });
 
   final KitchenSummary kitchen;
+  final bool isGuest;
 
   @override
   Widget build(BuildContext context) {
@@ -514,6 +563,7 @@ class _KitchenCard extends StatelessWidget {
               builder: (_) => KitchenDetailsScreen(
                 kitchenIdOrSlug: kitchen.slug.isNotEmpty ? kitchen.slug : kitchen.id,
                 title: kitchen.kitchenName,
+                isGuest: isGuest,
               ),
             ),
           );

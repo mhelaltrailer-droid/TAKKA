@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveDealUnitPrice } from "@/lib/deals";
+import { effectiveCatalogPriceDecimal } from "@/lib/pricing";
 import { createNotification } from "@/lib/notifications";
 import {
   isValidEgyptianPhone,
@@ -186,7 +187,15 @@ export async function POST(request: Request) {
         ? menuItem.sizes.find((size) => size.id === requestedItem.menuItemSizeId)
         : null;
 
-      const regularUnitPrice = selectedSize?.price ?? menuItem.basePrice;
+      const regularUnitPrice = selectedSize
+        ? effectiveCatalogPriceDecimal(
+            selectedSize.price,
+            selectedSize.discountedPrice,
+          )
+        : effectiveCatalogPriceDecimal(
+            menuItem.basePrice,
+            menuItem.discountedPrice,
+          );
       const depositAmount = selectedSize?.depositAmount ?? menuItem.depositAmount;
       const quantity = requestedItem.quantity;
 
@@ -194,7 +203,7 @@ export async function POST(request: Request) {
         throw new Error(`الكمية غير صحيحة للصنف "${menuItem.name}".`);
       }
 
-      // Flash / dish-of-the-day apply to base item price (no size variant deals).
+      // Flash / dish-of-the-day apply to base item (no size); strikethrough remains basePrice.
       const { unitPrice } = selectedSize
         ? { unitPrice: regularUnitPrice }
         : await resolveDealUnitPrice({

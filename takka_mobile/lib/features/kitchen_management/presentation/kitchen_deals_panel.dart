@@ -29,6 +29,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _basePriceController = TextEditingController();
+  final _discountedPriceController = TextEditingController();
   final _depositController = TextEditingController(text: '0');
 
   String? _dishItemId;
@@ -73,6 +74,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
     _nameController.dispose();
     _descriptionController.dispose();
     _basePriceController.dispose();
+    _discountedPriceController.dispose();
     _depositController.dispose();
     super.dispose();
   }
@@ -132,6 +134,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
     _nameController.clear();
     _descriptionController.clear();
     _basePriceController.clear();
+    _discountedPriceController.clear();
     _depositController.text = '0';
     _categoryId = 'meals';
   }
@@ -143,6 +146,8 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       _nameController.text = item.name;
       _descriptionController.text = item.description ?? '';
       _basePriceController.text = item.basePrice.toStringAsFixed(0);
+      _discountedPriceController.text =
+          item.discountedPrice?.toStringAsFixed(0) ?? '';
       _depositController.text = item.depositAmount.toStringAsFixed(0);
       _categoryId = item.categoryId;
     });
@@ -151,6 +156,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
   Future<void> _createHiddenItem() async {
     try {
       final token = await _token();
+      final discountedRaw = _discountedPriceController.text.trim();
       await _service.createMenuItem(
         sessionToken: token,
         payload: {
@@ -159,6 +165,8 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
           'categoryId': _categoryId,
           'orderReadiness': 'AVAILABLE_NOW',
           'basePrice': double.tryParse(_basePriceController.text.trim()) ?? 0,
+          'discountedPrice':
+              discountedRaw.isEmpty ? null : double.tryParse(discountedRaw),
           'depositAmount': double.tryParse(_depositController.text.trim()) ?? 0,
           'startHidden': true,
           'sizes': <Map<String, dynamic>>[],
@@ -183,6 +191,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
     if (_editItemId == null) return;
     try {
       final token = await _token();
+      final discountedRaw = _discountedPriceController.text.trim();
       await _service.updateMenuItem(
         sessionToken: token,
         payload: {
@@ -192,6 +201,8 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
           'categoryId': _categoryId,
           'orderReadiness': 'AVAILABLE_NOW',
           'basePrice': double.tryParse(_basePriceController.text.trim()) ?? 0,
+          'discountedPrice':
+              discountedRaw.isEmpty ? null : double.tryParse(discountedRaw),
           'depositAmount': double.tryParse(_depositController.text.trim()) ?? 0,
           'sizes': <Map<String, dynamic>>[],
         },
@@ -412,6 +423,15 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    controller: _discountedPriceController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'السعر بعد الخصم (اختياري)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
                     controller: _depositController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
@@ -451,7 +471,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(item.name),
                       subtitle: Text(
-                        '${item.basePrice.toStringAsFixed(0)} ج · ${_statusLabel(item)}',
+                        '${item.discountedPrice != null ? '${item.discountedPrice!.toStringAsFixed(0)} ج (كان ${item.basePrice.toStringAsFixed(0)})' : '${item.basePrice.toStringAsFixed(0)} ج'} · ${_statusLabel(item)}',
                       ),
                       trailing: Wrap(
                         spacing: 4,
@@ -504,12 +524,21 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
                         (item) => DropdownMenuItem(
                           value: item.id,
                           child: Text(
-                            '${item.name} (${item.basePrice.toStringAsFixed(0)} ج)${item.isAvailable ? '' : ' · مخفي'}',
+                            '${item.name} (${item.catalogOfferDefault.toStringAsFixed(0)} ج)${item.isAvailable ? '' : ' · مخفي'}',
                           ),
                         ),
                       )
                       .toList(),
-                  onChanged: (value) => setState(() => _dishItemId = value),
+                  onChanged: (value) {
+                    setState(() {
+                      _dishItemId = value;
+                      final item = _items.where((e) => e.id == value).firstOrNull;
+                      if (item != null) {
+                        _dishPriceController.text =
+                            item.catalogOfferDefault.toStringAsFixed(0);
+                      }
+                    });
+                  },
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -584,12 +613,22 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
                           (item) => DropdownMenuItem(
                             value: item.id,
                             child: Text(
-                              '${item.name} (${item.basePrice.toStringAsFixed(0)} ج)${item.isAvailable ? '' : ' · مخفي'}',
+                              '${item.name} (${item.catalogOfferDefault.toStringAsFixed(0)} ج)${item.isAvailable ? '' : ' · مخفي'}',
                             ),
                           ),
                         )
                         .toList(),
-                    onChanged: (value) => setState(() => _flashItemId = value),
+                    onChanged: (value) {
+                      setState(() {
+                        _flashItemId = value;
+                        final item =
+                            _items.where((e) => e.id == value).firstOrNull;
+                        if (item != null) {
+                          _flashPriceController.text =
+                              item.catalogOfferDefault.toStringAsFixed(0);
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: 10),
                   TextField(

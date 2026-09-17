@@ -162,6 +162,35 @@ class KitchenManagementService {
     }
   }
 
+  Future<KitchenOrderStatsResult> loadOrderStats({
+    required String sessionToken,
+    String? from,
+    String? to,
+  }) async {
+    final params = <String, String>{};
+    if (from != null && from.isNotEmpty) params['from'] = from;
+    if (to != null && to.isNotEmpty) params['to'] = to;
+
+    final response = await http.get(
+      _buildUri('/api/kitchen/stats').replace(
+        queryParameters: params.isEmpty ? null : params,
+      ),
+      headers: {'Authorization': 'Bearer $sessionToken'},
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      String message = 'تعذر تحميل الإحصائيات';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        message = body['error']?.toString() ?? message;
+      } catch (_) {}
+      throw Exception(message);
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return KitchenOrderStatsResult.fromJson(json);
+  }
+
   Future<KitchenDishOfTheDay?> loadDishOfTheDay({
     required String sessionToken,
   }) async {
@@ -350,6 +379,7 @@ class KitchenManagedMenuItem {
     required this.categoryId,
     required this.orderReadiness,
     required this.basePrice,
+    required this.discountedPrice,
     required this.depositAmount,
     required this.isAvailable,
     required this.approvalStatus,
@@ -369,6 +399,8 @@ class KitchenManagedMenuItem {
       orderReadiness:
           json['orderReadiness']?.toString() ?? 'AVAILABLE_NOW',
       basePrice: double.tryParse(json['basePrice']?.toString() ?? '') ?? 0,
+      discountedPrice:
+          double.tryParse(json['discountedPrice']?.toString() ?? ''),
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
       isAvailable: json['isAvailable'] == true,
@@ -387,6 +419,7 @@ class KitchenManagedMenuItem {
   final String categoryId;
   final String orderReadiness;
   final double basePrice;
+  final double? discountedPrice;
   final double depositAmount;
   final bool isAvailable;
   final String approvalStatus;
@@ -394,6 +427,14 @@ class KitchenManagedMenuItem {
   final String? draftStatus;
   final String? draftRejectionReason;
   final bool isDishOfTheDay;
+
+  double get catalogOfferDefault {
+    final discounted = discountedPrice;
+    if (discounted != null && discounted > 0 && discounted < basePrice) {
+      return discounted;
+    }
+    return basePrice;
+  }
 }
 
 class KitchenDishOfTheDay {
@@ -455,3 +496,76 @@ class KitchenFlashOffer {
   final int quantityLeft;
   final DateTime endsAt;
 }
+
+class KitchenOrderStatsResult {
+  const KitchenOrderStatsResult({
+    required this.kitchenName,
+    required this.from,
+    required this.to,
+    required this.stats,
+  });
+
+  factory KitchenOrderStatsResult.fromJson(Map<String, dynamic> json) {
+    return KitchenOrderStatsResult(
+      kitchenName: json['kitchenName']?.toString() ?? '',
+      from: json['from']?.toString() ?? '',
+      to: json['to']?.toString() ?? '',
+      stats: KitchenOrderStats.fromJson(
+        json['stats'] as Map<String, dynamic>? ?? const {},
+      ),
+    );
+  }
+
+  final String kitchenName;
+  final String from;
+  final String to;
+  final KitchenOrderStats stats;
+}
+
+class KitchenOrderStats {
+  const KitchenOrderStats({
+    required this.totalOrders,
+    required this.completed,
+    required this.cancelledTotal,
+    required this.cancelledByCustomer,
+    required this.rejectedByKitchen,
+    required this.inProgress,
+    required this.salesCompleted,
+    required this.completionRate,
+    required this.viewsTotal,
+    required this.uniqueVisitors,
+    required this.conversionRate,
+  });
+
+  factory KitchenOrderStats.fromJson(Map<String, dynamic> json) {
+    return KitchenOrderStats(
+      totalOrders: (json['totalOrders'] as num?)?.toInt() ?? 0,
+      completed: (json['completed'] as num?)?.toInt() ?? 0,
+      cancelledTotal: (json['cancelledTotal'] as num?)?.toInt() ?? 0,
+      cancelledByCustomer: (json['cancelledByCustomer'] as num?)?.toInt() ?? 0,
+      rejectedByKitchen: (json['rejectedByKitchen'] as num?)?.toInt() ?? 0,
+      inProgress: (json['inProgress'] as num?)?.toInt() ?? 0,
+      salesCompleted:
+          double.tryParse(json['salesCompleted']?.toString() ?? '') ?? 0,
+      completionRate:
+          double.tryParse(json['completionRate']?.toString() ?? '') ?? 0,
+      viewsTotal: (json['viewsTotal'] as num?)?.toInt() ?? 0,
+      uniqueVisitors: (json['uniqueVisitors'] as num?)?.toInt() ?? 0,
+      conversionRate:
+          double.tryParse(json['conversionRate']?.toString() ?? '') ?? 0,
+    );
+  }
+
+  final int totalOrders;
+  final int completed;
+  final int cancelledTotal;
+  final int cancelledByCustomer;
+  final int rejectedByKitchen;
+  final int inProgress;
+  final double salesCompleted;
+  final double completionRate;
+  final int viewsTotal;
+  final int uniqueVisitors;
+  final double conversionRate;
+}
+

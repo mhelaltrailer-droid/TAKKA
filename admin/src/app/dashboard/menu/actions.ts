@@ -11,6 +11,10 @@ import {
   serializePendingSizes,
 } from "@/lib/moderation";
 import { parseOrderReadiness } from "@/lib/order-readiness";
+import {
+  maxDepositAllowed,
+  parseOptionalDiscountedPrice,
+} from "@/lib/pricing";
 
 function getString(formData: FormData, key: string) {
   return formData.get(key)?.toString().trim() ?? "";
@@ -26,22 +30,29 @@ function parseCurrency(value: string, fieldName: string) {
   return parsed.toFixed(2);
 }
 
+/** Format: sizeName|price|deposit|discountedPrice (deposit and discounted optional). */
 function parseSizes(raw: string) {
   return raw
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [sizeName, price, deposit] = line.split("|").map((part) => part.trim());
+      const parts = line.split("|").map((part) => part.trim());
+      const [sizeName, price, deposit, discounted] = parts;
 
       if (!sizeName || !price) {
         throw new Error(
-          "تنسيق الأحجام غير صحيح. استخدم: اسم الحجم|السعر|العربون",
+          "تنسيق الأحجام غير صحيح. استخدم: اسم الحجم|السعر|العربون|السعر بعد الخصم",
         );
       }
 
       const parsedPrice = Number(price);
       const parsedDeposit = deposit ? Number(deposit) : null;
+      const discountedPrice = parseOptionalDiscountedPrice(
+        discounted,
+        parsedPrice,
+        `السعر بعد الخصم للحجم "${sizeName}"`,
+      );
 
       if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
         throw new Error(`سعر الحجم "${sizeName}" غير صحيح.`);
@@ -52,14 +63,21 @@ function parseSizes(raw: string) {
           throw new Error(`عربون الحجم "${sizeName}" غير صحيح.`);
         }
 
-        if (parsedDeposit > parsedPrice * 0.6) {
-          throw new Error(`عربون الحجم "${sizeName}" لا يجب أن يتجاوز 60% من السعر.`);
+        const maxDep = maxDepositAllowed(
+          parsedPrice,
+          discountedPrice != null ? Number(discountedPrice) : null,
+        );
+        if (parsedDeposit > maxDep) {
+          throw new Error(
+            `عربون الحجم "${sizeName}" لا يجب أن يتجاوز 60% من السعر بعد الخصم إن وُجد وإلا السعر.`,
+          );
         }
       }
 
       return {
         sizeName,
         price: parsedPrice.toFixed(2),
+        discountedPrice,
         depositAmount: parsedDeposit?.toFixed(2) ?? null,
       };
     });
@@ -98,6 +116,10 @@ export async function createMenuItem(formData: FormData) {
     getString(formData, "orderReadiness"),
   );
   const basePrice = parseCurrency(getString(formData, "basePrice"), "السعر");
+  const discountedPrice = parseOptionalDiscountedPrice(
+    getString(formData, "discountedPrice"),
+    Number(basePrice),
+  );
   const depositAmount = parseCurrency(getString(formData, "depositAmount"), "العربون");
   const imageUrl = getString(formData, "imageUrl");
   const sizesInput = getString(formData, "sizes");
@@ -110,8 +132,16 @@ export async function createMenuItem(formData: FormData) {
     throw new Error("اختر فئة الوجبة من قائمة تاكل ايه؟");
   }
 
-  if (Number(depositAmount) > Number(basePrice) * 0.6) {
-    throw new Error("العربون لا يجب أن يتجاوز 60% من سعر الصنف.");
+  if (
+    Number(depositAmount) >
+    maxDepositAllowed(
+      Number(basePrice),
+      discountedPrice != null ? Number(discountedPrice) : null,
+    )
+  ) {
+    throw new Error(
+      "العربون لا يجب أن يتجاوز 60% من السعر بعد الخصم إن وُجد وإلا السعر الأساسي.",
+    );
   }
 
   const createdItem = await db.menuItem.create({
@@ -123,6 +153,7 @@ export async function createMenuItem(formData: FormData) {
       categoryId,
       orderReadiness,
       basePrice,
+      discountedPrice,
       depositAmount,
       isAvailable: true,
       approvalStatus: ApprovalStatus.PENDING,
@@ -138,6 +169,7 @@ export async function createMenuItem(formData: FormData) {
         menuItemId: createdItem.id,
         sizeName: size.sizeName,
         price: size.price,
+        discountedPrice: size.discountedPrice,
         depositAmount: size.depositAmount,
         isActive: true,
       })),
@@ -162,6 +194,10 @@ export async function updateMenuItem(formData: FormData) {
     getString(formData, "orderReadiness"),
   );
   const basePrice = parseCurrency(getString(formData, "basePrice"), "السعر");
+  const discountedPrice = parseOptionalDiscountedPrice(
+    getString(formData, "discountedPrice"),
+    Number(basePrice),
+  );
   const depositAmount = parseCurrency(getString(formData, "depositAmount"), "العربون");
   const imageUrl = getString(formData, "imageUrl");
   const sizesInput = getString(formData, "sizes");
@@ -173,8 +209,16 @@ export async function updateMenuItem(formData: FormData) {
   if (!categoryId || !isFoodCategoryId(categoryId)) {
     throw new Error("اختر فئة الوجبة من قائمة تاكل ايه؟");
   }
-  if (Number(depositAmount) > Number(basePrice) * 0.6) {
-    throw new Error("العربون لا يجب أن يتجاوز 60% من سعر الصنف.");
+  if (
+    Number(depositAmount) >
+    maxDepositAllowed(
+      Number(basePrice),
+      discountedPrice != null ? Number(discountedPrice) : null,
+    )
+  ) {
+    throw new Error(
+      "العربون لا يجب أن يتجاوز 60% من السعر بعد الخصم إن وُجد وإلا السعر الأساسي.",
+    );
   }
 
   const menuItem = await db.menuItem.findFirst({
@@ -185,7 +229,6 @@ export async function updateMenuItem(formData: FormData) {
     throw new Error("الصنف غير موجود.");
   }
 
-  // New / rejected items: edit live fields and resubmit for approval.
   if (
     menuItem.approvalStatus === ApprovalStatus.PENDING ||
     menuItem.approvalStatus === ApprovalStatus.REJECTED
@@ -199,6 +242,7 @@ export async function updateMenuItem(formData: FormData) {
         categoryId,
         orderReadiness,
         basePrice,
+        discountedPrice,
         depositAmount,
         approvalStatus: ApprovalStatus.PENDING,
         rejectionReason: null,
@@ -212,6 +256,7 @@ export async function updateMenuItem(formData: FormData) {
           menuItemId: menuItem.id,
           sizeName: size.sizeName,
           price: size.price,
+          discountedPrice: size.discountedPrice,
           depositAmount: size.depositAmount,
           isActive: true,
         })),
@@ -222,8 +267,6 @@ export async function updateMenuItem(formData: FormData) {
     return;
   }
 
-  // Approved item: keep live fields, save draft for admin review.
-  // orderReadiness updates live so customers see timing changes immediately.
   await db.menuItem.update({
     where: { id: menuItem.id },
     data: {
@@ -233,6 +276,7 @@ export async function updateMenuItem(formData: FormData) {
       pendingImageUrl: imageUrl || null,
       pendingCategoryId: categoryId,
       pendingBasePrice: basePrice,
+      pendingDiscountedPrice: discountedPrice,
       pendingDepositAmount: depositAmount,
       pendingSizesJson: serializePendingSizes(parsedSizes),
       draftStatus: ApprovalStatus.PENDING,

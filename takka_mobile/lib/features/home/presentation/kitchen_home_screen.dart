@@ -9,6 +9,7 @@ import '../../auth/data/mobile_me_service.dart';
 import '../../kitchen_management/data/kitchen_management_service.dart';
 import '../../kitchen_management/presentation/kitchen_menu_management_screen.dart';
 import '../../kitchen_management/presentation/kitchen_onboarding_screen.dart';
+import '../../kitchen_management/presentation/kitchen_stats_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/kitchen_orders_screen.dart';
 
@@ -156,6 +157,18 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
             icon: const Icon(Icons.receipt_long_outlined),
             label: const Text('طلبات المطبخ'),
           ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const KitchenStatsScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.insights_outlined),
+            label: const Text('إحصائيات'),
+          ),
           const SizedBox(height: 16),
           const _KitchenActionTile(
             icon: Icons.verified_user_outlined,
@@ -171,6 +184,11 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
             icon: Icons.local_shipping_outlined,
             title: 'إدارة الطلبات',
             description: 'قبول الطلبات، تحديد رسوم التوصيل، ومتابعة الحالات.',
+          ),
+          const _KitchenActionTile(
+            icon: Icons.insights_outlined,
+            title: 'إحصائيات',
+            description: 'طلبات مكتملة وملغاة ومبيعات آخر 30 يومًا أو مدة تختارها.',
           ),
         ],
       ),

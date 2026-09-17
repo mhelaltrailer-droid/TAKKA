@@ -9,6 +9,7 @@ export const KITCHEN_NOT_APPROVED_MENU_MESSAGE =
 type PendingSize = {
   sizeName: string;
   price: string;
+  discountedPrice?: string | null;
   depositAmount: string | null;
 };
 
@@ -68,6 +69,10 @@ export async function applyApprovedMenuDraft(menuItemId: string) {
             : item.imageUrl,
         categoryId: item.pendingCategoryId ?? item.categoryId,
         basePrice: item.pendingBasePrice ?? item.basePrice,
+        discountedPrice:
+          item.pendingDiscountedPrice !== undefined
+            ? item.pendingDiscountedPrice
+            : item.discountedPrice,
         depositAmount: item.pendingDepositAmount ?? item.depositAmount,
         draftStatus: null,
         draftRejectionReason: null,
@@ -76,6 +81,7 @@ export async function applyApprovedMenuDraft(menuItemId: string) {
         pendingImageUrl: null,
         pendingCategoryId: null,
         pendingBasePrice: null,
+        pendingDiscountedPrice: null,
         pendingDepositAmount: null,
         pendingSizesJson: null,
       },
@@ -89,6 +95,7 @@ export async function applyApprovedMenuDraft(menuItemId: string) {
             menuItemId,
             sizeName: size.sizeName,
             price: size.price,
+            discountedPrice: size.discountedPrice ?? null,
             depositAmount: size.depositAmount,
             isActive: true,
           })),

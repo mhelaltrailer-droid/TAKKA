@@ -9,10 +9,12 @@ class AuthFlowScreen extends StatelessWidget {
     super.key,
     required this.selectedRole,
     required this.onRoleSelected,
+    this.onGuestBrowse,
   });
 
   final AppRole? selectedRole;
   final ValueChanged<AppRole> onRoleSelected;
+  final VoidCallback? onGuestBrowse;
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +137,23 @@ class AuthFlowScreen extends StatelessWidget {
                           icon: const Icon(Icons.arrow_back_rounded),
                           label: const Text('متابعة لتسجيل الدخول'),
                         ),
+                        if (onGuestBrowse != null) ...[
+                          const SizedBox(height: 14),
+                          Center(
+                            child: TextButton(
+                              onPressed: onGuestBrowse,
+                              child: Text(
+                                'دخول كزائر فقط',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: TakkaColors.primary,
+                                  fontWeight: FontWeight.w800,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: TakkaColors.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         Text(
                           effectiveRole == AppRole.customer

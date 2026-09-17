@@ -26,6 +26,7 @@ class _KitchenMenuManagementScreenState
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  final _discountedPriceController = TextEditingController();
   final _depositController = TextEditingController();
   final _imageController = TextEditingController();
 
@@ -44,6 +45,7 @@ class _KitchenMenuManagementScreenState
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _discountedPriceController.dispose();
     _depositController.dispose();
     _imageController.dispose();
     super.dispose();
@@ -218,7 +220,19 @@ class _KitchenMenuManagementScreenState
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(labelText: 'السعر'),
+                        decoration: const InputDecoration(labelText: 'السعر الأساسي'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _discountedPriceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'السعر بعد الخصم (اختياري)',
+                          helperText:
+                              'يجب أن يكون أقل من الأساسي وأكبر من صفر',
+                        ),
                       ),
                       const SizedBox(height: 10),
                       TextField(
@@ -275,7 +289,7 @@ class _KitchenMenuManagementScreenState
                           '${_categoryLabel(item.categoryId)} · ${_approvalLabel(item)}'
                           '${item.isDishOfTheDay ? ' · طبق اليوم' : ''}\n'
                           '$orderReadinessFieldLabel: ${orderReadinessLabel(item.orderReadiness)}\n'
-                          'السعر: ${item.basePrice.toStringAsFixed(0)} ج.م | العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م'
+                          'السعر: ${item.discountedPrice != null ? '${item.discountedPrice!.toStringAsFixed(0)} ج.م (كان ${item.basePrice.toStringAsFixed(0)})' : '${item.basePrice.toStringAsFixed(0)} ج.م'} | العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م'
                           '${item.rejectionReason != null && item.rejectionReason!.isNotEmpty ? '\nسبب الرفض: ${item.rejectionReason}' : ''}'
                           '${item.draftRejectionReason != null && item.draftRejectionReason!.isNotEmpty ? '\nسبب رفض التعديل: ${item.draftRejectionReason}' : ''}',
                           style: const TextStyle(height: 1.45),
@@ -351,6 +365,11 @@ class _KitchenMenuManagementScreenState
           'categoryId': _categoryId,
           'orderReadiness': _orderReadiness,
           'basePrice': double.tryParse(_priceController.text.trim()) ?? 0,
+          'discountedPrice': () {
+            final raw = _discountedPriceController.text.trim();
+            if (raw.isEmpty) return null;
+            return double.tryParse(raw);
+          }(),
           'depositAmount':
               double.tryParse(_depositController.text.trim()) ?? 0,
           'imageUrl': _imageController.text.trim(),
@@ -361,6 +380,7 @@ class _KitchenMenuManagementScreenState
       _nameController.clear();
       _descriptionController.clear();
       _priceController.clear();
+      _discountedPriceController.clear();
       _depositController.clear();
       _imageController.clear();
       setState(() {
