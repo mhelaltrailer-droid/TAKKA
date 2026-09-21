@@ -103,10 +103,10 @@ export function DeliveryLocationHeader({
         }
 
         const name = detected.districtName;
-        const allowed = districts.includes(name)
-          ? districts
-          : OBOUR_DISTRICTS;
-        if (!allowed.includes(name)) {
+        const known =
+          districts.includes(name) ||
+          (OBOUR_DISTRICTS as readonly string[]).includes(name);
+        if (!known) {
           return;
         }
 
