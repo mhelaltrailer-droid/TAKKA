@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../account/presentation/customer_account_screen.dart';
 import '../../home/presentation/customer_home_screen.dart';
+import '../../home/presentation/deals_browse_screen.dart';
 import 'my_orders_screen.dart';
 
 class CustomerShellScreen extends StatefulWidget {
@@ -46,9 +47,12 @@ class _CustomerShellScreenState extends State<CustomerShellScreen> {
             embeddedInShell: true,
           ),
           _visited.contains(1)
-              ? const MyOrdersScreen(embeddedInShell: true)
+              ? const DealsBrowseScreen(embeddedInShell: true)
               : const SizedBox.shrink(),
           _visited.contains(2)
+              ? const MyOrdersScreen(embeddedInShell: true)
+              : const SizedBox.shrink(),
+          _visited.contains(3)
               ? CustomerAccountScreen(
                   fallbackName: widget.displayName,
                   onSignOut: widget.onSignOut,
@@ -67,6 +71,14 @@ class _CustomerShellScreenState extends State<CustomerShellScreen> {
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home_rounded, color: TakkaColors.primary),
             label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_fire_department_outlined),
+            selectedIcon: Icon(
+              Icons.local_fire_department_rounded,
+              color: TakkaColors.primary,
+            ),
+            label: 'العروض',
           ),
           NavigationDestination(
             icon: Icon(Icons.shopping_bag_outlined),

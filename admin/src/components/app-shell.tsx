@@ -10,6 +10,7 @@ import { isClerkConfigured } from "@/lib/clerk";
 
 const customerTopLinks = [
   { href: "/kitchens", label: "المطابخ" },
+  { href: "/deals", label: "العروض" },
   { href: "/cart", label: "السلة" },
   { href: "/orders", label: "طلباتي" },
   { href: "/account", label: "حسابي" },
@@ -28,6 +29,7 @@ const kitchenLinks = [
 
 const customerBottomNav = [
   { key: "home", href: "/kitchens", label: "الرئيسية", icon: "🏠" },
+  { key: "deals", href: "/deals", label: "العروض", icon: "🔥" },
   { key: "orders", href: "/orders", label: "طلباتي", icon: "🛍️" },
   { key: "account", href: "/account", label: "حسابي", icon: "👤" },
 ] as const;
@@ -47,7 +49,7 @@ export function AppShell({
   unreadNotificationsCount?: number;
   title?: string;
   subtitle?: string;
-  activeNav?: "home" | "orders" | "account";
+  activeNav?: "home" | "deals" | "orders" | "account";
 }) {
   const isSignedIn = Boolean(userId);
   const links = mode === "kitchen" ? kitchenLinks : customerTopLinks;

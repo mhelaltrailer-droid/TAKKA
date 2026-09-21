@@ -270,7 +270,7 @@ class _CartScreenState extends State<CartScreen> {
 
                             if (snapshot.hasError) {
                               return Text(
-                                'تعذر تحميل العناوين: ${snapshot.error}',
+                                '(حدث خطأ)',
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.error,
                                 ),

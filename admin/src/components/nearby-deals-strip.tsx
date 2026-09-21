@@ -101,11 +101,21 @@ export function NearbyDealsStrip({
   return (
     <section className="mb-10 space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-[#3b2418]">عروض قريبة</h2>
-        <p className="mt-1 text-sm text-[#6b4a3a]">
-          طبق اليوم وعروض سريعة من المطابخ
-          {district ? ` في ${district}` : " المتاحة"}
-        </p>
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-[#3b2418]">عروض قريبة</h2>
+            <p className="mt-1 text-sm text-[#6b4a3a]">
+              طبق اليوم وعروض سريعة من المطابخ
+              {district ? ` في ${district}` : " المتاحة"}
+            </p>
+          </div>
+          <Link
+            href="/deals"
+            className="shrink-0 text-sm font-semibold text-[var(--brand-secondary)]"
+          >
+            كل العروض
+          </Link>
+        </div>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-2">

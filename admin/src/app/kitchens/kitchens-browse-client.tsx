@@ -181,6 +181,23 @@ export function KitchensBrowseClient({
 
       <PromoCarousel slides={promos} />
 
+      <Link
+        href="/deals"
+        className="mb-6 flex w-full items-center justify-between gap-3 rounded-2xl border-2 border-orange-300 bg-gradient-to-l from-orange-50 to-emerald-50 px-4 py-4 text-right transition hover:border-orange-400"
+      >
+        <span>
+          <span className="block text-base font-bold text-[#3b2418]">
+            🔥 العروض
+          </span>
+          <span className="mt-1 block text-sm text-[#6b4a3a]">
+            كل Flash وأطباق اليوم في مدينة العبور
+          </span>
+        </span>
+        <span className="text-xl text-[#e67e22]" aria-hidden>
+          ‹
+        </span>
+      </Link>
+
       <NearbyDealsStrip district={district} />
 
       {!isSignedIn ? (

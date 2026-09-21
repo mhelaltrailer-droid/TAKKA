@@ -5,6 +5,8 @@ import '../../../core/auth/session_token.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/validation/phone.dart';
 import '../../cart/data/order_service.dart';
@@ -29,6 +31,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   final _chatTextController = TextEditingController();
   final _reviewCommentController = TextEditingController();
   Future<CustomerOrderDetails>? _future;
+  int _selectedRating = 0;
+  var _submittingReview = false;
 
   @override
   void initState() {
@@ -78,9 +82,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
           if (snapshot.hasError) {
             return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(snapshot.error.toString(), textAlign: TextAlign.center),
+              child: TakkaErrorRetry(
+                onRetry: () {
+                  setState(() => _future = _load());
+                },
               ),
             );
           }
@@ -150,6 +155,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     kitchenName: order.kitchenName,
                     phone: order.kitchenPhone!,
                   ),
+                ],
+                if (order.status == 'COMPLETED') ...[
+                  const SizedBox(height: 14),
+                  _buildReviewSection(order),
                 ],
                 if (order.status == 'ACCEPTED_AWAITING_DEPOSIT' ||
                     order.status == 'DEPOSIT_PROOF_SUBMITTED') ...[
@@ -457,63 +466,162 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                   ),
                 ],
-                if (order.status == 'COMPLETED') ...[
-                  const SizedBox(height: 14),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'التقييم',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (order.reviewRating != null) ...[
-                            Text('تقييمك الحالي: ${order.reviewRating} / 5'),
-                            if (order.reviewComment != null &&
-                                order.reviewComment!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Text(order.reviewComment!),
-                              ),
-                          ] else ...[
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: List.generate(
-                                5,
-                                (index) => OutlinedButton(
-                                  onPressed: () => _submitReview(
-                                    order.id,
-                                    index + 1,
-                                  ),
-                                  child: Text('${index + 1} نجمة'),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: _reviewCommentController,
-                              maxLines: 3,
-                              decoration: const InputDecoration(
-                                hintText: 'تعليقك على الطلب',
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildReviewSection(CustomerOrderDetails order) {
+    if (order.reviewRating != null) {
+      return Card(
+        color: const Color(0xFFECFDF5),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'شكرًا، تم التقييم',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF065F46),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'تم تسجيل تقييمك لمطبخ ${order.kitchenName}. لن يطلب منك التقييم مرة أخرى لهذا الطلب.',
+                style: const TextStyle(
+                  color: Color(0xFF047857),
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                textDirection: TextDirection.ltr,
+                children: List.generate(5, (index) {
+                  final filled = index < (order.reviewRating ?? 0);
+                  return Text(
+                    '★',
+                    style: TextStyle(
+                      fontSize: 28,
+                      color: filled
+                          ? const Color(0xFFE67E22)
+                          : const Color(0xFFA7F3D0),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${order.reviewRating} / 5',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF065F46),
+                ),
+              ),
+              if (order.reviewComment != null &&
+                  order.reviewComment!.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  order.reviewComment!,
+                  style: const TextStyle(
+                    color: Color(0xFF065F46),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      color: const Color(0xFFFFF8F1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0x66E67E22), width: 2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'تقييم التجربة',
+              style: TextStyle(
+                color: Color(0xFFE67E22),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'كيف كانت تجربتك مع مطبخ ${order.kitchenName}؟',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'اختر النجوم، والتعليق اختياري.',
+              style: TextStyle(color: TakkaColors.muted, height: 1.45),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              textDirection: TextDirection.ltr,
+              children: List.generate(5, (index) {
+                final star = index + 1;
+                final selected = star <= _selectedRating;
+                return IconButton(
+                  onPressed: _submittingReview
+                      ? null
+                      : () => setState(() => _selectedRating = star),
+                  icon: Text(
+                    '★',
+                    style: TextStyle(
+                      fontSize: 36,
+                      color: selected
+                          ? const Color(0xFFE67E22)
+                          : const Color(0xFFEAD9C8),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            if (_selectedRating > 0)
+              Center(
+                child: Text(
+                  '$_selectedRating / 5',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _reviewCommentController,
+              maxLines: 3,
+              enabled: !_submittingReview,
+              decoration: const InputDecoration(
+                hintText: 'اكتب رأيك في الأكل أو الخدمة... (اختياري)',
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: _submittingReview || _selectedRating < 1
+                  ? null
+                  : () => _submitReview(order.id),
+              child: Text(
+                _submittingReview ? 'جارٍ الإرسال...' : 'إرسال',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -662,21 +770,31 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
-  Future<void> _submitReview(String orderId, int ratingValue) async {
+  Future<void> _submitReview(String orderId) async {
+    if (_selectedRating < 1 || _submittingReview) {
+      return;
+    }
+
+    setState(() => _submittingReview = true);
     try {
       final tokenJwt = await requireSessionJwt(context);
       await _orderService.submitReview(
         sessionToken: tokenJwt,
         orderId: orderId,
-        ratingValue: ratingValue,
+        ratingValue: _selectedRating,
         comment: _reviewCommentController.text.trim().isEmpty
             ? null
             : _reviewCommentController.text.trim(),
       );
       _reviewCommentController.clear();
+      _selectedRating = 0;
       setState(() => _future = _load());
     } catch (error) {
       _showError(error);
+    } finally {
+      if (mounted) {
+        setState(() => _submittingReview = false);
+      }
     }
   }
 }

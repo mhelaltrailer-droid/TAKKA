@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/location/obour_areas.dart';
 import '../../../core/location/obour_location_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../data/order_service.dart';
 
@@ -231,7 +232,11 @@ class _AddressesScreenState extends State<AddressesScreen> {
                 );
               }
               if (snapshot.hasError) {
-                return Text(snapshot.error.toString());
+                return TakkaErrorRetry(
+                  onRetry: () {
+                    setState(() => _addressesFuture = _loadAddresses());
+                  },
+                );
               }
               final addresses = snapshot.data ?? const [];
               if (addresses.isEmpty) {

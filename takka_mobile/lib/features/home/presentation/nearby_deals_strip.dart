@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/customer_discovery_service.dart';
+import 'deals_browse_screen.dart';
 import 'kitchen_details_screen.dart';
 
 class NearbyDealsStrip extends StatefulWidget {
@@ -59,7 +60,20 @@ class _NearbyDealsStripState extends State<NearbyDealsStrip> {
                   : 'طبق اليوم وعروض سريعة في ${widget.regionName}',
               style: const TextStyle(fontSize: 12, height: 1.4),
             ),
-            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DealsBrowseScreen(),
+                    ),
+                  );
+                },
+                child: const Text('كل العروض'),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               height: 168,
               child: ListView(

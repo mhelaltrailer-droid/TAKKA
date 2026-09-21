@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/orders/order_readiness.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../auth/presentation/guest_sign_up_prompt.dart';
 import '../../cart/data/cart_store.dart';
@@ -153,15 +154,16 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
           }
 
           if (snapshot.hasError) {
-            return _KitchenDetailsErrorState(
-              message: snapshot.error.toString(),
-              onRetry: () {
-                setState(() {
-                  _future = _service.loadKitchenDetails(
-                    kitchenIdOrSlug: widget.kitchenIdOrSlug,
-                  );
-                });
-              },
+            return Center(
+              child: TakkaErrorRetry(
+                onRetry: () {
+                  setState(() {
+                    _future = _service.loadKitchenDetails(
+                      kitchenIdOrSlug: widget.kitchenIdOrSlug,
+                    );
+                  });
+                },
+              ),
             );
           }
 
@@ -669,56 +671,6 @@ class _EmptyReviewsState extends StatelessWidget {
         child: Text(
           'لا توجد تقييمات ظاهرة لهذا المطبخ بعد.',
           style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
-  }
-}
-
-class _KitchenDetailsErrorState extends StatelessWidget {
-  const _KitchenDetailsErrorState({
-    required this.message,
-    required this.onRetry,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline_rounded, size: 42),
-                const SizedBox(height: 14),
-                const Text(
-                  'تعذر تحميل تفاصيل المطبخ',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('إعادة المحاولة'),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

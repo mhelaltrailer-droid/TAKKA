@@ -4,6 +4,7 @@ import '../../../core/auth/session_token.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/orders/order_status.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/data/order_service.dart';
 import 'order_tracking_screen.dart';
@@ -46,13 +47,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         }
 
         if (snapshot.hasError) {
-          return _OrdersErrorState(
-            message: snapshot.error.toString(),
-            onRetry: () {
-              setState(() {
-                _ordersFuture = _loadOrders();
-              });
-            },
+          return Center(
+            child: TakkaErrorRetry(
+              onRetry: () {
+                setState(() {
+                  _ordersFuture = _loadOrders();
+                });
+              },
+            ),
           );
         }
 
@@ -327,38 +329,6 @@ class _OrderCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _OrdersErrorState extends StatelessWidget {
-  const _OrdersErrorState({
-    required this.message,
-    required this.onRetry,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.receipt_long_outlined, size: 42),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: onRetry,
-              child: const Text('إعادة المحاولة'),
-            ),
-          ],
-        ),
       ),
     );
   }

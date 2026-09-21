@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/session_token.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/presentation/addresses_screen.dart';
 import '../../home/data/customer_discovery_service.dart';
@@ -105,39 +106,7 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.wifi_off_rounded, size: 40),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'تعذر تحميل الحساب',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            snapshot.error.toString(),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              height: 1.45,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          FilledButton(
-                            onPressed: _retry,
-                            child: const Text('إعادة المحاولة'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  TakkaErrorRetry(onRetry: _retry),
                   const SizedBox(height: 16),
                   _AccountRow(
                     icon: Icons.logout_rounded,

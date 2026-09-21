@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
+import { detectObourDistrict } from "@/lib/obour-geofence";
 
 const SELECTED_KEY = "takka.selectedObourDistrict";
 const CURRENT_KEY = "takka.currentObourDistrict";
@@ -26,6 +27,8 @@ export function DeliveryLocationHeader({
   const [pickingCurrent, setPickingCurrent] = useState(false);
   const [districts, setDistricts] = useState<string[]>([...OBOUR_DISTRICTS]);
   const [loadingDistricts, setLoadingDistricts] = useState(true);
+  const [detecting, setDetecting] = useState(false);
+  const [detectStatus, setDetectStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const selected = window.localStorage.getItem(SELECTED_KEY) ?? "";
@@ -93,6 +96,7 @@ export function DeliveryLocationHeader({
   function openSheet() {
     setPickingOther(false);
     setPickingCurrent(false);
+    setDetectStatus(null);
     if (mode === "other" && !selectedDistrict) {
       setPickingOther(true);
     }
@@ -116,6 +120,7 @@ export function DeliveryLocationHeader({
     setMode("other");
     setPickingOther(true);
     setPickingCurrent(false);
+    setDetectStatus(null);
   }
 
   function pickDistrict(district: string) {
@@ -124,6 +129,57 @@ export function DeliveryLocationHeader({
       return;
     }
     persist(district, currentDistrict, "other");
+  }
+
+  function detectMyLocation() {
+    if (!navigator.geolocation) {
+      setDetectStatus("المتصفح لا يدعم تحديد الموقع.");
+      return;
+    }
+
+    setDetecting(true);
+    setDetectStatus(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const detected = detectObourDistrict(
+          position.coords.latitude,
+          position.coords.longitude,
+        );
+
+        if (detected.status === "district") {
+          const name = detected.districtName;
+          if (districts.includes(name)) {
+            persist(name, name, "current");
+            setDetectStatus(`تم تحديد الحي: ${name}`);
+          } else {
+            setPickingCurrent(true);
+            setPickingOther(false);
+            setDetectStatus(
+              `تم تحديد موقعك بالقرب من «${name}». اختر الحي يدويًا.`,
+            );
+          }
+        } else if (detected.status === "city_only") {
+          setPickingCurrent(true);
+          setPickingOther(false);
+          setDetectStatus(
+            "أنت داخل مدينة العبور، لكن الحي غير واضح. اختر الحي يدويًا.",
+          );
+        } else {
+          setPickingCurrent(true);
+          setPickingOther(false);
+          setDetectStatus(
+            "يبدو أنك خارج نطاق مدينة العبور. اختر الحي يدويًا إن كان التوصيل داخل العبور.",
+          );
+        }
+        setDetecting(false);
+      },
+      () => {
+        setDetectStatus("تعذر تحديد الموقع. اختر الحي يدويًا.");
+        setDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
   }
 
   return (
@@ -153,6 +209,7 @@ export function DeliveryLocationHeader({
               setOpen(false);
               setPickingOther(false);
               setPickingCurrent(false);
+              setDetectStatus(null);
             }}
           />
           <div className="relative z-10 w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl">
@@ -163,6 +220,7 @@ export function DeliveryLocationHeader({
                   setOpen(false);
                   setPickingOther(false);
                   setPickingCurrent(false);
+                  setDetectStatus(null);
                 }}
                 className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-[#3b2418]"
                 aria-label="إغلاق"
@@ -182,6 +240,13 @@ export function DeliveryLocationHeader({
                     ? "حدّد حيّك الحالي"
                     : "اختر حيًا آخر للتوصيل / الاستلام"}
                 </p>
+                {pickingCurrent ? (
+                  <DetectLocationButton
+                    detecting={detecting}
+                    detectStatus={detectStatus}
+                    onClick={detectMyLocation}
+                  />
+                ) : null}
                 {loadingDistricts ? (
                   <div className="space-y-2 py-2">
                     {Array.from({ length: 6 }).map((_, i) => (
@@ -219,6 +284,7 @@ export function DeliveryLocationHeader({
                   onClick={() => {
                     setPickingOther(false);
                     setPickingCurrent(false);
+                    setDetectStatus(null);
                   }}
                   className="w-full py-2 text-sm font-medium text-[#6b4a3a]"
                 >
@@ -227,6 +293,11 @@ export function DeliveryLocationHeader({
               </div>
             ) : (
               <div className="space-y-3">
+                <DetectLocationButton
+                  detecting={detecting}
+                  detectStatus={detectStatus}
+                  onClick={detectMyLocation}
+                />
                 <LocationOptionCard
                   title="التوصيل إلى موقع آخر"
                   subtitle="اختر حيًا آخر من مدينة العبور"
@@ -251,6 +322,32 @@ export function DeliveryLocationHeader({
             )}
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DetectLocationButton({
+  detecting,
+  detectStatus,
+  onClick,
+}: {
+  detecting: boolean;
+  detectStatus: string | null;
+  onClick: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={detecting}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#e67e22] bg-[#fff8f1] px-4 py-3 text-sm font-bold text-[#3b2418] transition hover:bg-[#fff1e4] disabled:opacity-60"
+      >
+        {detecting ? "جارٍ تحديد موقعك..." : "تحديد موقعي الحالي (GPS)"}
+      </button>
+      {detectStatus ? (
+        <p className="text-xs leading-6 text-[#6b4a3a]">{detectStatus}</p>
       ) : null}
     </div>
   );

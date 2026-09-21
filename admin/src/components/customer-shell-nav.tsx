@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { GuestAwareLink } from "@/components/guest-sign-up-prompt";
 
-const PUBLIC_HREFS = new Set(["/kitchens"]);
+const PUBLIC_HREFS = new Set(["/kitchens", "/deals"]);
 
 export function CustomerTopNav({
   links,

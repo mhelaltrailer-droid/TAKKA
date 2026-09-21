@@ -8,6 +8,7 @@ const isAppPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/kitchens(.*)",
+  "/deals(.*)",
   "/join-kitchen(.*)",
   "/api/health",
   "/api/discovery(.*)",
@@ -43,6 +44,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (
       pathname === "/" ||
       pathname.startsWith("/kitchens") ||
+      pathname.startsWith("/deals") ||
       pathname.startsWith("/join-kitchen") ||
       pathname.startsWith("/sign-up") ||
       pathname.startsWith("/role-setup") ||

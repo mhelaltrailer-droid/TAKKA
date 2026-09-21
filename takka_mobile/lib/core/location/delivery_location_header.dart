@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
 import '../ui/takka_skeletons.dart';
 import 'obour_areas.dart';
+import 'obour_geofence.dart';
 
 const _selectedDistrictKey = 'takka.selectedObourDistrict';
 const _currentDistrictKey = 'takka.currentObourDistrict';
@@ -171,6 +173,8 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
   var _pickingCurrent = false;
   List<String> _districts = defaultObourDistricts;
   var _loadingDistricts = true;
+  var _detecting = false;
+  String? _detectStatus;
 
   @override
   void initState() {
@@ -215,6 +219,7 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
       _mode = _LocationMode.other;
       _pickingOther = true;
       _pickingCurrent = false;
+      _detectStatus = null;
     });
   }
 
@@ -224,6 +229,83 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
       return;
     }
     widget.onApply(district, _currentDistrict, _LocationMode.other);
+  }
+
+  Future<void> _detectMyLocation() async {
+    setState(() {
+      _detecting = true;
+      _detectStatus = null;
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _detectStatus = 'فعّل خدمة الموقع من إعدادات الجهاز.');
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        setState(
+          () => _detectStatus =
+              'تعذر الحصول على إذن الموقع. اختر الحي يدويًا.',
+        );
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      final detected =
+          detectObourDistrict(position.latitude, position.longitude);
+
+      if (!mounted) return;
+
+      switch (detected.status) {
+        case ObourDetectStatus.district:
+          final name = detected.districtName!;
+          if (_districts.contains(name)) {
+            widget.onApply(name, name, _LocationMode.current);
+            return;
+          }
+          setState(() {
+            _pickingCurrent = true;
+            _pickingOther = false;
+            _detectStatus =
+                'تم تحديد موقعك بالقرب من «$name». اختر الحي يدويًا.';
+          });
+        case ObourDetectStatus.cityOnly:
+          setState(() {
+            _pickingCurrent = true;
+            _pickingOther = false;
+            _detectStatus =
+                'أنت داخل مدينة العبور، لكن الحي غير واضح. اختر الحي يدويًا.';
+          });
+        case ObourDetectStatus.outsideCity:
+          setState(() {
+            _pickingCurrent = true;
+            _pickingOther = false;
+            _detectStatus =
+                'يبدو أنك خارج نطاق مدينة العبور. اختر الحي يدويًا إن كان التوصيل داخل العبور.';
+          });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _detectStatus = 'تعذر تحديد الموقع. اختر الحي يدويًا.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _detecting = false);
+      }
+    }
   }
 
   @override
@@ -266,6 +348,14 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
                 fontSize: 15,
               ),
             ),
+            if (_pickingCurrent) ...[
+              const SizedBox(height: 12),
+              _DetectLocationButton(
+                detecting: _detecting,
+                detectStatus: _detectStatus,
+                onPressed: _detectMyLocation,
+              ),
+            ],
             const SizedBox(height: 12),
             if (_loadingDistricts)
               const Column(
@@ -307,11 +397,18 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
                 setState(() {
                   _pickingOther = false;
                   _pickingCurrent = false;
+                  _detectStatus = null;
                 });
               },
               child: const Text('رجوع'),
             ),
           ] else ...[
+            _DetectLocationButton(
+              detecting: _detecting,
+              detectStatus: _detectStatus,
+              onPressed: _detectMyLocation,
+            ),
+            const SizedBox(height: 12),
             _LocationOptionCard(
               title: 'التوصيل إلى موقع آخر',
               subtitle: 'اختر حيًا آخر من مدينة العبور',
@@ -335,6 +432,63 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _DetectLocationButton extends StatelessWidget {
+  const _DetectLocationButton({
+    required this.detecting,
+    required this.detectStatus,
+    required this.onPressed,
+  });
+
+  final bool detecting;
+  final String? detectStatus;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: detecting ? null : onPressed,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: TakkaColors.ink,
+            side: const BorderSide(color: TakkaColors.primary, width: 2),
+            backgroundColor: const Color(0xFFFFF8F1),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          icon: detecting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.gps_fixed_rounded),
+          label: Text(
+            detecting
+                ? 'جارٍ تحديد موقعك...'
+                : 'تحديد موقعي الحالي (GPS)',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        if (detectStatus != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            detectStatus!,
+            style: const TextStyle(
+              color: TakkaColors.muted,
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

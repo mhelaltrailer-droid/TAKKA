@@ -8,7 +8,7 @@ import { DepositProofForm } from "@/components/deposit-proof-form";
 import { KitchenContactCard } from "@/components/kitchen-contact-card";
 import { LiveRefreshListener } from "@/components/live-refresh-listener";
 import { OrderTimeline } from "@/components/order-timeline";
-import { ReviewForm } from "@/components/review-form";
+import { ReviewForm, ReviewThanksCard } from "@/components/review-form";
 import { requireAuth } from "@/lib/auth";
 import {
   canCustomerCancelOrder,
@@ -112,6 +112,21 @@ export default async function CustomerOrderDetailsPage({
             {getCustomerOrderStatusHint(order.status, order.deliveryType)}
           </p>
         </header>
+
+        {order.status === OrderStatus.COMPLETED ? (
+          order.review ? (
+            <ReviewThanksCard
+              kitchenName={order.kitchen.kitchenName}
+              ratingValue={order.review.ratingValue}
+              comment={order.review.comment}
+            />
+          ) : (
+            <ReviewForm
+              orderId={order.id}
+              kitchenName={order.kitchen.kitchenName}
+            />
+          )
+        ) : null}
 
         {showKitchenPhone && order.kitchen.phoneNumber ? (
           <KitchenContactCard
@@ -244,24 +259,6 @@ export default async function CustomerOrderDetailsPage({
 
             {order.status === OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM ? (
               <ConfirmReceiptButton orderId={order.id} />
-            ) : null}
-
-            {order.status === OrderStatus.COMPLETED ? (
-              order.review ? (
-                <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                  <h2 className="text-xl font-semibold">تقييمك</h2>
-                  <div className="mt-4 space-y-2 text-sm text-zinc-700">
-                    <p>النجوم: {order.review.ratingValue} / 5</p>
-                    {order.review.comment ? (
-                      <p>{order.review.comment}</p>
-                    ) : (
-                      <p>لم يتم إضافة تعليق.</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <ReviewForm orderId={order.id} />
-              )
             ) : null}
 
             {order.status !== OrderStatus.PENDING_KITCHEN_APPROVAL &&

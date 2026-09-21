@@ -5,6 +5,7 @@ import '../../../core/location/delivery_location_header.dart';
 import '../../../core/location/food_categories.dart';
 import '../../../core/location/obour_nearby_districts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/widgets/food_categories_strip.dart';
 import '../../../core/widgets/promo_carousel.dart';
@@ -13,6 +14,7 @@ import '../../cart/presentation/addresses_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../orders/presentation/my_orders_screen.dart';
 import '../data/customer_discovery_service.dart';
+import 'deals_browse_screen.dart';
 import 'kitchen_details_screen.dart';
 import 'nearby_deals_strip.dart';
 
@@ -258,13 +260,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           }
 
           if (snapshot.hasError) {
-            return _CustomerErrorState(
-              message: snapshot.error.toString(),
-              onRetry: () {
-                setState(() {
-                  _bootstrapFuture = _loadBootstrap();
-                });
-              },
+            return Center(
+              child: TakkaErrorRetry(
+                onRetry: () {
+                  setState(() {
+                    _bootstrapFuture = _loadBootstrap();
+                  });
+                },
+              ),
             );
           }
 
@@ -296,6 +299,71 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         promoSnapshot.data ?? defaultPromoSlides;
                     return PromoCarousel(slides: slides);
                   },
+                ),
+                const SizedBox(height: 16),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const DealsBrowseScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(18),
+                    child: Ink(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: const Color(0xFFFFB86B),
+                          width: 2,
+                        ),
+                        gradient: const LinearGradient(
+                          begin: Alignment.centerRight,
+                          end: Alignment.centerLeft,
+                          colors: [
+                            Color(0xFFFFF7ED),
+                            Color(0xFFECFDF5),
+                          ],
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '🔥 العروض',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'كل Flash وأطباق اليوم في مدينة العبور',
+                                  style: TextStyle(
+                                    color: TakkaColors.muted,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_left_rounded,
+                            color: Color(0xFFE67E22),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 NearbyDealsStrip(regionName: _selectedDistrict),
@@ -749,57 +817,6 @@ class _EmptyAllKitchensState extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CustomerErrorState extends StatelessWidget {
-  const _CustomerErrorState({
-    required this.message,
-    required this.onRetry,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_off_rounded, size: 44),
-                const SizedBox(height: 14),
-                const Text(
-                  'تعذر تحميل بيانات العميل أو المطابخ',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('إعادة المحاولة'),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
