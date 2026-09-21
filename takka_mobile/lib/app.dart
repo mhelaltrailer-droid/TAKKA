@@ -3,6 +3,7 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 
 import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
+import 'core/ui/friendly_error.dart';
 import 'features/auth/data/app_role.dart';
 import 'features/auth/data/mobile_me_service.dart';
 import 'features/auth/presentation/apply_pending_role_screen.dart';
@@ -45,6 +46,7 @@ class TakkaApp extends StatelessWidget {
           textDirection: TextDirection.rtl,
           child: SafeArea(
             child: ClerkErrorListener(
+              handler: _handleClerkError,
               child: _AuthAwareHome(),
             ),
           ),
@@ -52,6 +54,23 @@ class TakkaApp extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _handleClerkError(BuildContext context, Object error) async {
+  if (!context.mounted) {
+    return;
+  }
+  showFriendlyError(
+    context,
+    onRetry: () {
+      try {
+        final auth = ClerkAuth.of(context, listen: false);
+        auth.sessionToken().then((_) {}, onError: (_) {});
+      } catch (_) {
+        // Ignore — user can retry again.
+      }
+    },
+  );
 }
 
 class _AuthAwareHome extends StatefulWidget {

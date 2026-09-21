@@ -1,4 +1,10 @@
-/// Home "تاكل ايه؟" categories — keep labels in sync with web `food-categories.ts`.
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../config/app_config.dart';
+
+/// Home "تاكل ايه؟" categories — defaults kept in sync with web `food-categories.ts`.
 class FoodCategory {
   const FoodCategory({
     required this.id,
@@ -11,9 +17,21 @@ class FoodCategory {
   final String label;
   final String thumb;
   final List<String> keywords;
+
+  factory FoodCategory.fromJson(Map<String, dynamic> json) {
+    return FoodCategory(
+      id: json['id']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      thumb: json['thumb']?.toString() ?? '🍽️',
+      keywords: (json['keywords'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.isNotEmpty)
+          .toList(),
+    );
+  }
 }
 
-const List<FoodCategory> foodCategories = [
+const List<FoodCategory> defaultFoodCategories = [
   FoodCategory(id: 'bakery', label: 'مخبوزات', thumb: '🥖', keywords: ['مخبوزات', 'عيش', 'فطير']),
   FoodCategory(id: 'poultry', label: 'طيور', thumb: '🍗', keywords: ['طيور', 'فراخ', 'دجاج']),
   FoodCategory(id: 'soups', label: 'شوربات', thumb: '🍲', keywords: ['شوربة', 'شوربات']),
@@ -38,3 +56,30 @@ const List<FoodCategory> foodCategories = [
   FoodCategory(id: 'healthy', label: 'هيلثي', thumb: '🥗', keywords: ['هيلثي', 'صحي']),
   FoodCategory(id: 'cake', label: 'كيك', thumb: '🎂', keywords: ['كيك', 'تورتة']),
 ];
+
+/// Offline / legacy alias.
+const List<FoodCategory> foodCategories = defaultFoodCategories;
+
+Future<List<FoodCategory>> loadFoodCategories() async {
+  try {
+    final base = AppConfig.apiBaseUrl.endsWith('/')
+        ? AppConfig.apiBaseUrl.substring(0, AppConfig.apiBaseUrl.length - 1)
+        : AppConfig.apiBaseUrl;
+    final response =
+        await http.get(Uri.parse('$base/api/discovery/food-categories'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return defaultFoodCategories;
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final categories = (json['categories'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(FoodCategory.fromJson)
+        .where((category) => category.id.isNotEmpty && category.label.isNotEmpty)
+        .toList();
+
+    return categories.isEmpty ? defaultFoodCategories : categories;
+  } catch (_) {
+    return defaultFoodCategories;
+  }
+}

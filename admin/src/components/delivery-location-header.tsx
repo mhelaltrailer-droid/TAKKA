@@ -29,6 +29,7 @@ export function DeliveryLocationHeader({
   const [loadingDistricts, setLoadingDistricts] = useState(true);
   const [detecting, setDetecting] = useState(false);
   const [detectStatus, setDetectStatus] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const selected = window.localStorage.getItem(SELECTED_KEY) ?? "";
@@ -42,6 +43,7 @@ export function DeliveryLocationHeader({
     if (selected) {
       onDistrictChange?.(selected);
     }
+    setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,6 +77,58 @@ export function DeliveryLocationHeader({
       cancelled = true;
     };
   }, []);
+
+  // Every home open: try GPS. Success → set district. Fail → keep last saved / «اختر الحي».
+  useEffect(() => {
+    if (!hydrated || loadingDistricts) {
+      return;
+    }
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    let cancelled = false;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+
+        const detected = detectObourDistrict(
+          position.coords.latitude,
+          position.coords.longitude,
+        );
+
+        if (detected.status !== "district") {
+          return;
+        }
+
+        const name = detected.districtName;
+        const allowed = districts.includes(name)
+          ? districts
+          : OBOUR_DISTRICTS;
+        if (!allowed.includes(name)) {
+          return;
+        }
+
+        setSelectedDistrict(name);
+        setCurrentDistrict(name);
+        setMode("current");
+        window.localStorage.setItem(SELECTED_KEY, name);
+        window.localStorage.setItem(CURRENT_KEY, name);
+        window.localStorage.setItem(MODE_KEY, "current");
+        onDistrictChange?.(name);
+      },
+      () => {
+        // Permission denied / unavailable — keep last saved district.
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, loadingDistricts]);
 
   function persist(
     selected: string,

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isFoodCategoryId } from "@/lib/food-categories";
+import { isActiveFoodCategorySlug } from "@/lib/food-category-catalog";
 import {
   KITCHEN_NOT_APPROVED_MENU_MESSAGE,
   serializePendingSizes,
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
     }
 
     const categoryId = payload.categoryId?.trim() ?? "";
-    if (!categoryId || !isFoodCategoryId(categoryId)) {
+    if (!categoryId || !(await isActiveFoodCategorySlug(categoryId))) {
       return NextResponse.json(
         { error: "اختر فئة الوجبة من قائمة تاكل ايه؟" },
         { status: 400 },
@@ -253,7 +253,7 @@ export async function PUT(request: Request) {
     if (!payload.name?.trim()) {
       return NextResponse.json({ error: "اسم الصنف مطلوب." }, { status: 400 });
     }
-    if (!categoryId || !isFoodCategoryId(categoryId)) {
+    if (!categoryId || !(await isActiveFoodCategorySlug(categoryId))) {
       return NextResponse.json(
         { error: "اختر فئة الوجبة من قائمة تاكل ايه؟" },
         { status: 400 },

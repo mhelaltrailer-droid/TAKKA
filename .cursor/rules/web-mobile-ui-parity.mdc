@@ -33,12 +33,15 @@ Customer and kitchen pick district via dropdown + optional Detect location (GPS 
 
 ## Home food categories
 
-"تاكل ايه؟" strip categories live in:
+"تاكل ايه؟" strip categories:
 
-- Web: `admin/src/lib/food-categories.ts`
-- Mobile: `takka_mobile/lib/core/location/food_categories.dart`
+- Defaults (seed/fallback): `admin/src/lib/food-categories.ts` / `takka_mobile/lib/core/location/food_categories.dart`
+- DB catalog: Prisma `FoodCategory` (`slug` stored on `MenuItem.categoryId`)
+- Admin CRUD: `/dashboard/admin/food-categories` (add / edit / hide / delete-or-soft-hide)
+- Public list: `GET /api/discovery/food-categories` (active only)
+- Clients load from API with fallback to defaults
 
-Keep labels/order aligned.
+Keep default labels/order aligned across web + mobile seed lists.
 
 Behavior on customer home:
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../../../core/validation/phone.dart';
 
 enum AuthMode { signIn, signUp, forgotPassword }
@@ -141,7 +142,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -193,7 +194,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -246,7 +247,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -306,7 +307,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -381,7 +382,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -423,7 +424,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
       if (mounted) {

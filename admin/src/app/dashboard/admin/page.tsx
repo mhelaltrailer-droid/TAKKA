@@ -88,6 +88,12 @@ export default async function AdminOperationsPage() {
               إدارة الأحياء
             </Link>
             <Link
+              href="/dashboard/admin/food-categories"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              فئات تاكل ايه؟
+            </Link>
+            <Link
               href="/dashboard/admin/promos"
               className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >

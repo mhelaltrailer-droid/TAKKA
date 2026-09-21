@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/orders/order_readiness.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../auth/presentation/guest_sign_up_prompt.dart';
@@ -863,11 +864,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
         ),
       );
     } on StateError catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
-      );
+      showFriendlyError(context, error: error);
     }
   }
 }

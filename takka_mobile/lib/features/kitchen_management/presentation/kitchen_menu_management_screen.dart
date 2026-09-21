@@ -6,6 +6,8 @@ import '../../../core/location/food_categories.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/friendly_error.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../data/kitchen_management_service.dart';
 import 'kitchen_deals_panel.dart';
@@ -56,9 +58,11 @@ class _KitchenMenuManagementScreenState
     final token = await authState.sessionToken();
     final profile = await _service.loadProfile(sessionToken: token.jwt);
     final items = await _service.loadMenuItems(sessionToken: token.jwt);
+    final categories = await loadFoodCategories();
     return _MenuPageData(
       kitchenApproved: profile?.approvalStatus == 'APPROVED',
       items: items,
+      categories: categories,
     );
   }
 
@@ -76,17 +80,19 @@ class _KitchenMenuManagementScreenState
           }
 
           if (snapshot.hasError) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                snapshot.error.toString(),
-                textAlign: TextAlign.center,
+            return Center(
+              child: TakkaErrorRetry(
+                onRetry: () {
+                  setState(() => _future = _load());
+                },
               ),
             );
           }
 
           final approved = snapshot.data?.kitchenApproved ?? false;
           final items = snapshot.data?.items ?? const <KitchenManagedMenuItem>[];
+          final categories =
+              snapshot.data?.categories ?? defaultFoodCategories;
 
           if (!approved) {
             return Padding(
@@ -137,6 +143,7 @@ class _KitchenMenuManagementScreenState
             children: [
               KitchenDealsPanel(
                 items: items,
+                foodCategories: categories,
                 onChanged: () {
                   setState(() => _future = _load());
                 },
@@ -172,7 +179,7 @@ class _KitchenMenuManagementScreenState
                         decoration: const InputDecoration(
                           labelText: 'فئة الوجبة (تاكل ايه؟)',
                         ),
-                        items: foodCategories
+                        items: categories
                             .map(
                               (category) => DropdownMenuItem(
                                 value: category.id,
@@ -286,7 +293,7 @@ class _KitchenMenuManagementScreenState
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          '${_categoryLabel(item.categoryId)} · ${_approvalLabel(item)}'
+                          '${_categoryLabel(item.categoryId, categories)} · ${_approvalLabel(item)}'
                           '${item.isDishOfTheDay ? ' · طبق اليوم' : ''}\n'
                           '$orderReadinessFieldLabel: ${orderReadinessLabel(item.orderReadiness)}\n'
                           'السعر: ${item.discountedPrice != null ? '${item.discountedPrice!.toStringAsFixed(0)} ج.م (كان ${item.basePrice.toStringAsFixed(0)})' : '${item.basePrice.toStringAsFixed(0)} ج.م'} | العربون: ${item.depositAmount.toStringAsFixed(0)} ج.م'
@@ -337,8 +344,8 @@ class _KitchenMenuManagementScreenState
     }
   }
 
-  String _categoryLabel(String categoryId) {
-    for (final category in foodCategories) {
+  String _categoryLabel(String categoryId, List<FoodCategory> categories) {
+    for (final category in categories) {
       if (category.id == categoryId) {
         return category.label;
       }
@@ -392,9 +399,7 @@ class _KitchenMenuManagementScreenState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      showFriendlyError(context, error: error);
     }
   }
 
@@ -412,9 +417,7 @@ class _KitchenMenuManagementScreenState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      showFriendlyError(context, error: error);
     }
   }
 
@@ -431,9 +434,7 @@ class _KitchenMenuManagementScreenState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      showFriendlyError(context, error: error);
     }
   }
 
@@ -454,9 +455,7 @@ class _KitchenMenuManagementScreenState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      showFriendlyError(context, error: error);
     }
   }
 }
@@ -465,8 +464,10 @@ class _MenuPageData {
   const _MenuPageData({
     required this.kitchenApproved,
     required this.items,
+    required this.categories,
   });
 
   final bool kitchenApproved;
   final List<KitchenManagedMenuItem> items;
+  final List<FoodCategory> categories;
 }

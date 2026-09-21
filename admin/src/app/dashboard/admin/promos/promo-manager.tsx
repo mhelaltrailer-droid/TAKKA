@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { UploadField } from "@/components/upload-field";
 
@@ -13,6 +13,20 @@ type PromoBanner = {
   oldPriceLabel: string | null;
   sortOrder: number;
   isActive: boolean;
+};
+
+type PromoDealOption = {
+  key: string;
+  kind: "flash" | "dish";
+  kindLabel: string;
+  title: string;
+  kitchenName: string;
+  imageUrl: string | null;
+  offerPrice: number;
+  basePrice: number;
+  flashOfferId?: string;
+  menuItemId: string;
+  kitchenId: string;
 };
 
 type PromoManagerProps = {
@@ -28,6 +42,48 @@ export function PromoManager({ initialBanners }: PromoManagerProps) {
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [dealOptions, setDealOptions] = useState<PromoDealOption[]>([]);
+  const [selectedDealKey, setSelectedDealKey] = useState<string>("");
+  const [loadingDeals, setLoadingDeals] = useState(true);
+  const [dealsError, setDealsError] = useState<string | null>(null);
+  const [addingDeal, setAddingDeal] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDeals() {
+      setLoadingDeals(true);
+      setDealsError(null);
+      try {
+        const response = await fetch("/api/admin/promos/deal-options");
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "تعذر تحميل عروض المطابخ.");
+        }
+        if (!cancelled) {
+          setDealOptions((result.options as PromoDealOption[]) ?? []);
+        }
+      } catch (caught) {
+        if (!cancelled) {
+          setDealsError(
+            caught instanceof Error
+              ? caught.message
+              : "تعذر تحميل عروض المطابخ.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDeals(false);
+        }
+      }
+    }
+
+    void loadDeals();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function createBanner() {
     setLoading(true);
@@ -65,6 +121,45 @@ export function PromoManager({ initialBanners }: PromoManagerProps) {
     }
   }
 
+  async function addDealToBanner() {
+    const option = dealOptions.find((item) => item.key === selectedDealKey);
+    if (!option) {
+      setDealsError("اختر عرضًا من القائمة.");
+      return;
+    }
+
+    setAddingDeal(true);
+    setDealsError(null);
+
+    try {
+      const response = await fetch("/api/admin/promos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "kitchen_deal",
+          kind: option.kind,
+          flashOfferId: option.flashOfferId,
+          menuItemId: option.menuItemId,
+          sortOrder: banners.length + 1,
+          isActive: true,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "تعذر إضافة العرض للبانر.");
+      }
+
+      setBanners((current) => [...current, result.banner]);
+      setSelectedDealKey("");
+    } catch (caught) {
+      setDealsError(
+        caught instanceof Error ? caught.message : "تعذر إضافة العرض للبانر.",
+      );
+    } finally {
+      setAddingDeal(false);
+    }
+  }
+
   async function toggleActive(banner: PromoBanner) {
     const response = await fetch(`/api/admin/promos/${banner.id}`, {
       method: "PATCH",
@@ -95,83 +190,180 @@ export function PromoManager({ initialBanners }: PromoManagerProps) {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-      <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">
-            <svg
-              viewBox="0 0 24 24"
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
+      <div className="space-y-8">
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--brand-primary)]/10 text-xl text-[var(--brand-primary)]">
+              🔥
+            </span>
+            <div>
+              <h2 className="text-xl font-semibold">من عروض المطابخ</h2>
+              <p className="text-sm text-zinc-500">
+                اختر عرضًا سريعًا أو طبق اليوم لإضافته كشريحة في البانر.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {loadingDeals ? (
+              <p className="text-sm text-zinc-500">جارٍ تحميل العروض...</p>
+            ) : dealOptions.length === 0 ? (
+              <div className="rounded-2xl bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
+                لا توجد عروض مطابخ نشطة حاليًا (عرض سريع أو طبق اليوم).
+              </div>
+            ) : (
+              <div className="max-h-[320px] space-y-2 overflow-y-auto">
+                {dealOptions.map((option) => {
+                  const selected = selectedDealKey === option.key;
+                  const disabled = !option.imageUrl;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setSelectedDealKey(option.key)}
+                      className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        selected
+                          ? "border-[var(--brand-primary)] border-2 bg-[var(--brand-primary)]/5"
+                          : "border-zinc-200 hover:bg-zinc-50"
+                      }`}
+                    >
+                      {option.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={option.imageUrl}
+                          alt=""
+                          className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-xs text-zinc-500">
+                          بلا صورة
+                        </div>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-zinc-900">
+                          {option.title}
+                        </span>
+                        <span className="mt-1 block text-xs text-zinc-500">
+                          {option.kindLabel} · {option.kitchenName}
+                        </span>
+                        <span className="mt-1 block text-sm font-medium text-zinc-800">
+                          {Math.round(option.offerPrice)} ج
+                          {option.basePrice > option.offerPrice ? (
+                            <span className="mr-2 text-xs text-zinc-400 line-through">
+                              {Math.round(option.basePrice)}
+                            </span>
+                          ) : null}
+                        </span>
+                        {disabled ? (
+                          <span className="mt-1 block text-xs text-amber-700">
+                            يحتاج صورة لإضافته للبانر
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {dealsError ? (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+                {dealsError}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={addDealToBanner}
+              disabled={
+                addingDeal || loadingDeals || !selectedDealKey || !dealOptions.length
+              }
+              className="w-full rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-              <rect x="3" y="3" width="18" height="18" rx="4" opacity="0.35" />
-            </svg>
-          </span>
-          <div>
-            <h2 className="text-xl font-semibold">رفع صور وعروض الشريط</h2>
-            <p className="text-sm text-zinc-500">
-              تظهر تلقائيًا في الصفحة الرئيسية للويب والتطبيق.
-            </p>
+              {addingDeal ? "جارٍ الإضافة..." : "أضف للبانر"}
+            </button>
           </div>
-        </div>
+        </section>
 
-        <div className="mt-5 space-y-4">
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="عنوان العرض"
-            className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-          />
-          <input
-            value={subtitle}
-            onChange={(event) => setSubtitle(event.target.value)}
-            placeholder="وصف قصير (اختياري)"
-            className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                <rect x="3" y="3" width="18" height="18" rx="4" opacity="0.35" />
+              </svg>
+            </span>
+            <div>
+              <h2 className="text-xl font-semibold">رفع صور وعروض الشريط</h2>
+              <p className="text-sm text-zinc-500">
+                رفع يدوي — تظهر تلقائيًا في الصفحة الرئيسية للويب والتطبيق.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
             <input
-              value={priceLabel}
-              onChange={(event) => setPriceLabel(event.target.value)}
-              placeholder="السعر مثل: ١٥٩ جنيه"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="عنوان العرض"
               className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
             />
             <input
-              value={oldPriceLabel}
-              onChange={(event) => setOldPriceLabel(event.target.value)}
-              placeholder="السعر قبل الخصم"
+              value={subtitle}
+              onChange={(event) => setSubtitle(event.target.value)}
+              placeholder="وصف قصير (اختياري)"
               className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
             />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                value={priceLabel}
+                onChange={(event) => setPriceLabel(event.target.value)}
+                placeholder="السعر مثل: ١٥٩ جنيه"
+                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+              />
+              <input
+                value={oldPriceLabel}
+                onChange={(event) => setOldPriceLabel(event.target.value)}
+                placeholder="السعر قبل الخصم"
+                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none"
+              />
+            </div>
+
+            <UploadField
+              endpoint="promoBannerImage"
+              label="صورة العرض"
+              buttonLabel="رفع صورة العرض"
+              includeHiddenInput={false}
+              onUploaded={setImageUrl}
+            />
+            {imageUrl ? (
+              <p className="text-xs text-emerald-700">تم رفع الصورة بنجاح.</p>
+            ) : null}
+
+            {error ? (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+                {error}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={createBanner}
+              disabled={loading || !title.trim() || !imageUrl}
+              className="w-full rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loading ? "جارٍ الحفظ..." : "إضافة إلى شريط العروض"}
+            </button>
           </div>
-
-          <UploadField
-            endpoint="promoBannerImage"
-            label="صورة العرض"
-            buttonLabel="رفع صورة العرض"
-            includeHiddenInput={false}
-            onUploaded={setImageUrl}
-          />
-          {imageUrl ? (
-            <p className="text-xs text-emerald-700">تم رفع الصورة بنجاح.</p>
-          ) : null}
-
-          {error ? (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
-              {error}
-            </p>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={createBanner}
-            disabled={loading || !title.trim() || !imageUrl}
-            className="w-full rounded-full bg-[var(--brand-primary)] px-5 py-3 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? "جارٍ الحفظ..." : "إضافة إلى شريط العروض"}
-          </button>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">العروض الحالية</h2>

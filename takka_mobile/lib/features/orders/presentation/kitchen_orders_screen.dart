@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/location/maps_links.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
+import '../../../core/ui/friendly_error.dart';
+import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../auth/data/mobile_me_service.dart';
 import '../../cart/data/order_service.dart';
@@ -85,9 +87,10 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
 
           if (snapshot.hasError) {
             return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(snapshot.error.toString(), textAlign: TextAlign.center),
+              child: TakkaErrorRetry(
+                onRetry: () {
+                  setState(() => _future = _load());
+                },
               ),
             );
           }
@@ -542,11 +545,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error.toString()),
-      ),
-    );
+    showFriendlyError(context, error: error);
   }
 }
 
@@ -636,9 +635,7 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      showFriendlyError(context, error: error);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -663,9 +660,7 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      showFriendlyError(context, error: error);
     } finally {
       if (mounted) setState(() => _sending = false);
     }

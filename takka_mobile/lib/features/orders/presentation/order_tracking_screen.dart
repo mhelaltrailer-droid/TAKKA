@@ -6,6 +6,7 @@ import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/validation/phone.dart';
@@ -667,9 +668,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.toString())),
-    );
+    showFriendlyError(context, error: error);
   }
 
   Future<void> _pickDepositImage() async {

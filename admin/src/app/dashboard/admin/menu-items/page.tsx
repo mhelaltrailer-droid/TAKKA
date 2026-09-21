@@ -2,25 +2,33 @@ import Link from "next/link";
 
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { menuItemNeedsAdminReviewWhere } from "@/lib/moderation";
+import { listAllFoodCategories } from "@/lib/food-category-catalog";
 import { getFoodCategoryById } from "@/lib/food-categories";
+import { menuItemNeedsAdminReviewWhere } from "@/lib/moderation";
 
 export default async function AdminMenuItemsQueuePage() {
   await requireRole(["admin"]);
 
-  const items = await db.menuItem.findMany({
-    where: menuItemNeedsAdminReviewWhere(),
-    include: {
-      kitchen: {
-        select: {
-          id: true,
-          kitchenName: true,
-          approvalStatus: true,
+  const [items, categories] = await Promise.all([
+    db.menuItem.findMany({
+      where: menuItemNeedsAdminReviewWhere(),
+      include: {
+        kitchen: {
+          select: {
+            id: true,
+            kitchenName: true,
+            approvalStatus: true,
+          },
         },
       },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+      orderBy: { updatedAt: "desc" },
+    }),
+    listAllFoodCategories().catch(() => []),
+  ]);
+
+  const labelBySlug = new Map(
+    categories.map((category) => [category.slug, category.label] as const),
+  );
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
@@ -61,7 +69,9 @@ export default async function AdminMenuItemsQueuePage() {
               const categoryId = isDraft
                 ? item.pendingCategoryId || item.categoryId
                 : item.categoryId;
-              const category = getFoodCategoryById(categoryId);
+              const categoryLabel =
+                labelBySlug.get(categoryId) ??
+                getFoodCategoryById(categoryId)?.label;
 
               return (
                 <article
@@ -89,7 +99,7 @@ export default async function AdminMenuItemsQueuePage() {
                         </span>
                       </div>
                       <p className="text-sm text-zinc-600">
-                        {item.kitchen.kitchenName} · {category?.label || categoryId}
+                        {item.kitchen.kitchenName} · {categoryLabel || categoryId}
                       </p>
                     </div>
                   </div>

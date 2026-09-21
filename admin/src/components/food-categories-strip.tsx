@@ -1,21 +1,67 @@
 "use client";
 
-import { FOOD_CATEGORIES } from "@/lib/food-categories";
+import { useEffect, useState } from "react";
+
+import {
+  DEFAULT_FOOD_CATEGORIES,
+  type FoodCategoryDef,
+} from "@/lib/food-categories";
 
 type FoodCategoriesStripProps = {
   selectedLabel?: string;
   onSelect: (label: string) => void;
+  /** When omitted, loads active categories from discovery API. */
+  categories?: FoodCategoryDef[];
 };
 
 export function FoodCategoriesStrip({
   selectedLabel,
   onSelect,
+  categories: categoriesProp,
 }: FoodCategoriesStripProps) {
+  const [loaded, setLoaded] = useState<FoodCategoryDef[]>(
+    categoriesProp ?? DEFAULT_FOOD_CATEGORIES,
+  );
+
+  useEffect(() => {
+    if (categoriesProp) {
+      setLoaded(categoriesProp);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const response = await fetch("/api/discovery/food-categories");
+        if (!response.ok) {
+          return;
+        }
+        const json = (await response.json()) as {
+          categories?: FoodCategoryDef[];
+        };
+        const next = json.categories ?? [];
+        if (!cancelled && next.length > 0) {
+          setLoaded(next);
+        }
+      } catch {
+        // Keep defaults.
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [categoriesProp]);
+
+  const categories = categoriesProp ?? loaded;
+
   return (
     <section className="mb-6">
       <h2 className="mb-3 text-xl font-bold text-[#3b2418]">تاكل ايه؟</h2>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {FOOD_CATEGORIES.map((category) => {
+        {categories.map((category) => {
           const selected = selectedLabel === category.label;
           return (
             <button

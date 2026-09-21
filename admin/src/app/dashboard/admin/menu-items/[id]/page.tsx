@@ -3,6 +3,7 @@ import Link from "next/link";
 import { StatusPill } from "@/components/status-pill";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { listAllFoodCategories } from "@/lib/food-category-catalog";
 import { getFoodCategoryById } from "@/lib/food-categories";
 import { parsePendingSizes } from "@/lib/moderation";
 import {
@@ -69,7 +70,11 @@ export default async function AdminMenuItemReviewPage({
     ? item.pendingDepositAmount ?? item.depositAmount
     : item.depositAmount;
   const pendingSizes = parsePendingSizes(item.pendingSizesJson);
-  const category = getFoodCategoryById(reviewCategoryId);
+  const categories = await listAllFoodCategories().catch(() => []);
+  const categoryLabel =
+    categories.find((row) => row.slug === reviewCategoryId)?.label ??
+    getFoodCategoryById(reviewCategoryId)?.label ??
+    reviewCategoryId;
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
@@ -114,7 +119,7 @@ export default async function AdminMenuItemReviewPage({
               />
             ) : null}
             <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-700">
-              <p>الفئة: {category?.label || reviewCategoryId}</p>
+              <p>الفئة: {categoryLabel}</p>
               <p>السعر الأساسي: {Number(reviewPrice).toFixed(2)} ج.م</p>
               <p>
                 السعر بعد الخصم:{" "}
@@ -164,7 +169,13 @@ export default async function AdminMenuItemReviewPage({
               ) : null}
               <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-700">
                 <p>الاسم: {item.name}</p>
-                <p>الفئة: {getFoodCategoryById(item.categoryId)?.label}</p>
+                <p>
+                  الفئة:{" "}
+                  {categories.find((row) => row.slug === item.categoryId)
+                    ?.label ??
+                    getFoodCategoryById(item.categoryId)?.label ??
+                    item.categoryId}
+                </p>
                 <p>السعر الأساسي: {Number(item.basePrice).toFixed(2)} ج.م</p>
                 <p>
                   السعر بعد الخصم:{" "}

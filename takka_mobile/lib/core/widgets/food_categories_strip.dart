@@ -8,13 +8,17 @@ class FoodCategoriesStrip extends StatelessWidget {
     super.key,
     required this.selectedLabel,
     required this.onSelect,
+    this.categories = defaultFoodCategories,
   });
 
   final String? selectedLabel;
   final ValueChanged<String> onSelect;
+  final List<FoodCategory> categories;
 
   @override
   Widget build(BuildContext context) {
+    final items = categories.isEmpty ? defaultFoodCategories : categories;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -29,10 +33,10 @@ class FoodCategoriesStrip extends StatelessWidget {
           height: 56,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: foodCategories.length,
+            itemCount: items.length,
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              final category = foodCategories[index];
+              final category = items[index];
               final selected = selectedLabel == category.label;
 
               return Material(

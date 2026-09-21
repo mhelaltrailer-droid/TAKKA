@@ -83,7 +83,7 @@ export function DealsBrowseClient() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold text-[#3b2418]">العروض</h1>
         <p className="text-sm leading-7 text-[#6b4a3a]">
-          كل عروض Flash وأطباق اليوم من مطابخ {OBOUR_CITY_NAME} المتاحة الآن.
+          كل العروض وأطباق اليوم من مطابخ {OBOUR_CITY_NAME} المتاحة الآن.
         </p>
       </header>
 
@@ -115,7 +115,7 @@ export function DealsBrowseClient() {
 
       {flashes.length > 0 ? (
         <section className="space-y-4">
-          <h2 className="text-xl font-bold text-[#3b2418]">عروض سريعة (Flash)</h2>
+          <h2 className="text-xl font-bold text-[#3b2418]">العروض</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {flashes.map((offer) => (
               <article

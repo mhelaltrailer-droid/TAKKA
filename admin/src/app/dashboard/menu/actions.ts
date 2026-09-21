@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isFoodCategoryId } from "@/lib/food-categories";
+import { isActiveFoodCategorySlug } from "@/lib/food-category-catalog";
 import {
   KITCHEN_NOT_APPROVED_MENU_MESSAGE,
   serializePendingSizes,
@@ -128,7 +128,7 @@ export async function createMenuItem(formData: FormData) {
     throw new Error("اسم الصنف مطلوب.");
   }
 
-  if (!categoryId || !isFoodCategoryId(categoryId)) {
+  if (!categoryId || !(await isActiveFoodCategorySlug(categoryId))) {
     throw new Error("اختر فئة الوجبة من قائمة تاكل ايه؟");
   }
 
@@ -206,7 +206,7 @@ export async function updateMenuItem(formData: FormData) {
   if (!name) {
     throw new Error("اسم الصنف مطلوب.");
   }
-  if (!categoryId || !isFoodCategoryId(categoryId)) {
+  if (!categoryId || !(await isActiveFoodCategorySlug(categoryId))) {
     throw new Error("اختر فئة الوجبة من قائمة تاكل ايه؟");
   }
   if (

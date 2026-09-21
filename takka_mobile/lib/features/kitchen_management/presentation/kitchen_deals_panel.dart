@@ -4,16 +4,19 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/location/food_categories.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../data/kitchen_management_service.dart';
 
 class KitchenDealsPanel extends StatefulWidget {
   const KitchenDealsPanel({
     super.key,
     required this.items,
+    this.foodCategories = defaultFoodCategories,
     this.onChanged,
   });
 
   final List<KitchenManagedMenuItem> items;
+  final List<FoodCategory> foodCategories;
   final VoidCallback? onChanged;
 
   @override
@@ -111,7 +114,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString();
+        _error = friendlyErrorMessage(error);
         _loading = false;
       });
     }
@@ -175,7 +178,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       if (!mounted) return;
       setState(() {
         _info =
-            'تم حفظ الصنف مخفيًا وإرساله للاعتماد. بعد الاعتماد يمكن تعيينه كطبق يوم أو فلاش.';
+            'تم حفظ الصنف مخفيًا وإرساله للاعتماد. بعد الاعتماد يمكن تعيينه كطبق يوم أو عرض.';
         _error = null;
         _resetForm();
       });
@@ -183,7 +186,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       await _load();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -217,7 +220,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       await _load();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -233,7 +236,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       await _load();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -256,7 +259,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -273,7 +276,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -296,7 +299,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -309,7 +312,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
       setState(() => _flash = null);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     }
   }
 
@@ -401,7 +404,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
                   DropdownButtonFormField<String>(
                     initialValue: _categoryId,
                     decoration: const InputDecoration(labelText: 'الفئة'),
-                    items: foodCategories
+                    items: widget.foodCategories
                         .map(
                           (c) => DropdownMenuItem(
                             value: c.id,
@@ -586,7 +589,7 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'عرض سريع (Flash)',
+                  'عرض سريع',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 if (_flash != null) ...[

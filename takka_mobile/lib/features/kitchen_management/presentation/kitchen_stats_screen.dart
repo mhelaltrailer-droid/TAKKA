@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/takka_error_retry.dart';
 import '../data/kitchen_management_service.dart';
 
 class KitchenStatsScreen extends StatefulWidget {
@@ -95,19 +96,8 @@ class _KitchenStatsScreenState extends State<KitchenStatsScreen> {
           }
           if (snapshot.hasError) {
             return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(snapshot.error.toString(), textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => setState(() => _future = _load()),
-                      child: const Text('إعادة المحاولة'),
-                    ),
-                  ],
-                ),
+              child: TakkaErrorRetry(
+                onRetry: () => setState(() => _future = _load()),
               ),
             );
           }

@@ -5,7 +5,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { UploadField } from "@/components/upload-field";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { FOOD_CATEGORIES, getFoodCategoryById } from "@/lib/food-categories";
+import { getFoodCategoryById } from "@/lib/food-categories";
+import { listActiveFoodCategories } from "@/lib/food-category-catalog";
 import {
   ORDER_READINESS_FIELD_LABEL,
   ORDER_READINESS_OPTIONS,
@@ -103,6 +104,11 @@ export default async function MenuManagementPage() {
     );
   }
 
+  const foodCategories = await listActiveFoodCategories();
+  const categoryLabelById = new Map(
+    foodCategories.map((category) => [category.id, category.label] as const),
+  );
+
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
@@ -124,6 +130,7 @@ export default async function MenuManagementPage() {
         </header>
 
         <KitchenDealsPanel
+          foodCategories={foodCategories}
           menuItems={kitchen.menuItems.map((item) => ({
             id: item.id,
             name: item.name,
@@ -181,7 +188,7 @@ export default async function MenuManagementPage() {
                 <option value="" disabled>
                   اختر الفئة
                 </option>
-                {FOOD_CATEGORIES.map((category) => (
+                {foodCategories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.thumb} {category.label}
                   </option>
@@ -344,7 +351,8 @@ export default async function MenuManagementPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-semibold">{item.name}</h3>
                           <span className="rounded-full bg-orange-50 px-3 py-1 text-xs text-orange-800">
-                            {getFoodCategoryById(item.categoryId)?.label ??
+                            {categoryLabelById.get(item.categoryId) ??
+                              getFoodCategoryById(item.categoryId)?.label ??
                               item.categoryId}
                           </span>
                           {item.isDishOfTheDay ? (

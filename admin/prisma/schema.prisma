@@ -471,6 +471,22 @@ model PromoBanner {
   updatedAt     DateTime @updatedAt
 }
 
+/// Catalog for home "تاكل ايه؟" strip — MenuItem.categoryId stores [slug].
+model FoodCategory {
+  id        String   @id @default(cuid())
+  /// Stable key stored on MenuItem.categoryId (e.g. bakery).
+  slug      String   @unique
+  label     String
+  thumb     String   @default("🍽️")
+  keywords  String[] @default([])
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
 /// Marketing lead: home cook interested in joining before app download.
 model KitchenJoinLead {
   id        String                 @id @default(cuid())

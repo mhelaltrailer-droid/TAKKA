@@ -43,6 +43,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   final _searchController = TextEditingController();
   Future<CustomerBootstrapData>? _bootstrapFuture;
   Future<List<PromoSlide>>? _promosFuture;
+  List<FoodCategory> _foodCategories = defaultFoodCategories;
   String _selectedDistrict = '';
   String _selectedCategory = '';
   String _searchQuery = '';
@@ -52,6 +53,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     super.initState();
     _bootstrapFuture = _loadBootstrap();
     _promosFuture = loadPromoSlides();
+    _loadFoodCategories();
+  }
+
+  Future<void> _loadFoodCategories() async {
+    final categories = await loadFoodCategories();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _foodCategories = categories);
   }
 
   @override
@@ -151,7 +161,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
 
     FoodCategory? category;
-    for (final item in foodCategories) {
+    for (final item in _foodCategories) {
       if (item.label == _selectedCategory) {
         category = item;
         break;
@@ -347,7 +357,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'كل Flash وأطباق اليوم في مدينة العبور',
+                                  'كل العروض وأطباق اليوم في مدينة العبور',
                                   style: TextStyle(
                                     color: TakkaColors.muted,
                                     fontSize: 13,
@@ -368,7 +378,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 const SizedBox(height: 16),
                 NearbyDealsStrip(regionName: _selectedDistrict),
                 FoodCategoriesStrip(
-                  selectedLabel: foodCategories.any(
+                  categories: _foodCategories,
+                  selectedLabel: _foodCategories.any(
                     (item) => item.label == _selectedCategory,
                   )
                       ? _selectedCategory

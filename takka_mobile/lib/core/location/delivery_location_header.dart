@@ -29,11 +29,17 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
   String _selectedDistrict = '';
   String _currentDistrict = '';
   _LocationMode _mode = _LocationMode.current;
+  var _autoDetecting = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSaved();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _loadSaved();
+    await _autoDetectOnOpen();
   }
 
   Future<void> _loadSaved() async {
@@ -51,6 +57,56 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
     });
     if (selected.isNotEmpty) {
       widget.onDistrictChanged(selected);
+    }
+  }
+
+  /// On every home open: request GPS. Success → set district. Fail → keep saved / «اختر الحي».
+  Future<void> _autoDetectOnOpen() async {
+    if (_autoDetecting) return;
+    _autoDetecting = true;
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      final detected =
+          detectObourDistrict(position.latitude, position.longitude);
+      if (!mounted) return;
+
+      if (detected.status != ObourDetectStatus.district) {
+        return;
+      }
+
+      final name = detected.districtName!;
+      final districts = await loadObourDistricts();
+      if (!districts.contains(name)) {
+        return;
+      }
+
+      await _persist(
+        selected: name,
+        current: name,
+        mode: _LocationMode.current,
+      );
+    } catch (_) {
+      // Keep last saved district (or empty «اختر الحي»).
+    } finally {
+      _autoDetecting = false;
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/location/obour_areas.dart';
 import '../../../core/location/obour_location_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../data/order_service.dart';
@@ -111,7 +112,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
         _addressesFuture = _loadAddresses();
       });
     } catch (error) {
-      setState(() => _error = error.toString());
+      setState(() => _error = friendlyErrorMessage(error));
     } finally {
       if (mounted) {
         setState(() => _saving = false);

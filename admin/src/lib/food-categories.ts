@@ -1,5 +1,5 @@
-/** Categories for home "تاكل ايه؟" strip — keep in sync with Flutter. */
-export type FoodCategory = {
+/** Default categories for home "تاكل ايه؟" — seed + offline fallback. Keep in sync with Flutter defaults. */
+export type FoodCategoryDef = {
   id: string;
   label: string;
   /** Small visual cue (emoji) used as temporary thumbnail */
@@ -8,7 +8,10 @@ export type FoodCategory = {
   keywords: string[];
 };
 
-export const FOOD_CATEGORIES: FoodCategory[] = [
+/** @deprecated Prefer FoodCategoryDef — kept for existing imports. */
+export type FoodCategory = FoodCategoryDef;
+
+export const DEFAULT_FOOD_CATEGORIES: FoodCategoryDef[] = [
   { id: "bakery", label: "مخبوزات", thumb: "🥖", keywords: ["مخبوزات", "عيش", "فطير"] },
   { id: "poultry", label: "طيور", thumb: "🍗", keywords: ["طيور", "فراخ", "دجاج"] },
   { id: "soups", label: "شوربات", thumb: "🍲", keywords: ["شوربة", "شوربات"] },
@@ -34,14 +37,17 @@ export const FOOD_CATEGORIES: FoodCategory[] = [
   { id: "cake", label: "كيك", thumb: "🎂", keywords: ["كيك", "تورتة"] },
 ];
 
+/** Static fallback alias — prefer listActiveFoodCategories() / discovery API at runtime. */
+export const FOOD_CATEGORIES = DEFAULT_FOOD_CATEGORIES;
+
 export function isFoodCategoryId(value: string): boolean {
-  return FOOD_CATEGORIES.some((category) => category.id === value);
+  return DEFAULT_FOOD_CATEGORIES.some((category) => category.id === value);
 }
 
-export function getFoodCategoryById(id: string): FoodCategory | undefined {
-  return FOOD_CATEGORIES.find((category) => category.id === id);
+export function getFoodCategoryById(id: string): FoodCategoryDef | undefined {
+  return DEFAULT_FOOD_CATEGORIES.find((category) => category.id === id);
 }
 
-export function getFoodCategoryByLabel(label: string): FoodCategory | undefined {
-  return FOOD_CATEGORIES.find((category) => category.label === label.trim());
+export function getFoodCategoryByLabel(label: string): FoodCategoryDef | undefined {
+  return DEFAULT_FOOD_CATEGORIES.find((category) => category.label === label.trim());
 }

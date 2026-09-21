@@ -77,7 +77,7 @@ class _DealsBrowseScreenState extends State<DealsBrowseScreen> {
                 const SizedBox(height: 6),
               ],
               const Text(
-                'كل Flash وأطباق اليوم من مطابخ مدينة العبور المتاحة الآن.',
+                'كل العروض وأطباق اليوم من مطابخ مدينة العبور المتاحة الآن.',
                 style: TextStyle(color: TakkaColors.muted, height: 1.45),
               ),
               const SizedBox(height: 18),
@@ -109,7 +109,7 @@ class _DealsBrowseScreenState extends State<DealsBrowseScreen> {
                 ),
               if (data.flashOffers.isNotEmpty) ...[
                 const Text(
-                  'عروض سريعة (Flash)',
+                  'العروض',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),

@@ -10,7 +10,6 @@ import {
   type PromoSlide,
 } from "@/components/promo-carousel";
 import { NearbyDealsStrip } from "@/components/nearby-deals-strip";
-import { FOOD_CATEGORIES, getFoodCategoryByLabel } from "@/lib/food-categories";
 import {
   getNearbyDistrictNames,
   kitchenMatchesAnyDistrict,
@@ -37,14 +36,21 @@ type KitchensBrowseClientProps = {
   kitchens: BrowseKitchen[];
   promos: PromoSlide[];
   isSignedIn: boolean;
+  /** label -> slug for active food categories */
+  categoryByLabel: Record<string, string>;
+  foodCategories: { id: string; label: string; thumb: string; keywords: string[] }[];
 };
 
-function matchesCategory(kitchen: BrowseKitchen, categoryLabel: string) {
-  const category = getFoodCategoryByLabel(categoryLabel);
-  if (!category) {
+function matchesCategory(
+  kitchen: BrowseKitchen,
+  categoryLabel: string,
+  categoryByLabel: Record<string, string>,
+) {
+  const categoryId = categoryByLabel[categoryLabel];
+  if (!categoryId) {
     return true;
   }
-  return kitchen.menuItemCategoryIds.includes(category.id);
+  return kitchen.menuItemCategoryIds.includes(categoryId);
 }
 
 function matchesTextSearch(kitchen: BrowseKitchen, query: string) {
@@ -61,11 +67,17 @@ function matchesTextSearch(kitchen: BrowseKitchen, query: string) {
   return kitchen.menuItemNames.some((name) => name.toLowerCase().includes(q));
 }
 
-function withCategory(kitchens: BrowseKitchen[], categoryLabel: string) {
+function withCategory(
+  kitchens: BrowseKitchen[],
+  categoryLabel: string,
+  categoryByLabel: Record<string, string>,
+) {
   if (!categoryLabel) {
     return kitchens;
   }
-  return kitchens.filter((kitchen) => matchesCategory(kitchen, categoryLabel));
+  return kitchens.filter((kitchen) =>
+    matchesCategory(kitchen, categoryLabel, categoryByLabel),
+  );
 }
 
 /**
@@ -76,8 +88,9 @@ function resolveDiscoveryKitchens(
   kitchens: BrowseKitchen[],
   district: string,
   categoryLabel: string,
+  categoryByLabel: Record<string, string>,
 ): BrowseKitchen[] {
-  const scoped = withCategory(kitchens, categoryLabel);
+  const scoped = withCategory(kitchens, categoryLabel, categoryByLabel);
 
   if (!district) {
     return scoped;
@@ -155,14 +168,22 @@ export function KitchensBrowseClient({
   kitchens,
   promos,
   isSignedIn,
+  categoryByLabel,
+  foodCategories,
 }: KitchensBrowseClientProps) {
   const [district, setDistrict] = useState("");
   const [categoryLabel, setCategoryLabel] = useState("");
   const [search, setSearch] = useState("");
 
   const discoveryKitchens = useMemo(
-    () => resolveDiscoveryKitchens(kitchens, district, categoryLabel),
-    [categoryLabel, district, kitchens],
+    () =>
+      resolveDiscoveryKitchens(
+        kitchens,
+        district,
+        categoryLabel,
+        categoryByLabel,
+      ),
+    [categoryByLabel, categoryLabel, district, kitchens],
   );
 
   const allKitchens = useMemo(() => {
@@ -190,7 +211,7 @@ export function KitchensBrowseClient({
             🔥 العروض
           </span>
           <span className="mt-1 block text-sm text-[#6b4a3a]">
-            كل Flash وأطباق اليوم في مدينة العبور
+            كل العروض وأطباق اليوم في مدينة العبور
           </span>
         </span>
         <span className="text-xl text-[#e67e22]" aria-hidden>
@@ -214,10 +235,9 @@ export function KitchensBrowseClient({
       ) : null}
 
       <FoodCategoriesStrip
+        categories={foodCategories}
         selectedLabel={
-          FOOD_CATEGORIES.some((item) => item.label === categoryLabel)
-            ? categoryLabel
-            : undefined
+          categoryByLabel[categoryLabel] ? categoryLabel : undefined
         }
         onSelect={(label) =>
           setCategoryLabel((current) => (current === label ? "" : label))

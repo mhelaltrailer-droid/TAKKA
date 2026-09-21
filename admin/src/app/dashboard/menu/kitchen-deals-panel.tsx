@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
 import { UploadField } from "@/components/upload-field";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { FOOD_CATEGORIES } from "@/lib/food-categories";
+import type { FoodCategoryDef } from "@/lib/food-categories";
 
 type MenuOption = {
   id: string;
@@ -87,8 +87,10 @@ function statusLabel(item: MenuOption) {
 
 export function KitchenDealsPanel({
   menuItems: initialItems,
+  foodCategories,
 }: {
   menuItems: MenuOption[];
+  foodCategories: FoodCategoryDef[];
 }) {
   const [items, setItems] = useState<MenuOption[]>(initialItems);
   const [dish, setDish] = useState<DishOfTheDay | null>(null);
@@ -448,7 +450,7 @@ export function KitchenDealsPanel({
             onChange={(e) => setFormCategoryId(e.target.value)}
             className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none"
           >
-            {FOOD_CATEGORIES.map((category) => (
+            {foodCategories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.thumb} {category.label}
               </option>
@@ -543,7 +545,7 @@ export function KitchenDealsPanel({
         </div>
         {pending.length > 0 ? (
           <p className="mt-3 text-xs text-amber-700">
-            أصناف بانتظار الاعتماد لا يمكن تعيينها كطبق يوم أو فلاش حتى تُعتمد.
+            أصناف بانتظار الاعتماد لا يمكن تعيينها كطبق يوم أو عرض حتى تُعتمد.
           </p>
         ) : null}
       </div>
@@ -631,7 +633,7 @@ export function KitchenDealsPanel({
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">عرض سريع (Flash)</h3>
+          <h3 className="text-lg font-semibold">عرض سريع</h3>
           {flash ? (
             <div className="rounded-2xl bg-orange-50 px-4 py-3 text-sm text-orange-950">
               <p>

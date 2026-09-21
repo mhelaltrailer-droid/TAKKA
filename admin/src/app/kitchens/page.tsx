@@ -3,13 +3,15 @@ import { auth } from "@clerk/nextjs/server";
 
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { listActiveFoodCategories } from "@/lib/food-category-catalog";
+import { DEFAULT_FOOD_CATEGORIES } from "@/lib/food-categories";
 import { listActivePromoBanners } from "@/lib/promos";
 
 import { KitchensBrowseClient } from "./kitchens-browse-client";
 
 export default async function KitchensPage() {
   const { userId } = await auth();
-  const [kitchens, promos] = await Promise.all([
+  const [kitchens, promos, foodCategories] = await Promise.all([
     db.kitchen.findMany({
       where: {
         approvalStatus: ApprovalStatus.APPROVED,
@@ -33,7 +35,15 @@ export default async function KitchensPage() {
       orderBy: [{ averageRating: "desc" }, { createdAt: "desc" }],
     }),
     listActivePromoBanners().catch(() => []),
+    listActiveFoodCategories().catch(() => DEFAULT_FOOD_CATEGORIES),
   ]);
+
+  const resolvedCategories =
+    foodCategories.length > 0 ? foodCategories : DEFAULT_FOOD_CATEGORIES;
+
+  const categoryByLabel = Object.fromEntries(
+    resolvedCategories.map((category) => [category.label, category.id]),
+  );
 
   return (
     <AppShell
@@ -44,6 +54,8 @@ export default async function KitchensPage() {
     >
       <KitchensBrowseClient
         isSignedIn={Boolean(userId)}
+        categoryByLabel={categoryByLabel}
+        foodCategories={resolvedCategories}
         promos={promos.map((banner) => ({
           id: banner.id,
           title: banner.title,
