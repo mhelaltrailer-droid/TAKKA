@@ -15,8 +15,8 @@ export default async function AdminOperationsPage() {
     pendingMenuItemsCount,
     regions,
     usersCount,
-    ordersCount,
     recentOrders,
+    newKitchenLeadsCount,
   ] = await Promise.all([
     db.kitchen.count({ where: { approvalStatus: "PENDING" } }),
     db.menuItem.count({ where: menuItemNeedsAdminReviewWhere() }),
@@ -24,7 +24,6 @@ export default async function AdminOperationsPage() {
       orderBy: [{ cityName: "asc" }, { regionName: "asc" }],
     }),
     db.user.count(),
-    db.order.count(),
     db.order.findMany({
       take: 8,
       orderBy: { createdAt: "desc" },
@@ -33,6 +32,7 @@ export default async function AdminOperationsPage() {
         customer: { select: { fullName: true } },
       },
     }),
+    db.kitchenJoinLead.count({ where: { status: "NEW" } }),
   ]);
 
   return (
@@ -94,6 +94,13 @@ export default async function AdminOperationsPage() {
               عروض الشريط
             </Link>
             <Link
+              href="/dashboard/admin/leads"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              ليدز انضمام المطابخ
+              {newKitchenLeadsCount > 0 ? ` (${newKitchenLeadsCount})` : ""}
+            </Link>
+            <Link
               href="/dashboard/admin/chats"
               className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >
@@ -124,16 +131,19 @@ export default async function AdminOperationsPage() {
             <p className="mt-3 text-3xl font-bold">{pendingMenuItemsCount}</p>
           </Link>
           <Link
+            href="/dashboard/admin/leads"
+            className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-[var(--brand-primary)]"
+          >
+            <p className="text-sm text-zinc-500">ليدز انضمام جديدة</p>
+            <p className="mt-3 text-3xl font-bold">{newKitchenLeadsCount}</p>
+          </Link>
+          <Link
             href="/dashboard/admin/users"
             className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-[var(--brand-primary)]"
           >
             <p className="text-sm text-zinc-500">إجمالي المستخدمين</p>
             <p className="mt-3 text-3xl font-bold">{usersCount}</p>
           </Link>
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-zinc-500">إجمالي الطلبات</p>
-            <p className="mt-3 text-3xl font-bold">{ordersCount}</p>
-          </div>
         </section>
 
         <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
@@ -186,6 +196,18 @@ export default async function AdminOperationsPage() {
                 <p className="mt-2 font-semibold">إدارة المستخدمين</p>
                 <p className="mt-1 text-sm text-zinc-600">
                   إضافة وتعديل الأدوار والتعطيل والحذف
+                </p>
+              </Link>
+              <Link
+                href="/dashboard/admin/leads"
+                className="rounded-2xl border border-zinc-200 p-5 transition hover:border-[var(--brand-primary)]"
+              >
+                <p className="text-2xl" aria-hidden>
+                  📋
+                </p>
+                <p className="mt-2 font-semibold">ليدز انضمام المطابخ</p>
+                <p className="mt-1 text-sm text-zinc-600">
+                  متابعة التسجيل السريع من صفحة الانضمام وحالات التواصل
                 </p>
               </Link>
               <Link

@@ -19,20 +19,32 @@ const List<String> defaultObourDistricts = [
   'الحي التاسع',
   'الحي الترفيهي',
   'دار مصر',
-  'سكن مصر (العبور الجديدة)',
-  'الحرية',
-  'حي المجد',
-  'حي الكرامة',
-  'إسكان الشباب',
-  'الإسكان العائلي',
-  'الإسكان القومي',
-  'إسكان المستقبل',
+  'الكرامة / سكن مصر',
+  'الحرية / المجد',
+  'إسكان الشباب / المستقبل',
+  'الإسكان العائلي / القومي',
   'جولف سيتي',
   'جمعية عرابي',
 ];
 
 /// Kept for older call sites; prefer [defaultObourDistricts] + API list.
 const List<String> obourDistricts = defaultObourDistricts;
+
+const Map<String, String> mergedDistrictAliases = {
+  'إسكان الشباب': 'إسكان الشباب / المستقبل',
+  'إسكان المستقبل': 'إسكان الشباب / المستقبل',
+  'إسكان الشباب / المستقبل': 'إسكان الشباب / المستقبل',
+  'الحرية': 'الحرية / المجد',
+  'حي المجد': 'الحرية / المجد',
+  'الحرية / حي المجد': 'الحرية / المجد',
+  'الحرية / المجد': 'الحرية / المجد',
+  'الإسكان العائلي': 'الإسكان العائلي / القومي',
+  'الإسكان القومي': 'الإسكان العائلي / القومي',
+  'الإسكان العائلي / القومي': 'الإسكان العائلي / القومي',
+  'سكن مصر (العبور الجديدة)': 'الكرامة / سكن مصر',
+  'حي الكرامة': 'الكرامة / سكن مصر',
+  'الكرامة / سكن مصر': 'الكرامة / سكن مصر',
+};
 
 Future<List<String>> loadObourDistricts() async {
   try {
@@ -58,7 +70,12 @@ Future<List<String>> loadObourDistricts() async {
 
 bool isObourDistrict(String value, {List<String>? allowed}) {
   final list = allowed ?? defaultObourDistricts;
-  return list.contains(value.trim());
+  final normalized = normalizeMergedDistrict(value.trim());
+  return list.contains(normalized);
+}
+
+String normalizeMergedDistrict(String regionName) {
+  return mergedDistrictAliases[regionName] ?? regionName;
 }
 
 String? assertObourLocation(

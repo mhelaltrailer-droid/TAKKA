@@ -8,8 +8,10 @@ const isAppPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/kitchens(.*)",
+  "/join-kitchen(.*)",
   "/api/health",
   "/api/discovery(.*)",
+  "/api/join-kitchen(.*)",
   "/api/mobile(.*)",
   // UploadThing webhook + client validation must stay public (Clerk cookies are absent).
   "/api/uploadthing(.*)",
@@ -41,6 +43,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (
       pathname === "/" ||
       pathname.startsWith("/kitchens") ||
+      pathname.startsWith("/join-kitchen") ||
       pathname.startsWith("/sign-up") ||
       pathname.startsWith("/role-setup") ||
       pathname.startsWith("/addresses") ||

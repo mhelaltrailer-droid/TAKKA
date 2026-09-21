@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../theme/app_theme.dart';
 import 'obour_areas.dart';
+import 'obour_geofence.dart';
 
 class ObourLocationSelection {
   const ObourLocationSelection({
@@ -112,10 +113,34 @@ class _ObourLocationPickerState extends State<ObourLocationPicker> {
         ),
       );
 
+      final detected =
+          detectObourDistrict(position.latitude, position.longitude);
+      String? nextRegion = _regionName;
+      String status;
+
+      switch (detected.status) {
+        case ObourDetectStatus.district:
+          final name = detected.districtName!;
+          if (_districts.contains(name)) {
+            nextRegion = name;
+            status = 'تم تحديد الحي: $name';
+          } else {
+            status =
+                'تم تحديد موقعك بالقرب من «$name». اختر الحي يدويًا.';
+          }
+        case ObourDetectStatus.cityOnly:
+          status =
+              'أنت داخل مدينة العبور، لكن الحي غير واضح. اختر الحي يدويًا.';
+        case ObourDetectStatus.outsideCity:
+          status =
+              'يبدو أنك خارج نطاق مدينة العبور. اختر الحي يدويًا إن كان التوصيل داخل العبور.';
+      }
+
       setState(() {
         _latitude = position.latitude;
         _longitude = position.longitude;
-        _status = 'تم تحديد موقعك. اختر الحي يدويًا من القائمة.';
+        _regionName = nextRegion;
+        _status = status;
       });
       _emit();
     } catch (_) {
@@ -165,7 +190,7 @@ class _ObourLocationPickerState extends State<ObourLocationPicker> {
           )
         else
           DropdownButtonFormField<String>(
-            initialValue: selected,
+            value: selected,
             decoration: const InputDecoration(hintText: 'اختر الحي'),
             items: _districts
                 .map(

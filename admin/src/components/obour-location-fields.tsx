@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
+import { detectObourDistrict } from "@/lib/obour-geofence";
 
 type ObourLocationFieldsProps = {
   cityFieldName?: string;
@@ -107,7 +108,27 @@ export function ObourLocationFields({
         setLatitude(next.latitude);
         setLongitude(next.longitude);
         onCoordsChange?.(next);
-        setDetectStatus("تم تحديد موقعك. اختر الحي يدويًا من القائمة.");
+
+        const detected = detectObourDistrict(next.latitude, next.longitude);
+        if (detected.status === "district") {
+          const inList = districts.includes(detected.districtName);
+          if (inList) {
+            setRegion(detected.districtName);
+            setDetectStatus(`تم تحديد الحي: ${detected.districtName}`);
+          } else {
+            setDetectStatus(
+              `تم تحديد موقعك بالقرب من «${detected.districtName}». اختر الحي يدويًا.`,
+            );
+          }
+        } else if (detected.status === "city_only") {
+          setDetectStatus(
+            "أنت داخل مدينة العبور، لكن الحي غير واضح. اختر الحي يدويًا.",
+          );
+        } else {
+          setDetectStatus(
+            "يبدو أنك خارج نطاق مدينة العبور. اختر الحي يدويًا إن كان التوصيل داخل العبور.",
+          );
+        }
         setDetecting(false);
       },
       () => {

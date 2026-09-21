@@ -30,9 +30,11 @@ export default async function Home() {
 
         <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-6xl flex-col justify-between px-6 py-8 md:px-10">
           <header className="flex items-center justify-between gap-4">
-            <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-white md:text-4xl">
-              تكة
-            </p>
+            <img
+              src="/takka-logo.png"
+              alt="تكة"
+              className="h-12 w-12 rounded-full object-cover shadow-sm md:h-14 md:w-14"
+            />
             {isClerkConfigured ? (
               <div className="flex items-center gap-3">
                 <SignedOut>

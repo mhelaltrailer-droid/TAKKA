@@ -60,8 +60,13 @@ export function AppShell({
           <div className="flex items-center justify-between gap-4">
             <Link
               href={mode === "kitchen" ? "/dashboard" : "/kitchens"}
-              className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--brand-secondary)]"
+              className="inline-flex items-center gap-2 font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--brand-secondary)]"
             >
+              <img
+                src="/takka-logo.png"
+                alt=""
+                className="h-9 w-9 rounded-full object-cover"
+              />
               تكة
             </Link>
             <div className="flex items-center gap-3">
