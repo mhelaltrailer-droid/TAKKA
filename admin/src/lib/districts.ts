@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
+import { serializePolygonRing } from "@/lib/district-polygon";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
+import { OBOUR_DISTRICT_POLYGONS } from "@/lib/obour-geofence";
 
 type DistrictMerge = {
   merged: string;
@@ -100,6 +102,24 @@ export async function ensureDefaultObourDistricts() {
 
   for (const merge of DISTRICT_MERGES) {
     await mergeLegacyDistrict(merge);
+  }
+
+  // Seed hardcoded polygons only when a district still has no ring (don't overwrite admin edits).
+  for (const polygon of OBOUR_DISTRICT_POLYGONS) {
+    const ringJson = serializePolygonRing(
+      polygon.ring.map(([lng, lat]) => [lng, lat]),
+    );
+    if (!ringJson) {
+      continue;
+    }
+    await db.region.updateMany({
+      where: {
+        cityName: OBOUR_CITY_NAME,
+        regionName: polygon.name,
+        polygonRingJson: null,
+      },
+      data: { polygonRingJson: ringJson },
+    });
   }
 }
 

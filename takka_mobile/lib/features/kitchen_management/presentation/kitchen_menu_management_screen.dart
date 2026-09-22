@@ -6,6 +6,7 @@ import '../../../core/location/food_categories.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/confirm_destructive.dart';
 import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
@@ -312,7 +313,8 @@ class _KitchenMenuManagementScreenState
                                 : null,
                           ),
                           IconButton(
-                            onPressed: () => _deleteItem(item.id),
+                            onPressed: () =>
+                                _deleteItem(item.id, itemName: item.name),
                             icon: const Icon(Icons.delete_outline_rounded),
                           ),
                         ],
@@ -421,7 +423,17 @@ class _KitchenMenuManagementScreenState
     }
   }
 
-  Future<void> _deleteItem(String id) async {
+  Future<void> _deleteItem(String id, {String? itemName}) async {
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'تأكيد الحذف',
+      message: itemName == null || itemName.isEmpty
+          ? 'هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.'
+          : 'هل أنت متأكد من حذف الصنف «$itemName»؟ لا يمكن التراجع.',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
     try {
       final authState = ClerkAuth.of(context, listen: false);
       final token = await authState.sessionToken();

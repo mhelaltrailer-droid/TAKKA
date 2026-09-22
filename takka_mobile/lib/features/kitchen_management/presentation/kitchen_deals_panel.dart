@@ -4,6 +4,7 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/location/food_categories.dart';
+import '../../../core/ui/confirm_destructive.dart';
 import '../../../core/ui/friendly_error.dart';
 import '../data/kitchen_management_service.dart';
 
@@ -305,6 +306,13 @@ class _KitchenDealsPanelState extends State<KitchenDealsPanel> {
 
   Future<void> _endFlash() async {
     if (_flash == null) return;
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'تأكيد إنهاء العرض',
+      message: 'هل أنت متأكد من إنهاء العرض الفلاش الآن؟ لا يمكن التراجع.',
+      confirmLabel: 'إنهاء',
+    );
+    if (!confirmed || !mounted) return;
     try {
       final token = await _token();
       await _service.endFlashOffer(sessionToken: token, offerId: _flash!.id);

@@ -3,10 +3,24 @@ import { NextResponse } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  parsePolygonRingInput,
+  parseStoredPolygonRing,
+  serializePolygonRing,
+} from "@/lib/district-polygon";
+import {
   ensureDefaultObourDistricts,
   listAllObourDistricts,
 } from "@/lib/districts";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
+
+function mapDistrict(
+  district: Awaited<ReturnType<typeof listAllObourDistricts>>[number],
+) {
+  return {
+    ...district,
+    polygonRing: parseStoredPolygonRing(district.polygonRingJson),
+  };
+}
 
 export async function GET() {
   try {
@@ -18,7 +32,7 @@ export async function GET() {
     const districts = await listAllObourDistricts();
     return NextResponse.json({
       cityName: OBOUR_CITY_NAME,
-      districts,
+      districts: districts.map(mapDistrict),
     });
   } catch (error) {
     const message =
@@ -34,7 +48,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "غير مصرح." }, { status: 403 });
     }
 
-    const payload = (await request.json()) as { regionName?: string };
+    const payload = (await request.json()) as {
+      regionName?: string;
+      polygonRing?: unknown;
+    };
     const regionName = payload.regionName?.trim() ?? "";
 
     if (!regionName) {
@@ -42,6 +59,15 @@ export async function POST(request: Request) {
         { error: "اسم الحي مطلوب." },
         { status: 400 },
       );
+    }
+
+    let polygonRingJson: string | null | undefined;
+    if (payload.polygonRing !== undefined) {
+      const parsed = parsePolygonRingInput(payload.polygonRing);
+      if (!parsed.ok) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      polygonRingJson = serializePolygonRing(parsed.ring);
     }
 
     await ensureDefaultObourDistricts();
@@ -55,11 +81,13 @@ export async function POST(request: Request) {
       },
       update: {
         isActive: true,
+        ...(polygonRingJson !== undefined ? { polygonRingJson } : {}),
       },
       create: {
         cityName: OBOUR_CITY_NAME,
         regionName,
         isActive: true,
+        polygonRingJson: polygonRingJson ?? null,
       },
       include: {
         _count: {
@@ -71,7 +99,10 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ district }, { status: 201 });
+    return NextResponse.json(
+      { district: mapDistrict(district) },
+      { status: 201 },
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "تعذر إضافة الحي.";

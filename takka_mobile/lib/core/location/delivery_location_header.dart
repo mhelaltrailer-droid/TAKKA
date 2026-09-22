@@ -38,6 +38,8 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
   }
 
   Future<void> _bootstrap() async {
+    // Load district names + GPS polygons from API before auto-detect.
+    await loadObourDistricts();
     await _loadSaved();
     await _autoDetectOnOpen();
   }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { requireRole } from "@/lib/auth";
+import { parseStoredPolygonRing } from "@/lib/district-polygon";
 import { listAllObourDistricts } from "@/lib/districts";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 
@@ -8,7 +9,11 @@ import { DistrictManager } from "./district-manager";
 
 export default async function AdminDistrictsPage() {
   await requireRole(["admin"]);
-  const districts = await listAllObourDistricts();
+  const rows = await listAllObourDistricts();
+  const districts = rows.map((district) => ({
+    ...district,
+    polygonRing: parseStoredPolygonRing(district.polygonRingJson),
+  }));
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
@@ -19,8 +24,8 @@ export default async function AdminDistrictsPage() {
           </p>
           <h1 className="mt-2 text-3xl font-bold">إدارة أحياء مدينة العبور</h1>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-600">
-            أضف أو عدّل أو احذف الأحياء التي تظهر في قائمة اختيار الموقع للعميل
-            والمطبخ على الويب والتطبيق.
+            أضف أو عدّل الأحياء، وارسم مضلع كل حي على الخريطة ليُستخدم في تحديد
+            الموقع تلقائيًا على الويب والتطبيق.
           </p>
           <div className="mt-4">
             <Link

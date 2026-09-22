@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
 import { detectObourDistrict } from "@/lib/obour-geofence";
+import {
+  ensureDistrictPolygonsLoaded,
+  getRuntimeCityRing,
+  getRuntimeDistrictPolygons,
+} from "@/lib/obour-geofence-runtime";
 
 const SELECTED_KEY = "takka.selectedObourDistrict";
 const CURRENT_KEY = "takka.currentObourDistrict";
@@ -52,6 +57,7 @@ export function DeliveryLocationHeader({
 
     async function loadDistricts() {
       try {
+        await ensureDistrictPolygonsLoaded();
         const response = await fetch("/api/discovery/districts");
         const result = await response.json();
         const next = (
@@ -96,6 +102,8 @@ export function DeliveryLocationHeader({
         const detected = detectObourDistrict(
           position.coords.latitude,
           position.coords.longitude,
+          getRuntimeDistrictPolygons(),
+          getRuntimeCityRing(),
         );
 
         if (detected.status !== "district") {
@@ -199,6 +207,8 @@ export function DeliveryLocationHeader({
         const detected = detectObourDistrict(
           position.coords.latitude,
           position.coords.longitude,
+          getRuntimeDistrictPolygons(),
+          getRuntimeCityRing(),
         );
 
         if (detected.status === "district") {

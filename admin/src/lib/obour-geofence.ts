@@ -269,19 +269,26 @@ export type ObourDetectResult =
  * 1) خارج العبور → outside_city
  * 2) جوه حي → district (أصغر مضلع عند التداخل)
  * 3) جوه العبور بدون حي → city_only
+ *
+ * Pass `districts` from the discovery API when available; otherwise hardcoded defaults.
  */
 export function detectObourDistrict(
   latitude: number,
   longitude: number,
+  districts: readonly ObourDistrictPolygon[] = OBOUR_DISTRICT_POLYGONS,
+  cityRing: readonly LngLat[] = OBOUR_CITY_RING,
 ): ObourDetectResult {
-  if (!pointInRing(longitude, latitude, OBOUR_CITY_RING)) {
+  if (!pointInRing(longitude, latitude, cityRing)) {
     return { status: "outside_city" };
   }
 
   let best: ObourDistrictPolygon | null = null;
   let bestArea = Number.POSITIVE_INFINITY;
 
-  for (const polygon of OBOUR_DISTRICT_POLYGONS) {
+  for (const polygon of districts) {
+    if (!polygon.ring.length) {
+      continue;
+    }
     if (!pointInRing(longitude, latitude, polygon.ring)) {
       continue;
     }

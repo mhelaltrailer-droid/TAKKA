@@ -2,11 +2,27 @@ import { NextResponse } from "next/server";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  parsePolygonRingInput,
+  parseStoredPolygonRing,
+  serializePolygonRing,
+} from "@/lib/district-polygon";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
+
+function mapDistrict<
+  T extends {
+    polygonRingJson: string | null;
+  },
+>(district: T) {
+  return {
+    ...district,
+    polygonRing: parseStoredPolygonRing(district.polygonRingJson),
+  };
+}
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
@@ -19,6 +35,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const payload = (await request.json()) as {
       regionName?: string;
       isActive?: boolean;
+      polygonRing?: unknown;
     };
 
     const existing = await db.region.findUnique({ where: { id } });
@@ -44,11 +61,21 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
+    let polygonRingJson: string | null | undefined;
+    if (payload.polygonRing !== undefined) {
+      const parsed = parsePolygonRingInput(payload.polygonRing);
+      if (!parsed.ok) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      polygonRingJson = serializePolygonRing(parsed.ring);
+    }
+
     const district = await db.region.update({
       where: { id },
       data: {
         ...(nextName ? { regionName: nextName } : {}),
         ...(payload.isActive != null ? { isActive: payload.isActive } : {}),
+        ...(polygonRingJson !== undefined ? { polygonRingJson } : {}),
       },
       include: {
         _count: {
@@ -60,7 +87,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json({ district });
+    return NextResponse.json({ district: mapDistrict(district) });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "تعذر تحديث الحي.";
@@ -113,7 +140,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       });
 
       return NextResponse.json({
-        district,
+        district: mapDistrict(district),
         softDeleted: true,
         message: "الحي مستخدم؛ تم إخفاؤه بدل الحذف النهائي.",
       });

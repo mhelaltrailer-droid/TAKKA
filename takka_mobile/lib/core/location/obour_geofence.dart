@@ -272,18 +272,41 @@ double ringArea(List<LngLat> ring) {
   return sum.abs() / 2;
 }
 
+/// Runtime polygons from discovery API (null = use hardcoded defaults).
+List<ObourDistrictPolygon>? _runtimeDistrictPolygons;
+List<LngLat>? _runtimeCityRing;
+
+void setRuntimeObourGeofence({
+  List<ObourDistrictPolygon>? districts,
+  List<LngLat>? cityRing,
+}) {
+  if (districts != null && districts.isNotEmpty) {
+    _runtimeDistrictPolygons = districts;
+  }
+  if (cityRing != null && cityRing.length >= 4) {
+    _runtimeCityRing = cityRing;
+  }
+}
+
+List<ObourDistrictPolygon> get activeObourDistrictPolygons =>
+    _runtimeDistrictPolygons ?? obourDistrictPolygons;
+
+List<LngLat> get activeObourCityRing => _runtimeCityRing ?? obourCityRing;
+
 /// 1) خارج العبور → outsideCity
 /// 2) جوه حي → district (أصغر مضلع عند التداخل)
 /// 3) جوه العبور بدون حي → cityOnly
 ObourDetectResult detectObourDistrict(double latitude, double longitude) {
-  if (!pointInRing(longitude, latitude, obourCityRing)) {
+  final city = activeObourCityRing;
+  if (!pointInRing(longitude, latitude, city)) {
     return const ObourDetectResult.outsideCity();
   }
 
   ObourDistrictPolygon? best;
   var bestArea = double.infinity;
 
-  for (final polygon in obourDistrictPolygons) {
+  for (final polygon in activeObourDistrictPolygons) {
+    if (polygon.ring.isEmpty) continue;
     if (!pointInRing(longitude, latitude, polygon.ring)) {
       continue;
     }

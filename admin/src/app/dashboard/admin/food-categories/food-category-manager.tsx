@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { confirmDestructive } from "@/lib/confirm-destructive";
+
 type Category = {
   id: string;
   slug: string;
@@ -128,7 +130,14 @@ export function FoodCategoryManager({
     }
   }
 
-  async function removeCategory(id: string) {
+  async function removeCategory(id: string, label: string) {
+    if (
+      !confirmDestructive(
+        `هل أنت متأكد من حذف الفئة «${label}»؟ لا يمكن التراجع بسهولة.`,
+      )
+    ) {
+      return;
+    }
     setLoading(true);
     setError(null);
     setInfo(null);
@@ -304,7 +313,9 @@ export function FoodCategoryManager({
                       </button>
                       <button
                         type="button"
-                        onClick={() => removeCategory(category.id)}
+                        onClick={() =>
+                          removeCategory(category.id, category.label)
+                        }
                         disabled={loading}
                         className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
                       >

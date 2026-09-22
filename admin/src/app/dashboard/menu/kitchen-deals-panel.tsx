@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
 import { UploadField } from "@/components/upload-field";
 import { PageSkeleton } from "@/components/ui/skeleton";
+import { confirmDestructive } from "@/lib/confirm-destructive";
 import type { FoodCategoryDef } from "@/lib/food-categories";
 
 type MenuOption = {
@@ -364,6 +365,13 @@ export function KitchenDealsPanel({
 
   async function endFlash() {
     if (!flash) return;
+    if (
+      !confirmDestructive(
+        "هل أنت متأكد من إنهاء العرض الفلاش الآن؟ لا يمكن التراجع.",
+      )
+    ) {
+      return;
+    }
     setError(null);
     const res = await fetch(`/api/kitchen/flash-offers/${flash.id}/end`, {
       method: "POST",

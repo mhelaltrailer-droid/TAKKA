@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { UploadField } from "@/components/upload-field";
+import { confirmDestructive } from "@/lib/confirm-destructive";
 
 type PromoBanner = {
   id: string;
@@ -176,7 +177,14 @@ export function PromoManager({ initialBanners }: PromoManagerProps) {
     );
   }
 
-  async function removeBanner(id: string) {
+  async function removeBanner(id: string, title: string) {
+    if (
+      !confirmDestructive(
+        `هل أنت متأكد من حذف العرض «${title}»؟ لا يمكن التراجع.`,
+      )
+    ) {
+      return;
+    }
     const response = await fetch(`/api/admin/promos/${id}`, {
       method: "DELETE",
     });
@@ -410,7 +418,7 @@ export function PromoManager({ initialBanners }: PromoManagerProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeBanner(banner.id)}
+                      onClick={() => removeBanner(banner.id, banner.title)}
                       className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
                     >
                       حذف

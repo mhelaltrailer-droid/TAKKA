@@ -132,6 +132,8 @@ model Region {
   cityName          String
   regionName        String
   isActive          Boolean           @default(true)
+  /// Closed GeoJSON-style ring as JSON: [[lng,lat],...] (first === last).
+  polygonRingJson   String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   customerAddresses CustomerAddress[]

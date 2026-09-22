@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
 import { detectObourDistrict } from "@/lib/obour-geofence";
+import {
+  ensureDistrictPolygonsLoaded,
+  getRuntimeCityRing,
+  getRuntimeDistrictPolygons,
+} from "@/lib/obour-geofence-runtime";
 
 type ObourLocationFieldsProps = {
   cityFieldName?: string;
@@ -62,6 +67,7 @@ export function ObourLocationFields({
 
     async function loadDistricts() {
       try {
+        await ensureDistrictPolygonsLoaded();
         const response = await fetch("/api/discovery/districts");
         const result = await response.json();
         const next = (result.districts as Array<{ regionName: string }> | undefined)
@@ -109,7 +115,12 @@ export function ObourLocationFields({
         setLongitude(next.longitude);
         onCoordsChange?.(next);
 
-        const detected = detectObourDistrict(next.latitude, next.longitude);
+        const detected = detectObourDistrict(
+          next.latitude,
+          next.longitude,
+          getRuntimeDistrictPolygons(),
+          getRuntimeCityRing(),
+        );
         if (detected.status === "district") {
           const inList = districts.includes(detected.districtName);
           if (inList) {

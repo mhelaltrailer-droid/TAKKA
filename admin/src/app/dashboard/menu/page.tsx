@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { StatusPill } from "@/components/status-pill";
 import { SubmitButton } from "@/components/submit-button";
 import { UploadField } from "@/components/upload-field";
@@ -443,12 +444,12 @@ export default async function MenuManagementPage() {
                         </form>
                         <form action={deleteMenuItem}>
                           <input type="hidden" name="menuItemId" value={item.id} />
-                          <button
-                            type="submit"
+                          <ConfirmSubmitButton
+                            message={`هل أنت متأكد من حذف الصنف «${item.name}»؟ لا يمكن التراجع.`}
                             className="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
                           >
                             حذف
-                          </button>
+                          </ConfirmSubmitButton>
                         </form>
                       </div>
                     </div>
