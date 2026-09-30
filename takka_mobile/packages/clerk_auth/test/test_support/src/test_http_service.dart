@@ -1,0 +1,295 @@
+// ignore_for_file: avoid_print
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:clerk_auth/clerk_auth.dart';
+import 'package:http/http.dart' show ByteStream, Response;
+
+import 'test_env.dart';
+import 'test_http_service_error.dart';
+
+extension on num {
+  String toPaddedString([int width = 3]) => toString().padLeft(width, '0');
+}
+
+class TestHttpService implements HttpService {
+  TestHttpService(this.recordDirectory, this.env);
+
+  final String recordDirectory;
+  final TestEnv env;
+
+  String? _recordPath;
+  int hitCount = 0;
+
+  set recordPath(String? path) {
+    _recordPath = path;
+    if (path is String && env.recording) {
+      // if we're given a path when recording, delete what's there so we
+      // can start afresh
+      final dir = _directory;
+      if (dir.existsSync()) {
+        dir.deleteSync(recursive: true);
+      }
+    }
+  }
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  void terminate() {}
+
+  @override
+  Future<bool> ping(Uri uri, {required Duration timeout}) async {
+    final response = await send(HttpMethod.head, uri);
+    return response.statusCode == 200;
+  }
+
+  Directory get _directory {
+    return Directory(
+      ['./test/_responses', recordDirectory, _recordPath].nonNulls.join('/'),
+    );
+  }
+
+  File _file(int count) {
+    final path = '${_directory.path}/${count.toPaddedString()}.json';
+    return File(path);
+  }
+
+  @override
+  Future<Response> send(
+    HttpMethod method,
+    Uri uri, {
+    Map<String, String>? headers,
+    Map<String, dynamic>? params,
+    String? body,
+  }) async {
+    _checkHeaders(method, uri, headers);
+
+    final key = _key(method, uri, bodyParams: params);
+
+    final file = _file(++hitCount);
+
+    if (env.recording) {
+      const service = DefaultHttpService();
+      const encoder = JsonEncoder.withIndent('  ');
+      final resp = await service.send(
+        method,
+        uri,
+        headers: headers,
+        params: params,
+        body: body,
+      );
+      await _directory.create(recursive: true);
+      final respBody = resp.body.isNotEmpty
+          ? jsonDecode(_deflateFromReality(resp.body))
+          : '';
+      final json = encoder.convert({'key': key, 'body': respBody});
+      await file.writeAsString(json);
+      return resp;
+    }
+
+    if (file.existsSync() == false) {
+      throw TestHttpServiceError('No response available for $key ($uri)');
+    }
+
+    final respBody = await file.readAsString();
+    final data = jsonDecode(respBody);
+    if (data['key'] case String? expected when expected != key) {
+      throw TestHttpServiceError(
+        'Key clash for $key: expected $expected ($uri)',
+      );
+    }
+
+    return Response(_inflateForTests(jsonEncode(data['body']), env), 200);
+  }
+
+  bool get isCompleted {
+    final file = _file(hitCount + 1);
+    return file.existsSync() == false;
+  }
+
+  void _checkHeaders(HttpMethod method, Uri uri, Map<String, String>? headers) {
+    if (headers case Map<String, String> headers) {
+      final expectedHeaders = {
+        HttpHeaders.acceptHeader: 'application/json',
+        HttpHeaders.acceptLanguageHeader: 'en',
+        HttpHeaders.contentTypeHeader: method.isGet
+            ? 'application/json'
+            : 'application/x-www-form-urlencoded',
+        'clerk-api-version': ClerkConstants.clerkApiVersion,
+        'x-flutter-sdk-version': ClerkConstants.flutterSdkVersion,
+        'x-mobile': '1',
+      };
+      for (final MapEntry(:key, :value) in expectedHeaders.entries) {
+        if (headers[key] != value) {
+          throw TestHttpServiceError(
+            'Unacceptable ${key.toUpperCase()} header on $method $uri: '
+            '"${headers[key]}" should be "$value',
+          );
+        }
+      }
+    }
+  }
+
+  static final _identifiers = {
+    RegExp(r'sia_\w+'): r'SIGN_IN_ID',
+    RegExp(r'sua_\w+'): r'SIGN_UP_ID',
+    RegExp(r'sess_\w+'): r'SESSION_ID',
+    RegExp(r'aac_\w+'): r'AUTH_CONFIG_ID',
+    RegExp(r'display_config_\w+'): r'DISPLAY_CONFIG_ID',
+    RegExp(r'img_\w+'): r'IMAGE_ID',
+    RegExp(r'user_\w{13,}'): r'USER_ID',
+    RegExp(r'client_\w{13,}'): r'CLIENT_ID',
+    RegExp(r'https://img\.clerk\.\w+/[^"]+"'): r'IMAGE_URL"',
+    RegExp(r'https://www\.gravatar\.\w+/avatar\?d=mp'): r'GRAVATAR_URL',
+    RegExp(r'_url":"[^"]+"'): r'_url":"URL"',
+    RegExp(r'"created_at":\d+'): r'"created_at":"%%DATETIME -4%%"',
+    RegExp(r'"last_active_at":\d+'): r'"last_active_at":"%%DATETIME -3%%"',
+    RegExp(r'"updated_at":\d+'): r'"updated_at":"%%DATETIME -2%%"',
+    RegExp(r'"password_last_updated_at":\d+'):
+        r'"password_last_updated_at":"%%DATETIME -2%%"',
+    RegExp(r'"last_sign_in_at":\d+'): r'"last_sign_in_at":"%%DATETIME -2%%"',
+    RegExp(r'"claimed_at":\d+'): r'"claimed_at":"%%DATETIME -1%%"',
+    RegExp(r'"expire_at":\d+'): r'"expire_at":"%%DATETIME 1%%"',
+    RegExp(r'"legal_accepted_at":\d+'): r'"legal_accepted_at":"%%DATETIME 1%%"',
+    RegExp(r'"abandon_at":\d+'): r'"abandon_at":"%%DATETIME 2%%"',
+    RegExp(r'"cookie_expires_at":\d+'): r'"cookie_expires_at":"%%DATETIME 3%%"',
+    RegExp(r'"application_name":"[^"]+"'):
+        r'"application_name":"APPLICATION_NAME"',
+    RegExp(r'"google_one_tap_client_id":"[^"]+"'):
+        r'"google_one_tap_client_id":"GOOGLE_ONE_TAP_CLIENT_ID"',
+    RegExp(r'"allowed_special_characters":".+",'):
+        r'"allowed_special_characters":"+$-_",',
+    RegExp(r'"allowed_special_characters":".+"}'):
+        r'"allowed_special_characters":"+$-_"}',
+  };
+
+  String _swapIdentifiers(String item) {
+    for (final MapEntry(:key, :value) in _identifiers.entries) {
+      item = item.replaceAll(key, value);
+    }
+    if (env.useOpenIdentifiers == false) {
+      item = item.replaceAll(RegExp(r'idn_\w+'), r'IDENTIFIER_ID');
+    }
+    return item;
+  }
+
+  static const _kFirstName = '%%FIRSTNAME%%';
+  static const _kLastName = '%%LASTNAME%%';
+  static const _kEmailAddress = '%%EMAIL%%';
+  static const _kPhoneNumber = '%%PHONE%%';
+  static const _kUsername = '%%USERNAME%%';
+
+  static final _fields = {
+    RegExp(r'"jwt":"[^"]+"'): '"jwt":"e30=.e30=.e30="',
+  };
+
+  static final _obscuredIdentifierFields = {
+    RegExp(r'"first_name":"\w+"'): '"first_name":"$_kFirstName"',
+    RegExp(r'"last_name":"\w+"'): '"last_name":"$_kLastName"',
+    RegExp(r'"email_address":"[^"]+"'): '"email_address":"$_kEmailAddress"',
+    RegExp(r'identifier":"[^@"]+@[^@"]+"'): 'identifier":"$_kEmailAddress"',
+    RegExp(r'identifier":"[+*0-9]+"'): 'identifier":"$_kPhoneNumber"',
+    RegExp(r'identifier":"[^%"]+"'): 'identifier":"$_kUsername"',
+  };
+
+  static final _datetimeOffsetRE = RegExp(r'"%%DATETIME (-?\d+)%%"');
+  static final _listRE = RegExp(r'_(fields|identifiers)":(\[.*?\])');
+
+  String _deflateFromReality(String item) {
+    item = _swapIdentifiers(item);
+
+    final fields = {
+      ..._fields,
+      if (env.useOpenIdentifiers == false) //
+        ..._obscuredIdentifierFields,
+    };
+    for (final MapEntry(:key, :value) in fields.entries) {
+      item = item.replaceAll(key, value);
+    }
+
+    for (final match in _listRE.allMatches(item)) {
+      final data = match.group(2)!;
+      final list = (jsonDecode(data) as List)..sort();
+      item = item.replaceAll(data, jsonEncode(list));
+    }
+
+    return item;
+  }
+
+  String _inflateForTests(String item, TestEnv env) {
+    item = item.replaceAll(_kEmailAddress, env.email);
+    item = item.replaceAll(_kPhoneNumber, env.phoneNumber);
+    item = item.replaceAll(_kUsername, env.username);
+
+    final now = DateTime.timestamp().millisecondsSinceEpoch;
+    for (final match in _datetimeOffsetRE.allMatches(item)) {
+      final matchString = match.group(0)!;
+      final offset = int.tryParse(match.group(1)!) ?? 0;
+      item = item.replaceAll(matchString, (now + offset * 1000).toString());
+    }
+
+    return item;
+  }
+
+  String _key(
+    HttpMethod method,
+    Uri uri, {
+    Map<String, dynamic>? bodyParams,
+  }) {
+    final queryParams = {
+      ...uri.queryParameters,
+      if (uri.queryParameters.containsKey('_clerk_session_id')) //
+        '_clerk_session_id': 'SESSION_ID',
+    }
+      ..remove('_is_native')
+      ..remove('_clerk_js_version');
+
+    final normalisedPath = Uri(
+      path: _swapIdentifiers(uri.path),
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
+    ).toString();
+
+    return [
+      method,
+      normalisedPath,
+      if (bodyParams case Map<String, dynamic> params when params.isNotEmpty) //
+        _mapToString(params),
+    ].join(' ');
+  }
+
+  String _mapToString(Map map) {
+    const privateIdentifiers = [
+      'identifier',
+      'email_address',
+      'phone_number',
+      'first_name',
+      'last_name',
+      'password',
+      'username',
+    ];
+    final pairs = map.entries.map((e) {
+      if (privateIdentifiers.contains(e.key)) {
+        return e.key;
+      }
+      return '${e.key}=${_swapIdentifiers(e.value.toString())}';
+    }).toList()
+      ..sort();
+    return pairs.join('&');
+  }
+
+  @override
+  Future<Response> sendByteStream(
+    HttpMethod method,
+    Uri uri,
+    ByteStream stream,
+    int length,
+    Map<String, String> headers,
+  ) {
+    // TODO: add tests for sendFile
+    throw UnimplementedError();
+  }
+}

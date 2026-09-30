@@ -46,25 +46,60 @@ class PasskeyAuthService {
 
   /// Creates a Clerk passkey and registers it with the OS authenticator.
   Future<void> enroll(ClerkAuthState authState) async {
-    final passkey = await authState.createPasskey();
-    final nonce = passkey?.verification?.nonce;
-    if (passkey == null || nonce == null) {
-      throw Exception('تعذر بدء إنشاء مفتاح الدخول السريع.');
+    late final clerk.Passkey passkey;
+    try {
+      final created = await authState.createPasskey();
+      if (created == null) {
+        throw const PasskeyEnrollException(
+          'تعذر بدء إنشاء مفتاح الدخول السريع.',
+        );
+      }
+      passkey = created;
+    } catch (error) {
+      if (error is PasskeyEnrollException) rethrow;
+      throw PasskeyEnrollException(
+        'تعذر إنشاء مفتاح البصمة من Clerk. '
+        'تأكد أن Passkeys مفعّلة في الـ Dashboard.',
+        cause: error,
+      );
     }
-    if (nonce.user == null || nonce.relyingParty.name == null) {
-      throw Exception('بيانات المستخدم ناقصة لإنشاء مفتاح الدخول.');
+
+    final nonce = passkey.verification?.nonce;
+    if (nonce == null) {
+      throw const PasskeyEnrollException(
+        'Clerk لم يرجع تحدي البصمة. راجع إعداد Passkeys وNative Android.',
+      );
     }
+    if (nonce.user == null ||
+        nonce.user!.id.isEmpty ||
+        nonce.relyingParty.id.isEmpty) {
+      throw const PasskeyEnrollException(
+        'بيانات المستخدم أو نطاق البصمة ناقصة من Clerk.',
+      );
+    }
+
+    final rpName = nonce.relyingParty.name?.trim().isNotEmpty == true
+        ? nonce.relyingParty.name!
+        : nonce.relyingParty.id;
+    final userName = nonce.user!.name.trim().isNotEmpty
+        ? nonce.user!.name
+        : (nonce.user!.displayName.trim().isNotEmpty
+            ? nonce.user!.displayName
+            : nonce.user!.id);
+    final displayName = nonce.user!.displayName.trim().isNotEmpty
+        ? nonce.user!.displayName
+        : userName;
 
     final authenticator = PasskeyAuthenticator(debugMode: kDebugMode);
     final challenge = RegisterRequestType(
       challenge: nonce.challenge,
       relyingParty: RelyingPartyType(
-        name: nonce.relyingParty.name!,
+        name: rpName,
         id: nonce.relyingParty.id,
       ),
       user: UserType(
-        displayName: nonce.user!.displayName,
-        name: nonce.user!.name,
+        displayName: displayName,
+        name: userName,
         id: nonce.user!.id,
       ),
       excludeCredentials: const [],
@@ -77,8 +112,17 @@ class PasskeyAuthService {
       ),
     );
 
-    final res = await authenticator.register(challenge);
-    await authState.attemptPasskeyVerification(passkey, res.toJsonString());
+    try {
+      final res = await authenticator.register(challenge);
+      await authState.attemptPasskeyVerification(passkey, res.toJsonString());
+    } catch (error) {
+      throw PasskeyEnrollException(
+        'فشل تسجيل البصمة على الجهاز. '
+        'تأكد من Package + SHA-256 في Clerk وأن البصمة مفعّلة.',
+        cause: error,
+      );
+    }
+
     await _prefs.setEnabled(true);
     await _prefs.setPromptDismissed(true);
   }
@@ -126,4 +170,21 @@ class PasskeyAuthService {
   }
 
   Future<void> dismissEnrollPrompt() => _prefs.setPromptDismissed(true);
+
+  /// Allow offering enroll again after a failed attempt.
+  Future<void> resetEnrollPrompt() async {
+    await _prefs.setPromptDismissed(false);
+    await _prefs.setEnabled(false);
+  }
+}
+
+/// User-facing enroll failure (safe to show in dialogs).
+class PasskeyEnrollException implements Exception {
+  const PasskeyEnrollException(this.message, {this.cause});
+
+  final String message;
+  final Object? cause;
+
+  @override
+  String toString() => message;
 }

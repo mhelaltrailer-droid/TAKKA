@@ -121,38 +121,85 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     }
     if (choice != 'enable') return;
 
+    // Keep a blocking loader while the OS passkey sheet should appear.
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'انتظر نافذة البصمة / قفل الشاشة على الجهاز…',
+                style: TextStyle(height: 1.45),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Object? enrollError;
     try {
-      setState(() {
-        _isSubmitting = true;
-        _error = null;
-        _info = 'اتبع تعليمات الجهاز لتأكيد البصمة...';
-      });
-      await authState.safelyCall(
-        context,
-        () => _passkeys.enroll(authState),
-        onError: (error) {
-          if (mounted) {
-            setState(() => _error = error.message);
-          }
+      // Call enroll directly (not safelyCall) so we always surface failures.
+      await _passkeys.enroll(authState);
+    } catch (error) {
+      enrollError = error;
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop(); // close loader
+    }
+    if (!mounted) return;
+
+    if (enrollError != null) {
+      final message = enrollError is PasskeyEnrollException
+          ? enrollError.message
+          : friendlyErrorMessage(enrollError);
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('تعذر تفعيل البصمة'),
+            content: Text(
+              '$message\n\nتأكد من إعداد Passkeys في Clerk وربط تطبيق الأندرويد (Package + SHA-256)، وأن الجهاز يدعم البصمة/قفل الشاشة.',
+              style: const TextStyle(height: 1.55),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('حسنًا'),
+              ),
+            ],
+          );
         },
       );
-      if (!mounted) return;
-      if (_error == null) {
-        setState(() {
-          _info = 'تم تفعيل الدخول السريع بالبصمة على هذا الجهاز.';
-          _showPasskeySignIn = true;
-        });
-        await Future<void>.delayed(const Duration(milliseconds: 700));
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() => _error = friendlyErrorMessage(error));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      return;
     }
+
+    if (!mounted) return;
+    setState(() => _showPasskeySignIn = true);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('تم التفعيل'),
+          content: const Text(
+            'الدخول بالبصمة جاهز. بعد تسجيل الخروج ستجد زر «دخول بالبصمة» في شاشة تسجيل الدخول.',
+            style: TextStyle(height: 1.55),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('حسنًا'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _submitPasskeySignIn() async {

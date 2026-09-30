@@ -47,6 +47,11 @@ dependencies:
   url_launcher: ^6.3.2
   passkeys: ^2.22.3
 
+# Local fork: Clerk FAPI returns null passkey.name; upstream casts it as String.
+dependency_overrides:
+  clerk_auth:
+    path: packages/clerk_auth
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
