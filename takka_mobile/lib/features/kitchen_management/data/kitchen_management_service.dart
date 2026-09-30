@@ -307,6 +307,31 @@ class KitchenManagementService {
       throw Exception(json['error']?.toString() ?? 'تعذر إنهاء العرض');
     }
   }
+
+  Future<String> updateKitchenAvailability({
+    required String sessionToken,
+    required String availabilityStatus,
+  }) async {
+    final response = await http.patch(
+      _buildUri('/api/kitchen/availability'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'availabilityStatus': availabilityStatus,
+      }),
+    );
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        json['error']?.toString() ?? 'تعذر تحديث حالة المطبخ',
+      );
+    }
+
+    return json['availabilityStatus']?.toString() ?? availabilityStatus;
+  }
 }
 
 class KitchenProfileData {
@@ -323,6 +348,7 @@ class KitchenProfileData {
     required this.instapayLink,
     required this.nationalIdImageUrl,
     required this.approvalStatus,
+    required this.availabilityStatus,
     required this.rejectionReason,
   });
 
@@ -351,7 +377,29 @@ class KitchenProfileData {
       instapayLink: payment['paymentLink']?.toString(),
       nationalIdImageUrl: nationalIdDoc['fileUrl']?.toString(),
       approvalStatus: json['approvalStatus']?.toString() ?? 'PENDING',
+      availabilityStatus: json['availabilityStatus']?.toString() ?? 'CLOSED',
       rejectionReason: json['rejectionReason']?.toString(),
+    );
+  }
+
+  KitchenProfileData copyWith({
+    String? availabilityStatus,
+  }) {
+    return KitchenProfileData(
+      kitchenName: kitchenName,
+      description: description,
+      phoneNumber: phoneNumber,
+      cityName: cityName,
+      regionName: regionName,
+      addressLine: addressLine,
+      logoUrl: logoUrl,
+      coverImageUrl: coverImageUrl,
+      instapayHandle: instapayHandle,
+      instapayLink: instapayLink,
+      nationalIdImageUrl: nationalIdImageUrl,
+      approvalStatus: approvalStatus,
+      availabilityStatus: availabilityStatus ?? this.availabilityStatus,
+      rejectionReason: rejectionReason,
     );
   }
 
@@ -367,6 +415,7 @@ class KitchenProfileData {
   final String? instapayLink;
   final String? nationalIdImageUrl;
   final String approvalStatus;
+  final String availabilityStatus;
   final String? rejectionReason;
 }
 

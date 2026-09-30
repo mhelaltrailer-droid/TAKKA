@@ -25,11 +25,26 @@ class DeliveryLocationHeader extends StatefulWidget {
   State<DeliveryLocationHeader> createState() => _DeliveryLocationHeaderState();
 }
 
+class _SavedLocation {
+  const _SavedLocation({
+    required this.selected,
+    required this.current,
+    required this.mode,
+  });
+
+  final String selected;
+  final String current;
+  final _LocationMode mode;
+}
+
 class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
+  static const _gpsTimeout = Duration(seconds: 10);
+
   String _selectedDistrict = '';
   String _currentDistrict = '';
   _LocationMode _mode = _LocationMode.current;
-  var _autoDetecting = false;
+  var _resolvingLocation = true;
+  var _bootstrapping = false;
 
   @override
   void initState() {
@@ -37,39 +52,74 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
     _bootstrap();
   }
 
-  Future<void> _bootstrap() async {
-    // Load district names + GPS polygons from API before auto-detect.
-    await loadObourDistricts();
-    await _loadSaved();
-    await _autoDetectOnOpen();
-  }
-
-  Future<void> _loadSaved() async {
+  Future<_SavedLocation> _readSaved() async {
     final prefs = await SharedPreferences.getInstance();
     final selected = prefs.getString(_selectedDistrictKey) ?? '';
     final current = prefs.getString(_currentDistrictKey) ?? '';
     final modeRaw = prefs.getString(_locationModeKey);
-    final mode = modeRaw == 'other' ? _LocationMode.other : _LocationMode.current;
+    final mode =
+        modeRaw == 'other' ? _LocationMode.other : _LocationMode.current;
+    return _SavedLocation(
+      selected: selected,
+      current: current.isNotEmpty ? current : selected,
+      mode: mode,
+    );
+  }
 
-    if (!mounted) return;
-    setState(() {
-      _selectedDistrict = selected;
-      _currentDistrict = current.isNotEmpty ? current : selected;
-      _mode = mode;
-    });
-    if (selected.isNotEmpty) {
-      widget.onDistrictChanged(selected);
+  /// Districts + polygons → GPS first → fallback to saved → «اختر الحي».
+  Future<void> _bootstrap() async {
+    if (_bootstrapping) return;
+    _bootstrapping = true;
+    if (mounted) {
+      setState(() => _resolvingLocation = true);
+    }
+
+    try {
+      final districts = await loadObourDistricts();
+      final saved = await _readSaved();
+      final detectedName = await _tryDetectDistrict(districts);
+
+      if (!mounted) return;
+
+      if (detectedName != null) {
+        await _persist(
+          selected: detectedName,
+          current: detectedName,
+          mode: _LocationMode.current,
+          resolving: false,
+        );
+        return;
+      }
+
+      if (saved.selected.isNotEmpty) {
+        await _persist(
+          selected: saved.selected,
+          current: saved.current,
+          mode: saved.mode,
+          resolving: false,
+        );
+        return;
+      }
+
+      setState(() {
+        _selectedDistrict = '';
+        _currentDistrict = '';
+        _mode = _LocationMode.current;
+        _resolvingLocation = false;
+      });
+      widget.onDistrictChanged('');
+    } finally {
+      _bootstrapping = false;
+      if (mounted && _resolvingLocation) {
+        setState(() => _resolvingLocation = false);
+      }
     }
   }
 
-  /// On every home open: request GPS. Success → set district. Fail → keep saved / «اختر الحي».
-  Future<void> _autoDetectOnOpen() async {
-    if (_autoDetecting) return;
-    _autoDetecting = true;
-
+  Future<String?> _tryDetectDistrict(List<String> districts) async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) return null;
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -77,38 +127,29 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return;
+        return null;
       }
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
+          timeLimit: _gpsTimeout,
         ),
       );
 
       final detected =
           detectObourDistrict(position.latitude, position.longitude);
-      if (!mounted) return;
-
       if (detected.status != ObourDetectStatus.district) {
-        return;
+        return null;
       }
 
       final name = detected.districtName!;
-      final districts = await loadObourDistricts();
       if (!districts.contains(name)) {
-        return;
+        return null;
       }
-
-      await _persist(
-        selected: name,
-        current: name,
-        mode: _LocationMode.current,
-      );
+      return name;
     } catch (_) {
-      // Keep last saved district (or empty «اختر الحي»).
-    } finally {
-      _autoDetecting = false;
+      return null;
     }
   }
 
@@ -116,6 +157,7 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
     required String selected,
     required String current,
     required _LocationMode mode,
+    bool resolving = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_selectedDistrictKey, selected);
@@ -129,11 +171,13 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
       _selectedDistrict = selected;
       _currentDistrict = current;
       _mode = mode;
+      _resolvingLocation = resolving;
     });
     widget.onDistrictChanged(selected);
   }
 
   Future<void> _openSheet() async {
+    if (_resolvingLocation) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -161,8 +205,12 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final title = _resolvingLocation
+        ? 'جاري تحديد موقعك...'
+        : (_selectedDistrict.isEmpty ? 'اختر الحي' : _selectedDistrict);
+
     return InkWell(
-      onTap: _openSheet,
+      onTap: _resolvingLocation ? null : _openSheet,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -181,17 +229,27 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
               children: [
                 Expanded(
                   child: Text(
-                    _selectedDistrict.isEmpty ? 'اختر الحي' : _selectedDistrict,
-                    style: const TextStyle(
+                    title,
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
+                      color: _resolvingLocation
+                          ? TakkaColors.muted
+                          : null,
                     ),
                   ),
                 ),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: TakkaColors.muted,
-                ),
+                if (_resolvingLocation)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: TakkaColors.muted,
+                  ),
               ],
             ),
             const Text(
@@ -319,6 +377,7 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
         ),
       );
 

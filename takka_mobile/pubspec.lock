@@ -662,7 +662,7 @@ packages:
     source: hosted
     version: "4.1.0"
   passkeys:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: passkeys
       sha256: "1596fa3940c458fcd0062ce222d7fec69d9b70187a4b9e67d585e0386f73e18c"

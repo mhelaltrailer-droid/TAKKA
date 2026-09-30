@@ -96,15 +96,24 @@ class TakkaCardSkeleton extends StatelessWidget {
 }
 
 class CustomerHomeSkeleton extends StatelessWidget {
-  const CustomerHomeSkeleton({super.key});
+  const CustomerHomeSkeleton({
+    super.key,
+    this.includeLocationPlaceholder = true,
+  });
+
+  /// When false, omit the top location bone (real header stays mounted above).
+  final bool includeLocationPlaceholder;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(20),
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        const TakkaBone(height: 48, radius: 16),
-        const SizedBox(height: 16),
+        if (includeLocationPlaceholder) ...[
+          const TakkaBone(height: 48, radius: 16),
+          const SizedBox(height: 16),
+        ],
         const TakkaBone(height: 140, radius: 24),
         const SizedBox(height: 16),
         const TakkaBone(height: 22, width: 120),

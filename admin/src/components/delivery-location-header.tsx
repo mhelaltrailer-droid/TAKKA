@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
@@ -14,12 +14,63 @@ import {
 const SELECTED_KEY = "takka.selectedObourDistrict";
 const CURRENT_KEY = "takka.currentObourDistrict";
 const MODE_KEY = "takka.deliveryLocationMode";
+const GPS_TIMEOUT_MS = 10000;
 
 type LocationMode = "current" | "other";
+
+type SavedLocation = {
+  selected: string;
+  current: string;
+  mode: LocationMode;
+};
 
 type DeliveryLocationHeaderProps = {
   onDistrictChange?: (district: string) => void;
 };
+
+function readSavedLocation(): SavedLocation {
+  const selected = window.localStorage.getItem(SELECTED_KEY) ?? "";
+  const current = window.localStorage.getItem(CURRENT_KEY) ?? "";
+  const modeRaw = window.localStorage.getItem(MODE_KEY);
+  return {
+    selected,
+    current: current || selected,
+    mode: modeRaw === "other" ? "other" : "current",
+  };
+}
+
+function detectDistrictName(knownDistricts: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const detected = detectObourDistrict(
+          position.coords.latitude,
+          position.coords.longitude,
+          getRuntimeDistrictPolygons(),
+          getRuntimeCityRing(),
+        );
+
+        if (detected.status !== "district") {
+          resolve(null);
+          return;
+        }
+
+        const name = detected.districtName;
+        const known =
+          knownDistricts.includes(name) ||
+          (OBOUR_DISTRICTS as readonly string[]).includes(name);
+        resolve(known ? name : null);
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: GPS_TIMEOUT_MS, maximumAge: 0 },
+    );
+  });
+}
 
 export function DeliveryLocationHeader({
   onDistrictChange,
@@ -32,24 +83,16 @@ export function DeliveryLocationHeader({
   const [pickingCurrent, setPickingCurrent] = useState(false);
   const [districts, setDistricts] = useState<string[]>([...OBOUR_DISTRICTS]);
   const [loadingDistricts, setLoadingDistricts] = useState(true);
+  const [resolvingLocation, setResolvingLocation] = useState(true);
   const [detecting, setDetecting] = useState(false);
   const [detectStatus, setDetectStatus] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const savedRef = useRef<SavedLocation | null>(null);
+  const didResolveRef = useRef(false);
+  const onDistrictChangeRef = useRef(onDistrictChange);
+  onDistrictChangeRef.current = onDistrictChange;
 
   useEffect(() => {
-    const selected = window.localStorage.getItem(SELECTED_KEY) ?? "";
-    const current = window.localStorage.getItem(CURRENT_KEY) ?? "";
-    const modeRaw = window.localStorage.getItem(MODE_KEY);
-    const nextMode: LocationMode = modeRaw === "other" ? "other" : "current";
-
-    setSelectedDistrict(selected);
-    setCurrentDistrict(current || selected);
-    setMode(nextMode);
-    if (selected) {
-      onDistrictChange?.(selected);
-    }
-    setHydrated(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    savedRef.current = readSavedLocation();
   }, []);
 
   useEffect(() => {
@@ -84,59 +127,56 @@ export function DeliveryLocationHeader({
     };
   }, []);
 
-  // Every home open: try GPS. Success → set district. Fail → keep last saved / «اختر الحي».
+  // Districts ready → GPS first → fallback to saved → «اختر الحي» (once per mount).
   useEffect(() => {
-    if (!hydrated || loadingDistricts) {
+    if (loadingDistricts || didResolveRef.current) {
       return;
     }
-    if (!navigator.geolocation) {
-      return;
-    }
+    didResolveRef.current = true;
 
     let cancelled = false;
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (cancelled) return;
+    async function resolveLocation() {
+      setResolvingLocation(true);
+      const known = districts.length > 0 ? districts : [...OBOUR_DISTRICTS];
+      const detected = await detectDistrictName(known);
 
-        const detected = detectObourDistrict(
-          position.coords.latitude,
-          position.coords.longitude,
-          getRuntimeDistrictPolygons(),
-          getRuntimeCityRing(),
-        );
+      if (cancelled) {
+        return;
+      }
 
-        if (detected.status !== "district") {
-          return;
-        }
-
-        const name = detected.districtName;
-        const known =
-          districts.includes(name) ||
-          (OBOUR_DISTRICTS as readonly string[]).includes(name);
-        if (!known) {
-          return;
-        }
-
-        setSelectedDistrict(name);
-        setCurrentDistrict(name);
+      if (detected) {
+        setSelectedDistrict(detected);
+        setCurrentDistrict(detected);
         setMode("current");
-        window.localStorage.setItem(SELECTED_KEY, name);
-        window.localStorage.setItem(CURRENT_KEY, name);
+        window.localStorage.setItem(SELECTED_KEY, detected);
+        window.localStorage.setItem(CURRENT_KEY, detected);
         window.localStorage.setItem(MODE_KEY, "current");
-        onDistrictChange?.(name);
-      },
-      () => {
-        // Permission denied / unavailable — keep last saved district.
-      },
-      { enableHighAccuracy: true, timeout: 15000 },
-    );
+        onDistrictChangeRef.current?.(detected);
+        setResolvingLocation(false);
+        return;
+      }
 
+      const saved = savedRef.current ?? readSavedLocation();
+      if (saved.selected) {
+        setSelectedDistrict(saved.selected);
+        setCurrentDistrict(saved.current || saved.selected);
+        setMode(saved.mode);
+        onDistrictChangeRef.current?.(saved.selected);
+      } else {
+        setSelectedDistrict("");
+        setCurrentDistrict("");
+        setMode("current");
+        onDistrictChangeRef.current?.("");
+      }
+      setResolvingLocation(false);
+    }
+
+    void resolveLocation();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, loadingDistricts]);
+  }, [loadingDistricts, districts]);
 
   function persist(
     selected: string,
@@ -146,16 +186,20 @@ export function DeliveryLocationHeader({
     setSelectedDistrict(selected);
     setCurrentDistrict(current);
     setMode(nextMode);
+    setResolvingLocation(false);
     window.localStorage.setItem(SELECTED_KEY, selected);
     window.localStorage.setItem(CURRENT_KEY, current);
     window.localStorage.setItem(MODE_KEY, nextMode);
-    onDistrictChange?.(selected);
+    onDistrictChangeRef.current?.(selected);
     setOpen(false);
     setPickingOther(false);
     setPickingCurrent(false);
   }
 
   function openSheet() {
+    if (resolvingLocation) {
+      return;
+    }
     setPickingOther(false);
     setPickingCurrent(false);
     setDetectStatus(null);
@@ -242,22 +286,31 @@ export function DeliveryLocationHeader({
         setDetectStatus("تعذر تحديد الموقع. اختر الحي يدويًا.");
         setDetecting(false);
       },
-      { enableHighAccuracy: true, timeout: 15000 },
+      { enableHighAccuracy: true, timeout: GPS_TIMEOUT_MS, maximumAge: 0 },
     );
   }
+
+  const title = resolvingLocation
+    ? "جاري تحديد موقعك..."
+    : selectedDistrict || "اختر الحي";
 
   return (
     <div className="mb-6">
       <button
         type="button"
         onClick={openSheet}
-        className="flex w-full flex-col items-start gap-1 text-right"
+        disabled={resolvingLocation}
+        className="flex w-full flex-col items-start gap-1 text-right disabled:opacity-80"
       >
         <span className="text-xs text-[#6b4a3a]">التوصيل / الاستلام في</span>
         <span className="flex items-center gap-2 text-xl font-bold text-[#3b2418]">
-          {selectedDistrict || "اختر الحي"}
+          {resolvingLocation ? (
+            <span className="text-[#6b4a3a]">{title}</span>
+          ) : (
+            title
+          )}
           <span aria-hidden className="text-sm text-[#6b4a3a]">
-            ▼
+            {resolvingLocation ? "…" : "▼"}
           </span>
         </span>
         <span className="text-sm text-[#6b4a3a]">{OBOUR_CITY_NAME}</span>
@@ -286,101 +339,94 @@ export function DeliveryLocationHeader({
                   setPickingCurrent(false);
                   setDetectStatus(null);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-[#3b2418]"
-                aria-label="إغلاق"
+                className="rounded-full px-2 py-1 text-sm text-[#6b4a3a]"
               >
-                ×
+                إغلاق
               </button>
-              <h2 className="flex-1 text-center text-lg font-bold text-[#3b2418]">
-                التوصيل / الاستلام في
-              </h2>
-              <span className="w-10" />
+              <h3 className="flex-1 text-center text-lg font-bold">
+                اختر موقع التوصيل
+              </h3>
+              <span className="w-12" />
             </div>
 
-            {pickingOther || pickingCurrent ? (
+            {!pickingOther && !pickingCurrent ? (
               <div className="space-y-3">
-                <p className="font-bold text-[#3b2418]">
-                  {pickingCurrent
-                    ? "حدّد حيّك الحالي"
-                    : "اختر حيًا آخر للتوصيل / الاستلام"}
-                </p>
-                {pickingCurrent ? (
-                  <DetectLocationButton
-                    detecting={detecting}
-                    detectStatus={detectStatus}
-                    onClick={detectMyLocation}
-                  />
-                ) : null}
-                {loadingDistricts ? (
-                  <div className="space-y-2 py-2">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <Skeleton key={i} className="h-12 w-full rounded-2xl" />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="max-h-[45vh] space-y-2 overflow-y-auto">
-                    {districts.map((district) => {
-                      const selected = pickingCurrent
-                        ? district === currentDistrict
-                        : district === selectedDistrict && mode === "other";
-                      return (
-                        <button
-                          key={district}
-                          type="button"
-                          onClick={() => pickDistrict(district)}
-                          className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-right font-semibold transition ${
-                            selected
-                              ? "border-[#e67e22] border-2 text-[#3b2418]"
-                              : "border-[#ead9c8] text-[#3b2418]"
-                          }`}
-                        >
-                          <span>{district}</span>
-                          {selected ? (
-                            <span className="text-[#e67e22]">✓</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setPickingOther(false);
-                    setPickingCurrent(false);
-                    setDetectStatus(null);
-                  }}
-                  className="w-full py-2 text-sm font-medium text-[#6b4a3a]"
+                  onClick={selectCurrent}
+                  className="flex w-full items-start gap-3 rounded-2xl border border-[#ead9c8] bg-[#fff8f1] px-4 py-3 text-right"
                 >
-                  رجوع
+                  <span className="mt-0.5 text-lg" aria-hidden>
+                    📍
+                  </span>
+                  <span>
+                    <span className="block font-semibold text-[#3b2418]">
+                      موقعي الحالي
+                    </span>
+                    <span className="mt-1 block text-sm text-[#6b4a3a]">
+                      {currentDistrict || "حدّد موقعك أو اختر الحي"}
+                    </span>
+                  </span>
                 </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <DetectLocationButton
+
+                <button
+                  type="button"
+                  onClick={openOtherPicker}
+                  className="flex w-full items-start gap-3 rounded-2xl border border-[#ead9c8] px-4 py-3 text-right"
+                >
+                  <span className="mt-0.5 text-lg" aria-hidden>
+                    🏠
+                  </span>
+                  <span>
+                    <span className="block font-semibold text-[#3b2418]">
+                      توصيل لحي آخر
+                    </span>
+                    <span className="mt-1 block text-sm text-[#6b4a3a]">
+                      اختر حيًا داخل مدينة العبور
+                    </span>
+                  </span>
+                </button>
+
+                <DetectButton
                   detecting={detecting}
                   detectStatus={detectStatus}
                   onClick={detectMyLocation}
                 />
-                <LocationOptionCard
-                  title="التوصيل إلى موقع آخر"
-                  subtitle="اختر حيًا آخر من مدينة العبور"
-                  selected={mode === "other"}
-                  onClick={openOtherPicker}
-                  leading="📍"
-                  trailing="‹"
-                />
-                <LocationOptionCard
-                  title="التوصيل إلى الموقع الحالي"
-                  subtitle={
-                    currentDistrict
-                      ? `${currentDistrict}، ${OBOUR_CITY_NAME}`
-                      : "حدّد حيّك الحالي في مدينة العبور"
-                  }
-                  selected={mode === "current" && Boolean(currentDistrict)}
-                  onClick={selectCurrent}
-                  leading="◎"
-                  trailing="✓"
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-[#6b4a3a]">
+                  {pickingCurrent
+                    ? "اختر حي موقعك الحالي"
+                    : "اختر حي التوصيل"}
+                </p>
+                {loadingDistricts ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full rounded-xl" />
+                    <Skeleton className="h-10 w-full rounded-xl" />
+                  </div>
+                ) : (
+                  <div className="max-h-72 space-y-2 overflow-y-auto">
+                    {districts.map((district) => (
+                      <button
+                        key={district}
+                        type="button"
+                        onClick={() => pickDistrict(district)}
+                        className={`flex w-full rounded-xl border px-4 py-3 text-right text-sm font-medium ${
+                          selectedDistrict === district
+                            ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-secondary)]"
+                            : "border-[#ead9c8] text-[#3b2418]"
+                        }`}
+                      >
+                        {district}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <DetectButton
+                  detecting={detecting}
+                  detectStatus={detectStatus}
+                  onClick={detectMyLocation}
                 />
               </div>
             )}
@@ -391,7 +437,7 @@ export function DeliveryLocationHeader({
   );
 }
 
-function DetectLocationButton({
+function DetectButton({
   detecting,
   detectStatus,
   onClick,
@@ -401,12 +447,12 @@ function DetectLocationButton({
   onClick: () => void;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 pt-1">
       <button
         type="button"
-        onClick={onClick}
         disabled={detecting}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#e67e22] bg-[#fff8f1] px-4 py-3 text-sm font-bold text-[#3b2418] transition hover:bg-[#fff1e4] disabled:opacity-60"
+        onClick={onClick}
+        className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3 text-sm font-semibold text-[#4a2e22] transition hover:border-[var(--brand-primary)] disabled:opacity-60"
       >
         {detecting ? "جارٍ تحديد موقعك..." : "تحديد موقعي الحالي (GPS)"}
       </button>
@@ -414,46 +460,5 @@ function DetectLocationButton({
         <p className="text-xs leading-6 text-[#6b4a3a]">{detectStatus}</p>
       ) : null}
     </div>
-  );
-}
-
-function LocationOptionCard({
-  title,
-  subtitle,
-  selected,
-  onClick,
-  leading,
-  trailing,
-}: {
-  title: string;
-  subtitle: string;
-  selected: boolean;
-  onClick: () => void;
-  leading: string;
-  trailing: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-2xl border bg-white px-4 py-4 text-right transition ${
-        selected ? "border-2 border-[#e67e22]" : "border border-[#ead9c8]"
-      }`}
-    >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#ead9c8] text-lg">
-        {leading}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-bold text-[#3b2418]">{title}</span>
-        <span className="mt-1 block truncate text-sm text-[#6b4a3a]">
-          {subtitle}
-        </span>
-      </span>
-      <span
-        className={`text-xl ${selected ? "text-[#e67e22]" : "text-[#6b4a3a]"}`}
-      >
-        {trailing}
-      </span>
-    </button>
   );
 }

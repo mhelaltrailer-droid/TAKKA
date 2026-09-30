@@ -5,6 +5,7 @@ import { UserButton } from "@clerk/nextjs";
 import { OrderStatus } from "@prisma/client";
 
 import { LiveNotificationBell } from "@/components/live-notification-bell";
+import { KitchenAvailabilityToggle } from "@/components/kitchen-availability-toggle";
 import { StatusPill } from "@/components/status-pill";
 import { TakkaFamilyJoinCard } from "@/components/takka-family-join-card";
 import { requireAuth } from "@/lib/auth";
@@ -196,6 +197,14 @@ export default async function DashboardPage() {
                         }
                       />
                     </div>
+                    <KitchenAvailabilityToggle
+                      initialStatus={
+                        kitchen.availabilityStatus === "OPEN"
+                          ? "OPEN"
+                          : "CLOSED"
+                      }
+                      approvalStatus={kitchen.approvalStatus}
+                    />
                     <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-[#6b4a3a]">
                       <p>أصناف المنيو: {kitchen._count.menuItems}</p>
                       <p>إجمالي الطلبات: {kitchen._count.orders}</p>

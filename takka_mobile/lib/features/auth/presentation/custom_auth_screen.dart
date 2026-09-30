@@ -3,6 +3,7 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/auth/passkey_auth_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/friendly_error.dart';
 import '../../../core/validation/phone.dart';
@@ -34,17 +35,22 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _codeController = TextEditingController();
+  final _passkeys = const PasskeyAuthService();
 
   String? _error;
   String? _info;
   var _isSubmitting = false;
   var _obscurePassword = true;
   var _obscureConfirmPassword = true;
+  var _showPasskeySignIn = false;
 
   @override
   void initState() {
     super.initState();
     _mode = widget.initialMode;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshPasskeySignInVisibility();
+    });
   }
 
   @override
@@ -56,6 +62,137 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     _confirmPasswordController.dispose();
     _codeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshPasskeySignInVisibility() async {
+    if (!mounted) return;
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final show = await _passkeys.shouldShowSignInButton(authState);
+      if (mounted) {
+        setState(() => _showPasskeySignIn = show);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _showPasskeySignIn = false);
+      }
+    }
+  }
+
+  Future<void> _finishAuthenticated(ClerkAuthState authState) async {
+    await _maybeOfferPasskeyEnroll(authState);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _maybeOfferPasskeyEnroll(ClerkAuthState authState) async {
+    if (!mounted) return;
+    final shouldOffer = await _passkeys.shouldOfferEnroll(authState);
+    if (!shouldOffer || !mounted) return;
+
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('تفعيل الدخول بالبصمة؟'),
+          content: const Text(
+            'بعد التفعيل تقدر تدخل في المرات الجاية بالبصمة أو قفل الشاشة من غير ما تكتب كلمة المرور كل مرة.',
+            style: TextStyle(height: 1.55),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('later'),
+              child: const Text('لاحقًا'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop('enable'),
+              child: const Text('تفعيل'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    if (choice == 'later') {
+      await _passkeys.dismissEnrollPrompt();
+      return;
+    }
+    if (choice != 'enable') return;
+
+    try {
+      setState(() {
+        _isSubmitting = true;
+        _error = null;
+        _info = 'اتبع تعليمات الجهاز لتأكيد البصمة...';
+      });
+      await authState.safelyCall(
+        context,
+        () => _passkeys.enroll(authState),
+        onError: (error) {
+          if (mounted) {
+            setState(() => _error = error.message);
+          }
+        },
+      );
+      if (!mounted) return;
+      if (_error == null) {
+        setState(() {
+          _info = 'تم تفعيل الدخول السريع بالبصمة على هذا الجهاز.';
+          _showPasskeySignIn = true;
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = friendlyErrorMessage(error));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _submitPasskeySignIn() async {
+    final authState = ClerkAuth.of(context, listen: false);
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+      _info = null;
+    });
+
+    try {
+      await authState.safelyCall(
+        context,
+        () => _passkeys.signIn(authState),
+        onError: (error) {
+          if (mounted) {
+            setState(() => _error = error.message);
+          }
+        },
+      );
+
+      if (!mounted) return;
+      if (authState.user != null) {
+        await _finishAuthenticated(authState);
+        return;
+      }
+      if (_error == null) {
+        setState(() {
+          _error = 'تعذر الدخول بالبصمة. استخدم الإيميل وكلمة المرور.';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = friendlyErrorMessage(error));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   void _switchMode(AuthMode mode) {
@@ -118,7 +255,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 
       if (!mounted) return;
       if (authState.user != null) {
-        Navigator.of(context).pop();
+        await _finishAuthenticated(authState);
         return;
       }
 
@@ -183,7 +320,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 
       if (!mounted) return;
       if (authState.user != null) {
-        Navigator.of(context).pop();
+        await _finishAuthenticated(authState);
         return;
       }
 
@@ -301,7 +438,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 
       if (!mounted) return;
       if (authState.user != null) {
-        Navigator.of(context).pop();
+        await _finishAuthenticated(authState);
       } else if (_error == null) {
         setState(() => _error = 'تعذر إكمال إعادة تعيين كلمة المرور.');
       }
@@ -373,7 +510,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 
       if (!mounted) return;
       if (authState.user != null) {
-        Navigator.of(context).pop();
+        await _finishAuthenticated(authState);
         return;
       }
 
@@ -416,7 +553,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 
       if (!mounted) return;
       if (authState.user != null) {
-        Navigator.of(context).pop();
+        await _finishAuthenticated(authState);
       } else if (_error == null) {
         setState(() {
           _error = 'لم يكتمل التحقق بعد. تأكد من الرمز وحاول مجددًا.';
@@ -656,6 +793,31 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
 
   List<Widget> _buildSignInFields() {
     return [
+      if (_showPasskeySignIn) ...[
+        OutlinedButton.icon(
+          onPressed: _isSubmitting ? null : _submitPasskeySignIn,
+          icon: const Icon(Icons.fingerprint_rounded),
+          label: const Text('دخول بالبصمة'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                'أو',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+            ),
+            const Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 14),
+      ],
       _LabeledField(
         label: 'البريد الإلكتروني',
         child: TextField(

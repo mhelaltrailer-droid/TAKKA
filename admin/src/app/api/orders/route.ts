@@ -1,4 +1,10 @@
-import { DeliveryType, NotificationType, Prisma } from "@prisma/client";
+import {
+  ApprovalStatus,
+  AvailabilityStatus,
+  DeliveryType,
+  NotificationType,
+  Prisma,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
@@ -66,6 +72,23 @@ export async function POST(request: Request) {
 
     if (!kitchen) {
       return NextResponse.json({ error: "المطبخ غير موجود." }, { status: 404 });
+    }
+
+    if (kitchen.approvalStatus !== ApprovalStatus.APPROVED) {
+      return NextResponse.json(
+        { error: "هذا المطبخ غير متاح للطلبات حاليًا." },
+        { status: 400 },
+      );
+    }
+
+    if (kitchen.availabilityStatus !== AvailabilityStatus.OPEN) {
+      return NextResponse.json(
+        {
+          error:
+            "المطبخ مغلق حاليًا ولا يستقبل طلبات. جرّب مطبخًا آخر أو عد لاحقًا.",
+        },
+        { status: 400 },
+      );
     }
 
     if (deliveryType === DeliveryType.DELIVERY && !payload.customerAddressId) {

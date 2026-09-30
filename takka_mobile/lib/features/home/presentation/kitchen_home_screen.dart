@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/community/takka_partners_community.dart';
 import '../../../core/realtime/kitchen_new_order_alert_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/ui/confirm_destructive.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../../auth/data/mobile_me_service.dart';
 import '../../kitchen_management/data/kitchen_management_service.dart';
 import '../../kitchen_management/presentation/kitchen_menu_management_screen.dart';
@@ -32,12 +34,14 @@ class KitchenHomeScreen extends StatefulWidget {
 class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
   final _service = const KitchenManagementService();
   final _meService = const MobileMeService();
-  Future<KitchenProfileData?>? _profileFuture;
+  KitchenProfileData? _profile;
+  bool _profileLoading = true;
+  bool _availabilityBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _profileFuture = _loadProfile();
+    _refreshProfile();
     _startNewOrderAlerts();
   }
 
@@ -59,10 +63,68 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
     } catch (_) {}
   }
 
-  Future<KitchenProfileData?> _loadProfile() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken();
-    return _service.loadProfile(sessionToken: token.jwt);
+  Future<void> _refreshProfile() async {
+    setState(() => _profileLoading = true);
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      final profile = await _service.loadProfile(sessionToken: token.jwt);
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _profileLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _profileLoading = false);
+    }
+  }
+
+  Future<void> _setAvailability(String nextStatus) async {
+    if (_availabilityBusy || _profile == null) return;
+    if (_profile!.approvalStatus != 'APPROVED') return;
+    if (_profile!.availabilityStatus == nextStatus) return;
+
+    if (nextStatus == 'CLOSED') {
+      final confirmed = await confirmDestructive(
+        context,
+        title: 'إغلاق استقبال الطلبات؟',
+        message:
+            'عند الإغلاق لن يظهر مطبخك للعملاء ولن يستقبل طلبات جديدة.',
+        confirmLabel: 'إغلاق',
+      );
+      if (!confirmed || !mounted) return;
+    }
+
+    setState(() => _availabilityBusy = true);
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      final resolved = await _service.updateKitchenAvailability(
+        sessionToken: token.jwt,
+        availabilityStatus: nextStatus,
+      );
+      if (!mounted) return;
+      setState(() {
+        _profile = _profile!.copyWith(availabilityStatus: resolved);
+        _availabilityBusy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            resolved == 'OPEN'
+                ? 'المطبخ مفتوح الآن ويظهر للعملاء.'
+                : 'تم إغلاق المطبخ ولن يظهر للعملاء.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _availabilityBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyErrorMessage(error))),
+      );
+    }
   }
 
   Future<void> _openTakkaFamily() async {
@@ -77,6 +139,9 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final approved = _profile?.approvalStatus == 'APPROVED';
+    final isOpen = _profile?.availabilityStatus == 'OPEN';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('تكة - المطبخ'),
@@ -109,26 +174,34 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
         children: [
           _KitchenIntroCard(displayName: widget.displayName),
           const SizedBox(height: 16),
-          FutureBuilder<KitchenProfileData?>(
-            future: _profileFuture,
-            builder: (context, snapshot) {
-              final approved = snapshot.data?.approvalStatus == 'APPROVED';
-              if (!approved) {
-                return const SizedBox.shrink();
-              }
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _TakkaFamilyJoinCard(onJoin: _openTakkaFamily),
-              );
-            },
-          ),
+          if (_profileLoading)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            if (approved) ...[
+              _KitchenAvailabilityCard(
+                isOpen: isOpen,
+                busy: _availabilityBusy,
+                onToggle: () => _setAvailability(isOpen ? 'CLOSED' : 'OPEN'),
+              ),
+              const SizedBox(height: 16),
+              _TakkaFamilyJoinCard(onJoin: _openTakkaFamily),
+              const SizedBox(height: 16),
+            ] else if (_profile != null) ...[
+              const _KitchenAvailabilityPendingCard(),
+              const SizedBox(height: 16),
+            ],
+          ],
           FilledButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              await Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const KitchenOnboardingScreen(),
                 ),
               );
+              await _refreshProfile();
             },
             icon: const Icon(Icons.verified_user_outlined),
             label: const Text('إعداد المطبخ'),
@@ -191,6 +264,100 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
             description: 'طلبات مكتملة وملغاة ومبيعات آخر 30 يومًا أو مدة تختارها.',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _KitchenAvailabilityCard extends StatelessWidget {
+  const _KitchenAvailabilityCard({
+    required this.isOpen,
+    required this.busy,
+    required this.onToggle,
+  });
+
+  final bool isOpen;
+  final bool busy;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: isOpen ? const Color(0xFFECFDF5) : const Color(0xFFFFF8F1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: isOpen ? const Color(0xFFA7F3D0) : const Color(0xFFE8D5C4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              isOpen ? 'المطبخ مفتوح للعملاء' : 'المطبخ مغلق',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isOpen
+                  ? 'يظهر مطبخك في «تاكل ايه؟» واستعراض المطابخ ويمكن استقبال الطلبات.'
+                  : 'لن يظهر مطبخك للعملاء حتى تفتح استقبال الطلبات.',
+              style: TextStyle(height: 1.5, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: busy ? null : onToggle,
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    isOpen ? Colors.white : TakkaColors.primary,
+                foregroundColor:
+                    isOpen ? TakkaColors.deep : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: Text(
+                busy
+                    ? 'جاري التحديث...'
+                    : isOpen
+                        ? 'إغلاق الاستقبال'
+                        : 'فتح استقبال الطلبات',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KitchenAvailabilityPendingCard extends StatelessWidget {
+  const _KitchenAvailabilityPendingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFFFFF8F1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Color(0xFFE8D5C4)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'فتح المطبخ للعملاء',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'بعد موافقة الإدارة يمكنك فتح استقبال الطلبات ليظهر مطبخك للعملاء.',
+              style: TextStyle(height: 1.5),
+            ),
+          ],
+        ),
       ),
     );
   }

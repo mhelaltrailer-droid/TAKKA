@@ -262,278 +262,296 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
               ],
             ),
-      body: FutureBuilder<CustomerBootstrapData>(
-        future: _bootstrapFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const CustomerHomeSkeleton();
-          }
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: DeliveryLocationHeader(
+              onDistrictChanged: _onDistrictChanged,
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<CustomerBootstrapData>(
+              future: _bootstrapFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const CustomerHomeSkeleton(
+                    includeLocationPlaceholder: false,
+                  );
+                }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: TakkaErrorRetry(
-                onRetry: () {
-                  setState(() {
-                    _bootstrapFuture = _loadBootstrap();
-                  });
-                },
-              ),
-            );
-          }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: TakkaErrorRetry(
+                      onRetry: () {
+                        setState(() {
+                          _bootstrapFuture = _loadBootstrap();
+                        });
+                      },
+                    ),
+                  );
+                }
 
-          final data = snapshot.data!;
-          final discovery = _discoveryKitchens(data.kitchens);
-          final allKitchens = _allKitchens(data.kitchens);
+                final data = snapshot.data!;
+                final discovery = _discoveryKitchens(data.kitchens);
+                final allKitchens = _allKitchens(data.kitchens);
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              final future = _loadBootstrap();
-              final promos = loadPromoSlides();
-              setState(() {
-                _bootstrapFuture = future;
-                _promosFuture = promos;
-              });
-              await Future.wait([future, promos]);
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                DeliveryLocationHeader(
-                  onDistrictChanged: _onDistrictChanged,
-                ),
-                const SizedBox(height: 16),
-                FutureBuilder<List<PromoSlide>>(
-                  future: _promosFuture,
-                  builder: (context, promoSnapshot) {
-                    final slides =
-                        promoSnapshot.data ?? defaultPromoSlides;
-                    return PromoCarousel(slides: slides);
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    final future = _loadBootstrap();
+                    final promos = loadPromoSlides();
+                    setState(() {
+                      _bootstrapFuture = future;
+                      _promosFuture = promos;
+                    });
+                    await Future.wait([future, promos]);
                   },
-                ),
-                const SizedBox(height: 16),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const DealsBrowseScreen(),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(18),
-                    child: Ink(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      FutureBuilder<List<PromoSlide>>(
+                        future: _promosFuture,
+                        builder: (context, promoSnapshot) {
+                          final slides =
+                              promoSnapshot.data ?? defaultPromoSlides;
+                          return PromoCarousel(slides: slides);
+                        },
                       ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFFFFB86B),
-                          width: 2,
-                        ),
-                        gradient: const LinearGradient(
-                          begin: Alignment.centerRight,
-                          end: Alignment.centerLeft,
-                          colors: [
-                            Color(0xFFFFF7ED),
-                            Color(0xFFECFDF5),
-                          ],
-                        ),
-                      ),
-                      child: const Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 16),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const DealsBrowseScreen(),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(18),
+                          child: Ink(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: const Color(0xFFFFB86B),
+                                width: 2,
+                              ),
+                              gradient: const LinearGradient(
+                                begin: Alignment.centerRight,
+                                end: Alignment.centerLeft,
+                                colors: [
+                                  Color(0xFFFFF7ED),
+                                  Color(0xFFECFDF5),
+                                ],
+                              ),
+                            ),
+                            child: const Row(
                               children: [
-                                Text(
-                                  '🔥 العروض',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '🔥 العروض',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'كل العروض وأطباق اليوم في مدينة العبور',
+                                        style: TextStyle(
+                                          color: TakkaColors.muted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'كل العروض وأطباق اليوم في مدينة العبور',
-                                  style: TextStyle(
-                                    color: TakkaColors.muted,
-                                    fontSize: 13,
-                                  ),
+                                Icon(
+                                  Icons.chevron_left_rounded,
+                                  color: Color(0xFFE67E22),
                                 ),
                               ],
                             ),
                           ),
-                          Icon(
-                            Icons.chevron_left_rounded,
-                            color: Color(0xFFE67E22),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                NearbyDealsStrip(regionName: _selectedDistrict),
-                FoodCategoriesStrip(
-                  categories: _foodCategories,
-                  selectedLabel: _foodCategories.any(
-                    (item) => item.label == _selectedCategory,
-                  )
-                      ? _selectedCategory
-                      : null,
-                  onSelect: _onCategorySelected,
-                ),
-                const SizedBox(height: 16),
-                _WelcomeCard(
-                  title: widget.isGuest
-                      ? 'أهلًا بك كزائر'
-                      : 'أهلًا ${data.user.fullName}',
-                  description: widget.isGuest
-                      ? 'يمكنك استعراض المطابخ والأصناف والأسعار. للطلب أو أي خطوة أخرى سجّل كعميل.'
-                      : 'تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة.',
-                ),
-                if (!widget.embeddedInShell && !widget.isGuest) ...[
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const MyOrdersScreen(),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.receipt_long_outlined),
-                    label: const Text('طلباتي'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const AddressesScreen(),
+                      ),
+                      const SizedBox(height: 16),
+                      NearbyDealsStrip(regionName: _selectedDistrict),
+                      FoodCategoriesStrip(
+                        categories: _foodCategories,
+                        selectedLabel: _foodCategories.any(
+                          (item) => item.label == _selectedCategory,
+                        )
+                            ? _selectedCategory
+                            : null,
+                        onSelect: _onCategorySelected,
+                      ),
+                      const SizedBox(height: 16),
+                      _WelcomeCard(
+                        title: widget.isGuest
+                            ? 'أهلًا بك كزائر'
+                            : 'أهلًا ${data.user.fullName}',
+                        description: widget.isGuest
+                            ? 'يمكنك استعراض المطابخ والأصناف والأسعار. للطلب أو أي خطوة أخرى سجّل كعميل.'
+                            : 'تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة.',
+                      ),
+                      if (!widget.embeddedInShell && !widget.isGuest) ...[
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const MyOrdersScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.receipt_long_outlined),
+                          label: const Text('طلباتي'),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.location_on_outlined),
-                    label: const Text('عناوين التوصيل'),
-                  ),
-                ],
-                if (widget.isGuest) ...[
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => showGuestSignUpPrompt(context),
-                    child: const Text('سجل الآن للمتابعة'),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                Text(
-                  _selectedDistrict.isEmpty
-                      ? _selectedCategory.isEmpty
-                          ? 'المطابخ المتاحة'
-                          : 'المطابخ المتاحة · $_selectedCategory'
-                      : _selectedCategory.isEmpty
-                          ? 'مطابخ قريبة منك · $_selectedDistrict'
-                          : 'مطابخ قريبة · $_selectedDistrict · $_selectedCategory',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const AddressesScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.location_on_outlined),
+                          label: const Text('عناوين التوصيل'),
+                        ),
+                      ],
+                      if (widget.isGuest) ...[
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: () => showGuestSignUpPrompt(context),
+                          child: const Text('سجل الآن للمتابعة'),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Text(
+                        _selectedDistrict.isEmpty
+                            ? _selectedCategory.isEmpty
+                                ? 'المطابخ المتاحة'
+                                : 'المطابخ المتاحة · $_selectedCategory'
+                            : _selectedCategory.isEmpty
+                                ? 'مطابخ قريبة منك · $_selectedDistrict'
+                                : 'مطابخ قريبة · $_selectedDistrict · $_selectedCategory',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
-                ),
-                const SizedBox(height: 12),
-                if (_selectedDistrict.isEmpty) ...[
-                  const _SelectDistrictHint(),
-                  const SizedBox(height: 12),
-                  if (discovery.isEmpty)
-                    const _EmptyAllKitchensState()
-                  else
-                    ...discovery.map(
-                      (kitchen) => _KitchenCard(
-                        kitchen: kitchen,
-                        isGuest: widget.isGuest,
-                      ),
-                    ),
-                ] else if (discovery.isEmpty)
-                  const _EmptyAllKitchensState()
-                else
-                  ...discovery.map(
-                    (kitchen) => _KitchenCard(
-                      kitchen: kitchen,
-                      isGuest: widget.isGuest,
-                    ),
-                  ),
-                const SizedBox(height: 24),
-                Text(
-                  'استعراض المطابخ',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'كل المطابخ المتاحة في العبور',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() => _searchQuery = value);
-                  },
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'ابحث في كل المطابخ',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _searchQuery.isEmpty
-                        ? null
-                        : IconButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                            icon: const Icon(Icons.close_rounded),
+                      const SizedBox(height: 12),
+                      if (_selectedDistrict.isEmpty) ...[
+                        const _SelectDistrictHint(),
+                        const SizedBox(height: 12),
+                        if (discovery.isEmpty)
+                          const _EmptyAllKitchensState()
+                        else
+                          ...discovery.map(
+                            (kitchen) => _KitchenCard(
+                              kitchen: kitchen,
+                              isGuest: widget.isGuest,
+                            ),
                           ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      borderSide: const BorderSide(color: TakkaColors.softLine),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      borderSide: const BorderSide(color: TakkaColors.softLine),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      borderSide: const BorderSide(
-                        color: TakkaColors.primary,
-                        width: 1.4,
+                      ] else if (discovery.isEmpty)
+                        const _EmptyAllKitchensState()
+                      else
+                        ...discovery.map(
+                          (kitchen) => _KitchenCard(
+                            kitchen: kitchen,
+                            isGuest: widget.isGuest,
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'استعراض المطابخ',
+                        style:
+                            Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
                       ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'كل المطابخ المتاحة في العبور',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: (value) {
+                          setState(() => _searchQuery = value);
+                        },
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'ابحث في كل المطابخ',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: _searchQuery.isEmpty
+                              ? null
+                              : IconButton(
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(999),
+                            borderSide: const BorderSide(
+                              color: TakkaColors.softLine,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(999),
+                            borderSide: const BorderSide(
+                              color: TakkaColors.softLine,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(999),
+                            borderSide: const BorderSide(
+                              color: TakkaColors.primary,
+                              width: 1.4,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (allKitchens.isEmpty)
+                        _EmptyAllKitchensState(searchQuery: _searchQuery)
+                      else
+                        ...allKitchens.map(
+                          (kitchen) => _KitchenCard(
+                            kitchen: kitchen,
+                            isGuest: widget.isGuest,
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                if (allKitchens.isEmpty)
-                  _EmptyAllKitchensState(searchQuery: _searchQuery)
-                else
-                  ...allKitchens.map(
-                    (kitchen) => _KitchenCard(
-                      kitchen: kitchen,
-                      isGuest: widget.isGuest,
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
