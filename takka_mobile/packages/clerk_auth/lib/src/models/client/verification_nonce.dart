@@ -37,8 +37,17 @@ class VerificationNonce with InformativeToStringMixin {
   final PasskeyUser? user;
 
   /// fromJson
-  static VerificationNonce fromJson(Map<String, dynamic> json) =>
-      _$VerificationNonceFromJson(json);
+  static VerificationNonce fromJson(Map<String, dynamic> json) {
+    // Clerk may nest WebAuthn options under `publicKey`.
+    final nested = json['publicKey'];
+    final Map<String, dynamic> data;
+    if (nested is Map<String, dynamic>) {
+      data = <String, dynamic>{...json, ...nested};
+    } else {
+      data = json;
+    }
+    return _$VerificationNonceFromJson(data);
+  }
 
   /// toJson
   @override

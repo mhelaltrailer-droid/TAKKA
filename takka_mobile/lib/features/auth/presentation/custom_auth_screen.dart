@@ -80,6 +80,10 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
   }
 
   Future<void> _finishAuthenticated(ClerkAuthState authState) async {
+    // Drop the "verifying…" state before passkey dialogs so OTP UI is not stuck.
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+    }
     await _maybeOfferPasskeyEnroll(authState);
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -165,7 +169,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
           return AlertDialog(
             title: const Text('تعذر تفعيل البصمة'),
             content: Text(
-              '$message\n\nتأكد من إعداد Passkeys في Clerk وربط تطبيق الأندرويد (Package + SHA-256)، وأن الجهاز يدعم البصمة/قفل الشاشة.',
+              message,
               style: const TextStyle(height: 1.55),
             ),
             actions: [

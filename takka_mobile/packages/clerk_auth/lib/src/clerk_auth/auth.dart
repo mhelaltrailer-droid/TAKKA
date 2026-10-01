@@ -862,8 +862,31 @@ class Auth {
   ///
   Future<Passkey?> createPasskey() async {
     final resp = await _api.createPasskey().then(_housekeeping);
+    // ClerkAuthState.handleError may only stream when a listener is attached,
+    // so still fail the Future when the API response is an error.
+    if (resp.isError) {
+      throw ClerkError.from(resp.errorCollection);
+    }
     if (resp.response case final json?) {
       return Passkey.fromJson(json);
+    }
+    return _passkeyNeedingVerification(resp.client?.user?.passkeys) ??
+        _passkeyNeedingVerification(user?.passkeys);
+  }
+
+  Passkey? _passkeyNeedingVerification(List<Passkey>? passkeys) {
+    if (passkeys == null || passkeys.isEmpty) {
+      return null;
+    }
+    for (final passkey in passkeys.reversed) {
+      if (passkey.verification?.nonce != null) {
+        return passkey;
+      }
+    }
+    for (final passkey in passkeys.reversed) {
+      if (passkey.isUnverified) {
+        return passkey;
+      }
     }
     return null;
   }
