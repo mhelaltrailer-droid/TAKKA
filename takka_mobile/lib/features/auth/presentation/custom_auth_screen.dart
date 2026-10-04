@@ -220,7 +220,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         () => _passkeys.signIn(authState),
         onError: (error) {
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
@@ -299,7 +299,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         },
         onError: (error) {
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
@@ -364,7 +364,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         },
         onError: (error) {
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
@@ -416,7 +416,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         },
         onError: (error) {
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
@@ -453,8 +453,8 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       setState(() => _error = 'أدخل رمز التأكيد.');
       return;
     }
-    if (password.length < 15) {
-      setState(() => _error = 'كلمة المرور يجب أن تكون 15 حرفًا على الأقل.');
+    if (password.length < 8) {
+      setState(() => _error = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.');
       return;
     }
     if (password != confirm) {
@@ -482,7 +482,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         },
         onError: (error) {
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
@@ -504,6 +504,13 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     }
   }
 
+  void _clearTransientErrors() {
+    ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
+  }
+
+  String _messageFromClerkError(clerk.ClerkError error) =>
+      clerkUserFacingMessage(error);
+
   Future<void> _submitSignUpDetails() async {
     final phoneError = phoneValidationMessage(_phoneController.text);
     if (phoneError != null) {
@@ -518,8 +525,8 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     }
 
     final password = _passwordController.text;
-    if (password.length < 15) {
-      setState(() => _error = 'كلمة المرور يجب أن تكون 15 حرفًا على الأقل.');
+    if (password.length < 8) {
+      setState(() => _error = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.');
       return;
     }
 
@@ -532,6 +539,15 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
     setState(() {
       _isSubmitting = true;
       _error = null;
+      _info = null;
+    });
+    _clearTransientErrors();
+
+    // ClerkErrorListener swallows API failures into a stream (no throw). Capture
+    // them so we never open the verify step when prepare_verification failed.
+    clerk.ClerkError? streamedError;
+    final errorSub = ClerkAuth.errorStreamOf(context).listen((error) {
+      streamedError = error;
     });
 
     try {
@@ -548,31 +564,116 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
             metadata: {'egyptianPhone': localPhone},
           );
 
-          if (authState.signUp?.unverified(clerk.Field.emailAddress) == true) {
+          final signUp = authState.signUp;
+          if (signUp != null &&
+              signUp.unverified(clerk.Field.emailAddress) &&
+              !signUp.isVerifying(clerk.Strategy.emailCode)) {
             await authState.attemptSignUp(strategy: clerk.Strategy.emailCode);
           }
         },
         onError: (error) {
+          streamedError ??= error;
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
 
       if (!mounted) return;
+      _clearTransientErrors();
+
       if (authState.user != null) {
         await _finishAuthenticated(authState);
         return;
       }
 
-      if (_error == null) {
-        setState(() => _step = _SignUpStep.verify);
+      final signUp = authState.signUp;
+      final codePrepared =
+          signUp != null && signUp.isVerifying(clerk.Strategy.emailCode);
+
+      if (codePrepared && streamedError == null && _error == null) {
+        setState(() {
+          _step = _SignUpStep.verify;
+          _codeController.clear();
+          _info = 'أرسلنا رمز التأكيد إلى ${_emailController.text.trim()}.';
+        });
+        return;
       }
+
+      setState(() {
+        _error = _error ??
+            (streamedError != null
+                ? _messageFromClerkError(streamedError!)
+                : 'تعذر إرسال رمز التأكيد إلى البريد. تحقق من البيانات وحاول مجددًا.');
+      });
     } catch (error) {
       if (mounted) {
         setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
+      await errorSub.cancel();
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _resendSignUpCode() async {
+    final authState = ClerkAuth.of(context, listen: false);
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+      _info = null;
+    });
+    _clearTransientErrors();
+
+    clerk.ClerkError? streamedError;
+    final errorSub = ClerkAuth.errorStreamOf(context).listen((error) {
+      streamedError = error;
+    });
+
+    try {
+      await authState.safelyCall(
+        context,
+        () async {
+          if (authState.signUp?.isVerifying(clerk.Strategy.emailCode) == true) {
+            await authState.resendCode(clerk.Strategy.emailCode);
+          } else {
+            await authState.attemptSignUp(strategy: clerk.Strategy.emailCode);
+          }
+        },
+        onError: (error) {
+          streamedError ??= error;
+          if (mounted) {
+            setState(() => _error = _messageFromClerkError(error));
+          }
+        },
+      );
+
+      if (!mounted) return;
+      _clearTransientErrors();
+
+      final prepared =
+          authState.signUp?.isVerifying(clerk.Strategy.emailCode) == true;
+      if (prepared && streamedError == null && _error == null) {
+        setState(() {
+          _info = 'تم إرسال رمز جديد إلى ${_emailController.text.trim()}.';
+        });
+        return;
+      }
+
+      setState(() {
+        _error = _error ??
+            (streamedError != null
+                ? _messageFromClerkError(streamedError!)
+                : 'تعذر إعادة إرسال الرمز الآن. حاول بعد لحظات.');
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = friendlyErrorMessage(error));
+      }
+    } finally {
+      await errorSub.cancel();
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
@@ -585,6 +686,12 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
       _isSubmitting = true;
       _error = null;
     });
+    _clearTransientErrors();
+
+    clerk.ClerkError? streamedError;
+    final errorSub = ClerkAuth.errorStreamOf(context).listen((error) {
+      streamedError = error;
+    });
 
     try {
       await authState.safelyCall(
@@ -596,18 +703,24 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
           );
         },
         onError: (error) {
+          streamedError ??= error;
           if (mounted) {
-            setState(() => _error = error.message);
+            setState(() => _error = _messageFromClerkError(error));
           }
         },
       );
 
       if (!mounted) return;
+      _clearTransientErrors();
+
       if (authState.user != null) {
         await _finishAuthenticated(authState);
-      } else if (_error == null) {
+      } else {
         setState(() {
-          _error = 'لم يكتمل التحقق بعد. تأكد من الرمز وحاول مجددًا.';
+          _error = _error ??
+              (streamedError != null
+                  ? _messageFromClerkError(streamedError!)
+                  : 'لم يكتمل التحقق بعد. تأكد من الرمز وحاول مجددًا.');
         });
       }
     } catch (error) {
@@ -615,6 +728,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
         setState(() => _error = friendlyErrorMessage(error));
       }
     } finally {
+      await errorSub.cancel();
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
@@ -781,6 +895,16 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
                                                   : 'تسجيل الدخول'),
                         ),
                       ),
+                      if (showingSignUpVerify) ...[
+                        const SizedBox(height: 10),
+                        TextButton(
+                          onPressed: _isSubmitting ? null : _resendSignUpCode,
+                          child: const Text(
+                            'إعادة إرسال الرمز',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
                       if (!showingVerify) ...[
                         const SizedBox(height: 16),
                         if (isForgot)
@@ -961,7 +1085,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
           obscureText: _obscurePassword,
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
-            hintText: '15 حرفًا على الأقل',
+            hintText: '8 أحرف على الأقل',
             suffixIcon: IconButton(
               tooltip:
                   _obscurePassword ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
@@ -1051,7 +1175,7 @@ class _CustomAuthScreenState extends State<CustomAuthScreen> {
           obscureText: _obscurePassword,
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
-            hintText: '15 حرفًا على الأقل',
+            hintText: '8 أحرف على الأقل',
             suffixIcon: IconButton(
               tooltip: _obscurePassword ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
               onPressed: () {

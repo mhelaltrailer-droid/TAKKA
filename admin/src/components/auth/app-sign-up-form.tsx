@@ -42,8 +42,8 @@ export function AppSignUpForm() {
       return;
     }
 
-    if (password.length < 15) {
-      setError("كلمة المرور يجب أن تكون 15 حرفًا على الأقل.");
+    if (password.length < 8) {
+      setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل.");
       return;
     }
 
@@ -173,7 +173,7 @@ export function AppSignUpForm() {
         label="كلمة المرور"
         value={password}
         onChange={setPassword}
-        placeholder="15 حرفًا على الأقل"
+        placeholder="8 أحرف على الأقل"
         autoComplete="new-password"
       />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

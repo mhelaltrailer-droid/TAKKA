@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   isUploadPurpose,
   requireUploadApiUser,
+  UploadValidationError,
   uploadImageFile,
 } from "@/lib/server-upload";
 
@@ -47,7 +48,8 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "تعذر رفع الصورة.";
+    const status = error instanceof UploadValidationError ? 400 : 500;
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status });
   }
 }

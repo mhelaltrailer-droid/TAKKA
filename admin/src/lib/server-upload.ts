@@ -1,11 +1,64 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { UserRole } from "@prisma/client";
+import sharp from "sharp";
 import { UTApi } from "uploadthing/server";
 
 import { db } from "@/lib/db";
 import { type AppRole, isAppRole } from "@/lib/roles";
 
 const utapi = new UTApi();
+const WEBP_QUALITY = 85;
+
+/** Client-facing upload validation errors (map to HTTP 400). */
+export class UploadValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadValidationError";
+  }
+}
+
+function assertImageMimeType(mimeType: string) {
+  // Empty MIME is allowed: some mobile clients omit it; sharp validates bytes.
+  if (!mimeType) {
+    return;
+  }
+
+  if (!mimeType.startsWith("image/")) {
+    throw new UploadValidationError("يسمح برفع الصور فقط.");
+  }
+}
+
+async function convertImageToWebp(file: File): Promise<File> {
+  assertImageMimeType(file.type);
+
+  const input = Buffer.from(await file.arrayBuffer());
+
+  try {
+    const meta = await sharp(input, { failOn: "error", animated: false }).metadata();
+    if (!meta.format) {
+      throw new Error("missing format");
+    }
+  } catch {
+    throw new UploadValidationError("يسمح برفع الصور فقط.");
+  }
+
+  try {
+    const webpBuffer = await sharp(input, { failOn: "error", animated: false })
+      .rotate()
+      .webp({ quality: WEBP_QUALITY })
+      .toBuffer();
+
+    const baseName =
+      file.name.replace(/\.[^.]+$/u, "").trim() || "image";
+
+    return new File([new Uint8Array(webpBuffer)], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } catch {
+    throw new UploadValidationError("تعذر تحويل الصورة إلى WebP.");
+  }
+}
 
 export const UPLOAD_PURPOSES = {
   kitchenLogo: { maxBytes: 4 * 1024 * 1024, adminOnly: false },
@@ -97,23 +150,24 @@ export async function uploadImageFile(params: {
   const config = UPLOAD_PURPOSES[params.purpose];
 
   if (config.adminOnly && params.role !== "admin") {
-    throw new Error("غير مصرح برفع هذا الملف.");
-  }
-
-  if (!params.file.type.startsWith("image/")) {
-    throw new Error("يسمح برفع الصور فقط.");
+    throw new UploadValidationError("غير مصرح برفع هذا الملف.");
   }
 
   if (params.file.size <= 0) {
-    throw new Error("الملف فارغ.");
+    throw new UploadValidationError("الملف فارغ.");
   }
 
   if (params.file.size > config.maxBytes) {
     const maxMb = Math.round(config.maxBytes / (1024 * 1024));
-    throw new Error(`حجم الصورة أكبر من الحد المسموح (${maxMb}MB).`);
+    throw new UploadValidationError(
+      `حجم الصورة أكبر من الحد المسموح (${maxMb}MB).`,
+    );
   }
 
-  const result = await utapi.uploadFiles(params.file);
+  // Accept any real image bytes, reject non-images, store as WebP.
+  const webpFile = await convertImageToWebp(params.file);
+
+  const result = await utapi.uploadFiles(webpFile);
 
   if (result.error) {
     throw new Error(result.error.message || "فشل رفع الصورة.");
@@ -128,5 +182,6 @@ export async function uploadImageFile(params: {
     url,
     key: result.data.key,
     purpose: params.purpose,
+    contentType: "image/webp",
   };
 }

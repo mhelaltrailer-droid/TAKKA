@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glow Chevrons — Demo</title>
+    <style>
+      :root {
+        --bg: #050508;
+        --panel: #0c0c10;
+        --glow: #3b82f6;
+        --glow-hot: #60a5fa;
+        --glow-core: #93c5fd;
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --stroke-w: 5.5;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        overflow-x: hidden;
+      }
+
+      /* ---------- Preloader counter (JohnyDev-style) ---------- */
+      .preloader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background: #000;
+        transition: opacity 0.55s ease, visibility 0.55s ease;
+      }
+
+      .preloader.is-done {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .preloader .percentage {
+        font-size: clamp(4.5rem, 18vw, 7.5rem);
+        font-weight: 600;
+        letter-spacing: -0.04em;
+        color: #404040;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        user-select: none;
+      }
+
+      /* ---------- Particles background ---------- */
+      #particles-js {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        background:
+          radial-gradient(ellipse 90% 60% at 20% 10%, rgba(40, 20, 70, 0.45), transparent 55%),
+          radial-gradient(ellipse 70% 50% at 80% 80%, rgba(10, 40, 90, 0.4), transparent 50%),
+          radial-gradient(ellipse 50% 40% at 50% 40%, rgba(20, 20, 40, 0.5), transparent 60%),
+          #050508;
+      }
+
+      #particles-js canvas {
+        filter: drop-shadow(0 0 4px rgba(91, 163, 255, 0.55))
+          drop-shadow(0 0 10px rgba(59, 130, 246, 0.35));
+      }
+
+      /* ---------- Main content ---------- */
+      .page {
+        position: relative;
+        z-index: 1;
+        min-height: 100vh;
+        width: min(1100px, 100%);
+        margin: 0 auto;
+        display: grid;
+        gap: 28px;
+        justify-items: center;
+        align-content: center;
+        padding: 24px;
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s ease, transform 0.7s ease;
+      }
+
+      .page.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .label {
+        text-align: center;
+      }
+
+      .label h1 {
+        font-size: clamp(1.4rem, 3vw, 2rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .label p {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .stage {
+        width: min(560px, 92vw);
+        aspect-ratio: 1;
+        border-radius: 28px;
+        background:
+          radial-gradient(
+            circle at 50% 55%,
+            color-mix(in srgb, var(--glow) 8%, transparent) 0%,
+            rgba(12, 12, 16, 0.18) 55%,
+            rgba(8, 8, 12, 0.08) 100%
+          );
+        position: relative;
+        overflow: visible;
+        box-shadow: none;
+        isolation: isolate;
+        backdrop-filter: blur(1.5px);
+      }
+
+      .stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.02);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .stage::after {
+        content: "";
+        position: absolute;
+        inset: auto 10% 8% 10%;
+        height: 28%;
+        background: radial-gradient(
+          ellipse at center,
+          color-mix(in srgb, var(--glow) 18%, transparent),
+          transparent 70%
+        );
+        filter: blur(18px);
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .glow-stack {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .glow {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(40px);
+        mix-blend-mode: screen;
+        will-change: transform, opacity;
+      }
+
+      .glow-a {
+        width: 42%;
+        height: 42%;
+        background: radial-gradient(circle, var(--glow-core) 0%, var(--glow) 35%, transparent 70%);
+        opacity: 0.55;
+        animation: pulse-a 3.4s ease-in-out infinite;
+      }
+
+      .glow-b {
+        width: 58%;
+        height: 34%;
+        background: radial-gradient(circle, var(--glow-hot) 0%, var(--glow) 40%, transparent 72%);
+        opacity: 0.35;
+        filter: blur(55px);
+        animation: pulse-b 4.4s ease-in-out infinite;
+      }
+
+      .glow-c {
+        width: 28%;
+        height: 28%;
+        background: radial-gradient(circle, #dbeafe 0%, var(--glow-hot) 40%, transparent 70%);
+        opacity: 0.45;
+        filter: blur(22px);
+        animation: drift 5s ease-in-out infinite;
+      }
+
+      .chevrons {
+        position: absolute;
+        inset: 18%;
+        z-index: 3;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4%;
+        align-items: center;
+        direction: ltr;
+        animation: float 5.6s ease-in-out infinite;
+      }
+
+      .chevron {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .chevron path.body {
+        fill: url(#chevronGrad);
+        fill-opacity: 0.28;
+      }
+
+      .chevron path.sheen {
+        fill: url(#chevronSheen);
+        opacity: 0.22;
+      }
+
+      /* Thick luminous outline drawn on the marks themselves */
+      .chevron path.glow-stroke-outer {
+        fill: none;
+        stroke: var(--glow);
+        stroke-width: calc(var(--stroke-w) * 2.4);
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        opacity: 0.35;
+        filter: blur(6px);
+        animation: stroke-pulse 3s ease-in-out infinite;
+      }
+
+      .chevron path.glow-stroke {
+        fill: none;
+        stroke: var(--glow-hot);
+        stroke-width: var(--stroke-w);
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        filter: drop-shadow(0 0 6px var(--glow)) drop-shadow(0 0 14px var(--glow-hot));
+        animation: stroke-pulse 3s ease-in-out infinite;
+      }
+
+      .chevron path.glow-stroke-core {
+        fill: none;
+        stroke: var(--glow-core);
+        stroke-width: calc(var(--stroke-w) * 0.45);
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        opacity: 0.95;
+        animation: stroke-pulse 3s ease-in-out infinite;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      button {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 10px 16px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: background 0.2s ease, border-color 0.2s ease;
+        backdrop-filter: blur(8px);
+      }
+
+      button:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.22);
+      }
+
+      button.active {
+        background: color-mix(in srgb, var(--glow) 22%, transparent);
+        border-color: color-mix(in srgb, var(--glow-hot) 55%, transparent);
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-align: center;
+        max-width: 46ch;
+        line-height: 1.5;
+      }
+
+      .theme-blue {
+        --glow: #3b82f6;
+        --glow-hot: #60a5fa;
+        --glow-core: #93c5fd;
+      }
+
+      .theme-takka {
+        --glow: #e67e22;
+        --glow-hot: #f0a05a;
+        --glow-core: #ffd2a8;
+      }
+
+      .theme-violet {
+        --glow: #8b5cf6;
+        --glow-hot: #a78bfa;
+        --glow-core: #ddd6fe;
+      }
+
+      @keyframes pulse-a {
+        0%,
+        100% {
+          transform: scale(0.92);
+          opacity: 0.65;
+        }
+        50% {
+          transform: scale(1.08);
+          opacity: 0.95;
+        }
+      }
+
+      @keyframes pulse-b {
+        0%,
+        100% {
+          transform: scale(1) translateY(4%);
+          opacity: 0.4;
+        }
+        50% {
+          transform: scale(1.15) translateY(-2%);
+          opacity: 0.7;
+        }
+      }
+
+      @keyframes drift {
+        0%,
+        100% {
+          transform: translate(-8%, 4%) scale(0.9);
+          opacity: 0.55;
+        }
+        33% {
+          transform: translate(10%, -6%) scale(1.05);
+          opacity: 0.85;
+        }
+        66% {
+          transform: translate(2%, 8%) scale(1);
+          opacity: 0.65;
+        }
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+
+      @keyframes stroke-pulse {
+        0%,
+        100% {
+          opacity: 0.75;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .glow,
+        .chevrons,
+        .chevron path.glow-stroke,
+        .chevron path.glow-stroke-outer,
+        .chevron path.glow-stroke-core {
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="theme-violet">
+    <!-- Counter overlay -->
+    <div class="preloader" id="preloader" aria-live="polite">
+      <div class="percentage" id="percentage">0</div>
+    </div>
+
+    <!-- Connected glowing dots -->
+    <div id="particles-js" aria-hidden="true"></div>
+
+    <div class="page" id="page">
+      <div class="stage" id="stage" aria-label="Animated chevron glow">
+        <div class="glow-stack" aria-hidden="true">
+          <div class="glow glow-b"></div>
+          <div class="glow glow-a"></div>
+          <div class="glow glow-c"></div>
+        </div>
+
+        <div class="chevrons" aria-hidden="true">
+          <svg width="0" height="0" style="position: absolute">
+            <defs>
+              <linearGradient id="chevronGrad" x1="18%" y1="0%" x2="82%" y2="100%">
+                <stop offset="0%" stop-color="#2c2e3a" stop-opacity="0.55" />
+                <stop offset="38%" stop-color="#1a1c26" stop-opacity="0.4" />
+                <stop offset="100%" stop-color="#0b0c11" stop-opacity="0.3" />
+              </linearGradient>
+              <linearGradient id="chevronSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.16)" />
+                <stop offset="35%" stop-color="rgba(255,255,255,0.04)" />
+                <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          <!-- Left > -->
+          <svg class="chevron" viewBox="0 0 140 220" role="img">
+            <path
+              class="glow-stroke-outer"
+              d="M32 22 C24 22 20 32 25 39 L82 100 C88 107 88 113 82 120 L25 181 C20 188 24 198 32 198 L62 198 C69 198 75 194 79 188 L122 122 C132 110 132 110 122 98 L79 32 C75 26 69 22 62 22 Z"
+            />
+            <path
+              class="body"
+              d="M32 22 C24 22 20 32 25 39 L82 100 C88 107 88 113 82 120 L25 181 C20 188 24 198 32 198 L62 198 C69 198 75 194 79 188 L122 122 C132 110 132 110 122 98 L79 32 C75 26 69 22 62 22 Z"
+            />
+            <path
+              class="sheen"
+              d="M32 22 C24 22 20 32 25 39 L82 100 C88 107 88 113 82 120 L25 181 C20 188 24 198 32 198 L62 198 C69 198 75 194 79 188 L122 122 C132 110 132 110 122 98 L79 32 C75 26 69 22 62 22 Z"
+            />
+            <path
+              class="glow-stroke"
+              d="M32 22 C24 22 20 32 25 39 L82 100 C88 107 88 113 82 120 L25 181 C20 188 24 198 32 198 L62 198 C69 198 75 194 79 188 L122 122 C132 110 132 110 122 98 L79 32 C75 26 69 22 62 22 Z"
+            />
+            <path
+              class="glow-stroke-core"
+              d="M32 22 C24 22 20 32 25 39 L82 100 C88 107 88 113 82 120 L25 181 C20 188 24 198 32 198 L62 198 C69 198 75 194 79 188 L122 122 C132 110 132 110 122 98 L79 32 C75 26 69 22 62 22 Z"
+            />
+          </svg>
+
+          <!-- Right < -->
+          <svg class="chevron" viewBox="0 0 140 220" role="img">
+            <path
+              class="glow-stroke-outer"
+              d="M108 22 C116 22 120 32 115 39 L58 100 C52 107 52 113 58 120 L115 181 C120 188 116 198 108 198 L78 198 C71 198 65 194 61 188 L18 122 C8 110 8 110 18 98 L61 32 C65 26 71 22 78 22 Z"
+            />
+            <path
+              class="body"
+              d="M108 22 C116 22 120 32 115 39 L58 100 C52 107 52 113 58 120 L115 181 C120 188 116 198 108 198 L78 198 C71 198 65 194 61 188 L18 122 C8 110 8 110 18 98 L61 32 C65 26 71 22 78 22 Z"
+            />
+            <path
+              class="sheen"
+              d="M108 22 C116 22 120 32 115 39 L58 100 C52 107 52 113 58 120 L115 181 C120 188 116 198 108 198 L78 198 C71 198 65 194 61 188 L18 122 C8 110 8 110 18 98 L61 32 C65 26 71 22 78 22 Z"
+            />
+            <path
+              class="glow-stroke"
+              d="M108 22 C116 22 120 32 115 39 L58 100 C52 107 52 113 58 120 L115 181 C120 188 116 198 108 198 L78 198 C71 198 65 194 61 188 L18 122 C8 110 8 110 18 98 L61 32 C65 26 71 22 78 22 Z"
+            />
+            <path
+              class="glow-stroke-core"
+              d="M108 22 C116 22 120 32 115 39 L58 100 C52 107 52 113 58 120 L115 181 C120 188 116 198 108 198 L78 198 C71 198 65 194 61 188 L18 122 C8 110 8 110 18 98 L61 32 C65 26 71 22 78 22 Z"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button type="button" data-theme="theme-blue">أزرق (Gemini)</button>
+        <button type="button" data-theme="theme-takka">برتقالي تكة</button>
+        <button type="button" class="active" data-theme="theme-violet">بنفسجي</button>
+      </div>
+
+      <p class="hint">
+        صفحة تجريبية —
+        <code>marketing/demos/glow-chevrons.html</code>
+      </p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <script>
+      // Theme buttons
+      const buttons = document.querySelectorAll("[data-theme]");
+      buttons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.body.classList.remove("theme-blue", "theme-takka", "theme-violet");
+          document.body.classList.add(btn.dataset.theme);
+          buttons.forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+      });
+
+      // Preloader counter 0 → 100 then reveal content
+      (function runCounter() {
+        const preloader = document.getElementById("preloader");
+        const percentage = document.getElementById("percentage");
+        const page = document.getElementById("page");
+        let value = 0;
+
+        const tick = () => {
+          // Ease: faster at start, slower near end (similar feel to site loaders)
+          const step = value < 70 ? 2 + Math.random() * 3 : value < 90 ? 1 + Math.random() * 1.5 : 0.4 + Math.random();
+          value = Math.min(100, value + step);
+          percentage.textContent = String(Math.floor(value));
+
+          if (value < 100) {
+            requestAnimationFrame(() => setTimeout(tick, 18));
+          } else {
+            percentage.textContent = "100";
+            setTimeout(() => {
+              preloader.classList.add("is-done");
+              page.classList.add("is-visible");
+            }, 220);
+          }
+        };
+
+        // Small delay so first paint shows 0
+        setTimeout(tick, 120);
+      })();
+
+      // Particles network (JohnyDev-like config)
+      function initParticles() {
+        if (typeof particlesJS !== "function") return;
+        particlesJS("particles-js", {
+          particles: {
+            number: { value: 70, density: { enable: true, value_area: 800 } },
+            color: { value: "#e8f1ff" },
+            shape: { type: "circle" },
+            opacity: { value: 0.72, random: true },
+            size: { value: 5.5, random: true },
+            line_linked: {
+              enable: true,
+              distance: 260,
+              color: "#5ba3ff",
+              opacity: 0.72,
+              width: 2.2,
+            },
+            move: {
+              enable: true,
+              speed: 4.2,
+              direction: "none",
+              random: false,
+              straight: false,
+              out_mode: "out",
+              bounce: false,
+            },
+          },
+          interactivity: {
+            detect_on: "canvas",
+            events: {
+              onhover: { enable: true, mode: "repulse" },
+              onclick: { enable: true, mode: "push" },
+              resize: true,
+            },
+            modes: {
+              repulse: { distance: 160, duration: 0.4 },
+              push: { particles_nb: 3 },
+            },
+          },
+          retina_detect: true,
+        });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initParticles);
+      } else {
+        initParticles();
+      }
+    </script>
+  </body>
+</html>

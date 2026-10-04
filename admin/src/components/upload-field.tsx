@@ -175,7 +175,7 @@ export function UploadField({
         </button>
 
         <p className="mt-2 text-xs text-zinc-500">
-          صورة فقط · بحد أقصى الحجم المسموح
+          صورة فقط (أي صيغة) · تُحفظ WebP · بحد أقصى الحجم المسموح
         </p>
 
         {status === "uploading" ? (

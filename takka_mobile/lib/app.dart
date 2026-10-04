@@ -62,6 +62,7 @@ Future<void> _handleClerkError(BuildContext context, Object error) async {
   }
   showFriendlyError(
     context,
+    error: error,
     onRetry: () {
       try {
         final auth = ClerkAuth.of(context, listen: false);

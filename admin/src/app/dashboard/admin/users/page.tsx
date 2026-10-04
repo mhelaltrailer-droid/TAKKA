@@ -20,25 +20,42 @@ function dbRoleToAppRole(role: UserRole): AppRole {
   }
 }
 
+function parseRoleFilter(value: string | undefined): UserRole | undefined {
+  switch (value) {
+    case UserRole.ADMIN:
+      return UserRole.ADMIN;
+    case UserRole.CUSTOMER:
+      return UserRole.CUSTOMER;
+    case UserRole.KITCHEN_OWNER:
+      return UserRole.KITCHEN_OWNER;
+    default:
+      return undefined;
+  }
+}
+
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; role?: string }>;
 }) {
   const admin = await requireRole(["admin"]);
-  const { q } = await searchParams;
-  const query = q?.trim() ?? "";
+  const params = await searchParams;
+  const query = params.q?.trim() ?? "";
+  const roleFilter = parseRoleFilter(params.role);
 
   const users = await db.user.findMany({
-    where: query
-      ? {
-          OR: [
-            { fullName: { contains: query, mode: "insensitive" } },
-            { email: { contains: query, mode: "insensitive" } },
-            { phoneNumber: { contains: query, mode: "insensitive" } },
-          ],
-        }
-      : undefined,
+    where: {
+      ...(roleFilter ? { role: roleFilter } : {}),
+      ...(query
+        ? {
+            OR: [
+              { fullName: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+              { phoneNumber: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     include: {
       kitchens: {
         select: { kitchenName: true, approvalStatus: true },
@@ -84,22 +101,51 @@ export default async function AdminUsersPage({
               <h2 className="text-xl font-semibold">قائمة المستخدمين</h2>
               <p className="mt-1 text-sm text-zinc-600">
                 العدد: {users.length}
+                {roleFilter
+                  ? ` · ${getRoleLabel(dbRoleToAppRole(roleFilter))}`
+                  : ""}
                 {query ? ` · نتائج «${query}»` : ""}
               </p>
             </div>
-            <form className="flex gap-2">
-              <input
-                name="q"
-                defaultValue={query}
-                placeholder="بحث بالاسم / الإيميل / الهاتف"
-                className="min-w-[220px] rounded-full border border-zinc-300 px-4 py-2 text-sm outline-none"
-              />
+            <form className="flex flex-wrap items-end gap-2">
+              <label className="space-y-1 text-sm">
+                <span className="font-medium text-zinc-600">نوع المستخدم</span>
+                <select
+                  name="role"
+                  defaultValue={roleFilter ?? ""}
+                  className="block min-w-[160px] rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none"
+                >
+                  <option value="">الكل</option>
+                  <option value={UserRole.ADMIN}>Admin · إدارة</option>
+                  <option value={UserRole.CUSTOMER}>Customer · عميل</option>
+                  <option value={UserRole.KITCHEN_OWNER}>
+                    Kitchen · صاحب مطبخ
+                  </option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium text-zinc-600">بحث</span>
+                <input
+                  name="q"
+                  defaultValue={query}
+                  placeholder="الاسم / الإيميل / الهاتف"
+                  className="block min-w-[220px] rounded-full border border-zinc-300 px-4 py-2 text-sm outline-none"
+                />
+              </label>
               <button
                 type="submit"
                 className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white"
               >
-                بحث
+                تطبيق
               </button>
+              {roleFilter || query ? (
+                <Link
+                  href="/dashboard/admin/users"
+                  className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+                >
+                  مسح الفلتر
+                </Link>
+              ) : null}
             </form>
           </div>
 
