@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/kitchen/kitchen_feature_gate.dart';
 import '../../../core/location/maps_links.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
@@ -11,6 +12,7 @@ import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../auth/data/mobile_me_service.dart';
 import '../../cart/data/order_service.dart';
+import '../../kitchen_management/data/kitchen_management_service.dart';
 
 class KitchenOrdersScreen extends StatefulWidget {
   const KitchenOrdersScreen({super.key});
@@ -21,9 +23,10 @@ class KitchenOrdersScreen extends StatefulWidget {
 
 class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
   final _orderService = const OrderService();
+  final _kitchenService = const KitchenManagementService();
   final _meService = const MobileMeService();
   final _uploadService = MobileUploadService();
-  Future<List<KitchenOrderSummary>>? _future;
+  Future<_OrdersPageData>? _future;
   String? _userChannelName;
 
   void _onRealtimeEvent(event) {
@@ -52,10 +55,22 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
     super.dispose();
   }
 
-  Future<List<KitchenOrderSummary>> _load() async {
+  Future<_OrdersPageData> _load() async {
     final authState = ClerkAuth.of(context, listen: false);
     final token = await authState.sessionToken();
-    return _orderService.loadKitchenOrders(sessionToken: token.jwt);
+    final profile = await _kitchenService.loadProfile(sessionToken: token.jwt);
+    final access = kitchenFeatureAccessFromStatus(profile?.approvalStatus);
+    if (access != KitchenFeatureAccess.ready) {
+      return _OrdersPageData(access: access);
+    }
+
+    final orders = await _orderService.loadKitchenOrders(
+      sessionToken: token.jwt,
+    );
+    return _OrdersPageData(
+      access: KitchenFeatureAccess.ready,
+      orders: orders,
+    );
   }
 
   Future<void> _subscribeRealtime() async {
@@ -78,7 +93,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
       appBar: AppBar(
         title: const Text('طلبات المطبخ'),
       ),
-      body: FutureBuilder<List<KitchenOrderSummary>>(
+      body: FutureBuilder<_OrdersPageData>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -95,7 +110,12 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
             );
           }
 
-          final orders = snapshot.data ?? const [];
+          final page = snapshot.data!;
+          if (page.access != KitchenFeatureAccess.ready) {
+            return KitchenFeatureGate(access: page.access);
+          }
+
+          final orders = page.orders ?? const [];
           if (orders.isEmpty) {
             return const Center(
               child: Text(
@@ -781,4 +801,14 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
       ),
     );
   }
+}
+
+class _OrdersPageData {
+  const _OrdersPageData({
+    required this.access,
+    this.orders,
+  });
+
+  final KitchenFeatureAccess access;
+  final List<KitchenOrderSummary>? orders;
 }

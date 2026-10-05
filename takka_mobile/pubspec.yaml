@@ -37,6 +37,7 @@ dependencies:
   clerk_flutter: ^0.0.18-beta
   clerk_auth: ^0.0.18-beta
   http: ^1.6.0
+  http_parser: ^4.1.2
   image_picker: ^1.2.3
   pusher_channels_flutter: ^2.6.0
   google_fonts: ^8.2.1

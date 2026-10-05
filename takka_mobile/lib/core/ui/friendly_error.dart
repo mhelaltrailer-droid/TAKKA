@@ -21,6 +21,28 @@ bool isTechnicalErrorMessage(String message) {
       message.contains('Error:');
 }
 
+String _unwrapErrorText(Object error) {
+  if (error is clerk.ClerkError) {
+    return clerkUserFacingMessage(error);
+  }
+
+  // Prefer plain message without Dart's "Exception:" / "Error:" prefix.
+  if (error is Exception) {
+    final full = error.toString().trim();
+    if (full.startsWith('Exception: ')) {
+      return full.substring('Exception: '.length).trim();
+    }
+  }
+  if (error is Error) {
+    final full = error.toString().trim();
+    if (full.startsWith('Error: ')) {
+      return full.substring('Error: '.length).trim();
+    }
+  }
+
+  return error.toString().trim();
+}
+
 String friendlyErrorMessage([Object? error]) {
   if (error == null) {
     return kFriendlyErrorMessage;
@@ -28,7 +50,8 @@ String friendlyErrorMessage([Object? error]) {
   if (error is clerk.ClerkError) {
     return clerkUserFacingMessage(error);
   }
-  final raw = error.toString().trim();
+
+  final raw = _unwrapErrorText(error);
   if (raw.isEmpty || isTechnicalErrorMessage(raw)) {
     return kFriendlyErrorMessage;
   }

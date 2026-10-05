@@ -142,6 +142,23 @@ export function isUploadPurpose(value: string): value is UploadPurpose {
   return value in UPLOAD_PURPOSES;
 }
 
+export function asUploadFile(value: FormDataEntryValue | null): File | null {
+  if (value instanceof File && value.size > 0) {
+    return value;
+  }
+
+  // Some mobile multipart clients send Blob instead of File.
+  if (value instanceof Blob && value.size > 0) {
+    const type = value.type || "image/jpeg";
+    return new File([value], "upload.jpg", {
+      type,
+      lastModified: Date.now(),
+    });
+  }
+
+  return null;
+}
+
 export async function uploadImageFile(params: {
   file: File;
   purpose: UploadPurpose;

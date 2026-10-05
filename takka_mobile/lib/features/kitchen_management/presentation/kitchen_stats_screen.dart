@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/kitchen/kitchen_feature_gate.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../data/kitchen_management_service.dart';
 
@@ -14,7 +15,7 @@ class KitchenStatsScreen extends StatefulWidget {
 class _KitchenStatsScreenState extends State<KitchenStatsScreen> {
   final _service = const KitchenManagementService();
   DateTimeRange? _range;
-  Future<KitchenOrderStatsResult>? _future;
+  Future<_StatsPageData>? _future;
 
   @override
   void initState() {
@@ -34,15 +35,22 @@ class _KitchenStatsScreenState extends State<KitchenStatsScreen> {
     return '${date.year}-$m-$d';
   }
 
-  Future<KitchenOrderStatsResult> _load() async {
+  Future<_StatsPageData> _load() async {
     final authState = ClerkAuth.of(context, listen: false);
     final token = await authState.sessionToken();
+    final profile = await _service.loadProfile(sessionToken: token.jwt);
+    final access = kitchenFeatureAccessFromStatus(profile?.approvalStatus);
+    if (access != KitchenFeatureAccess.ready) {
+      return _StatsPageData(access: access);
+    }
+
     final range = _range;
-    return _service.loadOrderStats(
+    final stats = await _service.loadOrderStats(
       sessionToken: token.jwt,
       from: range == null ? null : _key(range.start),
       to: range == null ? null : _key(range.end),
     );
+    return _StatsPageData(access: KitchenFeatureAccess.ready, stats: stats);
   }
 
   Future<void> _pickRange() async {
@@ -88,7 +96,7 @@ class _KitchenStatsScreenState extends State<KitchenStatsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<KitchenOrderStatsResult>(
+      body: FutureBuilder<_StatsPageData>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -102,7 +110,12 @@ class _KitchenStatsScreenState extends State<KitchenStatsScreen> {
             );
           }
 
-          final data = snapshot.data!;
+          final page = snapshot.data!;
+          if (page.access != KitchenFeatureAccess.ready) {
+            return KitchenFeatureGate(access: page.access);
+          }
+
+          final data = page.stats!;
           final stats = data.stats;
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -173,6 +186,16 @@ class _KitchenStatsScreenState extends State<KitchenStatsScreen> {
   }
 }
 
+class _StatsPageData {
+  const _StatsPageData({
+    required this.access,
+    this.stats,
+  });
+
+  final KitchenFeatureAccess access;
+  final KitchenOrderStatsResult? stats;
+}
+
 class _StatTile extends StatelessWidget {
   const _StatTile({
     required this.label,
@@ -201,7 +224,10 @@ class _StatTile extends StatelessWidget {
             ),
             if (hint != null) ...[
               const SizedBox(height: 6),
-              Text(hint!, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              Text(
+                hint!,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
             ],
           ],
         ),

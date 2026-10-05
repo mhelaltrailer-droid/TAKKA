@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/community/takka_partners_community.dart';
+import '../../../core/kitchen/kitchen_feature_gate.dart';
+import '../../../core/kitchen/kitchen_onboarding_copy.dart';
 import '../../../core/realtime/kitchen_new_order_alert_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/confirm_destructive.dart';
@@ -137,6 +139,53 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
     }
   }
 
+  Future<void> _openFeature(Widget screen) async {
+    final access = kitchenFeatureAccessFromStatus(_profile?.approvalStatus);
+    if (access == KitchenFeatureAccess.ready) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => screen),
+      );
+      return;
+    }
+
+    final isSetup = access == KitchenFeatureAccess.needsSetup;
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            isSetup
+                ? kitchenFeatureNeedsSetupTitle
+                : kitchenFeatureNeedsApprovalTitle,
+          ),
+          content: Text(
+            isSetup
+                ? kitchenFeatureNeedsSetupBody
+                : kitchenFeatureNeedsApprovalBody,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('حسنًا'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const KitchenOnboardingScreen(),
+                  ),
+                );
+              },
+              child: const Text(kitchenFeatureOpenOnboarding),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final approved = _profile?.approvalStatus == 'APPROVED';
@@ -209,11 +258,7 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const KitchenMenuManagementScreen(),
-                ),
-              );
+              _openFeature(const KitchenMenuManagementScreen());
             },
             icon: const Icon(Icons.restaurant_menu_outlined),
             label: const Text('إدارة المنيو'),
@@ -221,11 +266,7 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const KitchenOrdersScreen(),
-                ),
-              );
+              _openFeature(const KitchenOrdersScreen());
             },
             icon: const Icon(Icons.receipt_long_outlined),
             label: const Text('طلبات المطبخ'),
@@ -233,11 +274,7 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const KitchenStatsScreen(),
-                ),
-              );
+              _openFeature(const KitchenStatsScreen());
             },
             icon: const Icon(Icons.insights_outlined),
             label: const Text('إحصائيات'),

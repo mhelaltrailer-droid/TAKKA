@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  asUploadFile,
   isUploadPurpose,
   requireUploadApiUser,
   UploadValidationError,
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const purposeRaw = formData.get("purpose")?.toString() ?? "";
-    const file = formData.get("file");
+    const file = asUploadFile(formData.get("file"));
 
     if (!isUploadPurpose(purposeRaw)) {
       return NextResponse.json(
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!(file instanceof File)) {
+    if (!file) {
       return NextResponse.json(
         { error: "ملف الصورة مطلوب." },
         { status: 400 },

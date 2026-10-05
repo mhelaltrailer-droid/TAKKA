@@ -54,3 +54,12 @@ const kitchenMenuAwaitApprovalTitle = 'انتظر اعتماد المطبخ أو
 const kitchenMenuAwaitApprovalBody =
     'يجب انتظار اعتماد المطبخ من الإدارة قبل إضافة الأصناف.';
 const kitchenMenuGoToOnboarding = 'الذهاب إلى إعداد المطبخ';
+
+/// Shared gate for menu / orders / stats before setup or approval.
+const kitchenFeatureNeedsSetupTitle = 'أكمل إعداد المطبخ أولًا';
+const kitchenFeatureNeedsSetupBody =
+    'لازم تكمّل بيانات المطبخ وتبعتها للاعتماد قبل فتح المنيو والطلبات والإحصائيات.';
+const kitchenFeatureNeedsApprovalTitle = 'انتظر اعتماد المطبخ أولًا';
+const kitchenFeatureNeedsApprovalBody =
+    'تم إرسال طلب المطبخ وهو قيد مراجعة الإدارة. بعد الاعتماد تقدر تستخدم المنيو والطلبات والإحصائيات.';
+const kitchenFeatureOpenOnboarding = 'فتح إعداد المطبخ';

@@ -56,6 +56,18 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
   String? _approvalStatus;
   String? _rejectionReason;
   bool _hasServerProfile = false;
+  String? _uploadingPurpose;
+
+  bool _isHttpImageUrl(String? value) {
+    final v = value?.trim() ?? '';
+    return v.startsWith('http://') || v.startsWith('https://');
+  }
+
+  String _sanitizedImageUrl(String? value) =>
+      _isHttpImageUrl(value) ? value!.trim() : '';
+
+  String _imageStatusLabel(String url) =>
+      _isHttpImageUrl(url) ? 'تم الرفع' : 'غير مرفوع';
 
   @override
   void initState() {
@@ -126,11 +138,11 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     _descriptionController.text = profile.description ?? '';
     _phoneController.text = profile.phoneNumber;
     _addressController.text = profile.addressLine;
-    _logoController.text = profile.logoUrl ?? '';
-    _coverController.text = profile.coverImageUrl ?? '';
+    _logoController.text = _sanitizedImageUrl(profile.logoUrl);
+    _coverController.text = _sanitizedImageUrl(profile.coverImageUrl);
     _instapayHandleController.text = profile.instapayHandle ?? '';
     _instapayLinkController.text = profile.instapayLink ?? '';
-    _nationalIdController.text = profile.nationalIdImageUrl ?? '';
+    _nationalIdController.text = _sanitizedImageUrl(profile.nationalIdImageUrl);
     _location = ObourLocationSelection(
       cityName: obourCityName,
       regionName: profile.regionName,
@@ -145,13 +157,13 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
         return;
       }
       final data = jsonDecode(raw) as Map<String, dynamic>;
-      void apply(TextEditingController c, String key) {
+      void apply(TextEditingController c, String key, {bool image = false}) {
         final value = data[key]?.toString();
         if (value == null) {
           return;
         }
         if (!mergeWithProfile || c.text.trim().isEmpty) {
-          c.text = value;
+          c.text = image ? _sanitizedImageUrl(value) : value;
         }
       }
 
@@ -159,11 +171,11 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       apply(_descriptionController, 'description');
       apply(_phoneController, 'phoneNumber');
       apply(_addressController, 'addressLine');
-      apply(_logoController, 'logoUrl');
-      apply(_coverController, 'coverImageUrl');
+      apply(_logoController, 'logoUrl', image: true);
+      apply(_coverController, 'coverImageUrl', image: true);
       apply(_instapayHandleController, 'instapayHandle');
       apply(_instapayLinkController, 'instapayLink');
-      apply(_nationalIdController, 'nationalIdImageUrl');
+      apply(_nationalIdController, 'nationalIdImageUrl', image: true);
 
       final region = data['regionName']?.toString();
       if (region != null &&
@@ -205,11 +217,11 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       'regionName': _location.regionName,
       'latitude': _location.latitude,
       'longitude': _location.longitude,
-      'logoUrl': _logoController.text.trim(),
-      'coverImageUrl': _coverController.text.trim(),
+      'logoUrl': _sanitizedImageUrl(_logoController.text),
+      'coverImageUrl': _sanitizedImageUrl(_coverController.text),
       'instapayHandle': _instapayHandleController.text.trim(),
       'instapayLink': _instapayLinkController.text.trim(),
-      'nationalIdImageUrl': _nationalIdController.text.trim(),
+      'nationalIdImageUrl': _sanitizedImageUrl(_nationalIdController.text),
     };
     await prefs.setString(kitchenOnboardingDraftKey, jsonEncode(payload));
     if (showSnack && mounted) {
@@ -519,11 +531,14 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       _summaryRow('رقم الهاتف', _phoneController.text),
       _summaryRow('الحي', _location.regionName),
       _summaryRow('العنوان', _addressController.text),
-      _summaryRow('اللوجو', _logoController.text),
-      _summaryRow('الغلاف', _coverController.text),
+      _summaryRow('اللوجو', _imageStatusLabel(_logoController.text)),
+      _summaryRow('الغلاف', _imageStatusLabel(_coverController.text)),
       _summaryRow('معرّف InstaPay', _instapayHandleController.text),
       _summaryRow('رابط الدفع', _instapayLinkController.text),
-      _summaryRow('صورة البطاقة', _nationalIdController.text),
+      _summaryRow(
+        'صورة البطاقة',
+        _imageStatusLabel(_nationalIdController.text),
+      ),
     ];
   }
 
@@ -650,32 +665,138 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     String purpose,
     String criteria,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _field(controller, label),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            criteria,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: TakkaColors.muted,
-                  height: 1.5,
-                ),
+    final url = _sanitizedImageUrl(controller.text);
+    final isUploading = _uploadingPurpose == purpose;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: () => _uploadImage(controller, purpose),
-              icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('اختيار ورفع صورة'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFCF8),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: TakkaColors.softLine,
+                style: BorderStyle.solid,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (url.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: AspectRatio(
+                      aspectRatio: purpose == 'kitchenCover' ? 16 / 9 : 1,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: Colors.black12,
+                          alignment: Alignment.center,
+                          child: const Text('تعذر عرض الصورة'),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'تم رفع الصورة بنجاح وسيتم حفظها مع النموذج.',
+                      style: TextStyle(
+                        color: Color(0xFF2E7D32),
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 28),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: TakkaColors.softLine),
+                    ),
+                    child: const Column(
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 36,
+                          color: TakkaColors.muted,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'لم يتم اختيار صورة بعد',
+                          style: TextStyle(color: TakkaColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                FilledButton.icon(
+                  onPressed: isUploading || _isSaving
+                      ? null
+                      : () => _uploadImage(controller, purpose),
+                  icon: isUploading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.photo_library_outlined),
+                  label: Text(
+                    isUploading
+                        ? 'جارٍ الرفع...'
+                        : url.isNotEmpty
+                            ? 'استبدال الصورة'
+                            : 'اختيار ورفع صورة',
+                  ),
+                ),
+                if (url.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: isUploading || _isSaving
+                        ? null
+                        : () {
+                            controller.clear();
+                            setState(() {});
+                            _saveDraft();
+                          },
+                    child: const Text('إزالة الصورة'),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  criteria,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: TakkaColors.muted,
+                        height: 1.5,
+                      ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -718,11 +839,11 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
           'addressLine': _addressController.text.trim(),
           'latitude': _location.latitude,
           'longitude': _location.longitude,
-          'logoUrl': _logoController.text.trim(),
-          'coverImageUrl': _coverController.text.trim(),
+          'logoUrl': _sanitizedImageUrl(_logoController.text),
+          'coverImageUrl': _sanitizedImageUrl(_coverController.text),
           'instapayHandle': _instapayHandleController.text.trim(),
           'instapayLink': _instapayLinkController.text.trim(),
-          'nationalIdImageUrl': _nationalIdController.text.trim(),
+          'nationalIdImageUrl': _sanitizedImageUrl(_nationalIdController.text),
         },
       );
 
@@ -825,6 +946,7 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
     TextEditingController controller,
     String purpose,
   ) async {
+    setState(() => _uploadingPurpose = purpose);
     try {
       final authState = ClerkAuth.of(context, listen: false);
       final token = await authState.sessionToken();
@@ -843,6 +965,10 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
         return;
       }
       showFriendlyError(context, error: error);
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingPurpose = null);
+      }
     }
   }
 }

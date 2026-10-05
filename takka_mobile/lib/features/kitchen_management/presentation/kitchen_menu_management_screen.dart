@@ -1,18 +1,16 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/kitchen/kitchen_onboarding_copy.dart';
+import '../../../core/kitchen/kitchen_feature_gate.dart';
 import '../../../core/location/food_categories.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/order_readiness.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/confirm_destructive.dart';
 import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../data/kitchen_management_service.dart';
 import 'kitchen_deals_panel.dart';
-import 'kitchen_onboarding_screen.dart';
 
 class KitchenMenuManagementScreen extends StatefulWidget {
   const KitchenMenuManagementScreen({super.key});
@@ -58,10 +56,20 @@ class _KitchenMenuManagementScreenState
     final authState = ClerkAuth.of(context, listen: false);
     final token = await authState.sessionToken();
     final profile = await _service.loadProfile(sessionToken: token.jwt);
-    final items = await _service.loadMenuItems(sessionToken: token.jwt);
     final categories = await loadFoodCategories();
+    final access = kitchenFeatureAccessFromStatus(profile?.approvalStatus);
+
+    if (access != KitchenFeatureAccess.ready) {
+      return _MenuPageData(
+        access: access,
+        items: const [],
+        categories: categories,
+      );
+    }
+
+    final items = await _service.loadMenuItems(sessionToken: token.jwt);
     return _MenuPageData(
-      kitchenApproved: profile?.approvalStatus == 'APPROVED',
+      access: KitchenFeatureAccess.ready,
       items: items,
       categories: categories,
     );
@@ -90,53 +98,13 @@ class _KitchenMenuManagementScreenState
             );
           }
 
-          final approved = snapshot.data?.kitchenApproved ?? false;
+          final access = snapshot.data?.access ?? KitchenFeatureAccess.needsSetup;
           final items = snapshot.data?.items ?? const <KitchenManagedMenuItem>[];
           final categories =
               snapshot.data?.categories ?? defaultFoodCategories;
 
-          if (!approved) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Card(
-                color: const Color(0xFFFFF8E1),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        kitchenMenuAwaitApprovalTitle,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: TakkaColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        kitchenMenuAwaitApprovalBody,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(height: 1.6, fontSize: 15),
-                      ),
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const KitchenOnboardingScreen(),
-                            ),
-                          );
-                        },
-                        child: const Text(kitchenMenuGoToOnboarding),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
+          if (access != KitchenFeatureAccess.ready) {
+            return KitchenFeatureGate(access: access);
           }
 
           return ListView(
@@ -474,12 +442,12 @@ class _KitchenMenuManagementScreenState
 
 class _MenuPageData {
   const _MenuPageData({
-    required this.kitchenApproved,
+    required this.access,
     required this.items,
     required this.categories,
   });
 
-  final bool kitchenApproved;
+  final KitchenFeatureAccess access;
   final List<KitchenManagedMenuItem> items;
   final List<FoodCategory> categories;
 }
