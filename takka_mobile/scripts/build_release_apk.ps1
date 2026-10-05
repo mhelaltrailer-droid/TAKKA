@@ -1,5 +1,5 @@
 # Always build release APK with Clerk / API dart-defines.
-# Usage (from repo):  powershell -File takka_mobile/scripts/build_release_apk.ps1
+# Usage: powershell -File takka_mobile/scripts/build_release_apk.ps1
 $ErrorActionPreference = "Stop"
 
 $mobileRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -7,7 +7,7 @@ Set-Location $mobileRoot
 
 $defines = Join-Path $mobileRoot "dart_defines.json"
 if (-not (Test-Path $defines)) {
-  Write-Host "dart_defines.json missing — syncing from admin/.env ..."
+  Write-Host "dart_defines.json missing - syncing from admin/.env ..."
   & (Join-Path $PSScriptRoot "sync_dart_defines.ps1")
 }
 

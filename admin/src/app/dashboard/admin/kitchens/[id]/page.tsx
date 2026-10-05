@@ -3,6 +3,11 @@ import Link from "next/link";
 import { StatusPill } from "@/components/status-pill";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  formatCoords,
+  googleMapsShareUrl,
+  isValidLatLng,
+} from "@/lib/maps";
 import { getApprovalStatusLabel } from "@/lib/status-labels";
 
 import { approveKitchen, rejectKitchen } from "../../actions";
@@ -46,6 +51,10 @@ export default async function AdminKitchenReviewPage({
 
   const payment = kitchen.paymentMethods[0];
   const nationalId = kitchen.documents.find((d) => d.documentType === "national_id");
+  const hasCoords = isValidLatLng(kitchen.latitude, kitchen.longitude);
+  const mapsUrl = hasCoords
+    ? googleMapsShareUrl(Number(kitchen.latitude), Number(kitchen.longitude))
+    : null;
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
@@ -111,12 +120,31 @@ export default async function AdminKitchenReviewPage({
               المنطقة: {kitchen.region.cityName} - {kitchen.region.regionName}
             </p>
             <p>العنوان: {kitchen.addressLine}</p>
-            <p>
-              الموقع:{" "}
-              {kitchen.latitude != null && kitchen.longitude != null
-                ? `${kitchen.latitude}, ${kitchen.longitude}`
-                : "غير محدد"}
-            </p>
+            <div className="space-y-2 md:col-span-2">
+              <p>
+                الموقع:{" "}
+                {hasCoords
+                  ? formatCoords(
+                      Number(kitchen.latitude),
+                      Number(kitchen.longitude),
+                    )
+                  : "غير محدد"}
+              </p>
+              {mapsUrl ? (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-full bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--brand-secondary)]"
+                >
+                  عرض الموقع على Google Maps
+                </a>
+              ) : (
+                <p className="text-xs text-amber-700">
+                  لا توجد إحداثيات صالحة لفتح الخريطة.
+                </p>
+              )}
+            </div>
             <p>
               InstaPay:{" "}
               {payment?.accountNumberOrHandle || payment?.paymentLink || "غير مضاف"}

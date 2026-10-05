@@ -7,7 +7,7 @@ Set-Location $mobileRoot
 
 $defines = Join-Path $mobileRoot "dart_defines.json"
 if (-not (Test-Path $defines)) {
-  Write-Host "dart_defines.json missing — syncing from admin/.env ..."
+  Write-Host "dart_defines.json missing - syncing from admin/.env ..."
   & (Join-Path $PSScriptRoot "sync_dart_defines.ps1")
 }
 
