@@ -284,6 +284,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 if (snapshot.hasError) {
                   return Center(
                     child: TakkaErrorRetry(
+                      message: widget.isGuest
+                          ? 'تعذر عرض المطابخ - اعد المحاولة'
+                          : '(حدث خطأ)',
                       onRetry: () {
                         setState(() {
                           _bootstrapFuture = _loadBootstrap();

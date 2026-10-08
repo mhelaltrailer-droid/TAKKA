@@ -8,6 +8,7 @@ import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/presentation/addresses_screen.dart';
 import '../../home/data/customer_discovery_service.dart';
 import '../../notifications/presentation/notifications_screen.dart';
+import 'delete_account_confirm_dialog.dart';
 
 const _notificationsEnabledKey = 'takka.notificationsEnabled';
 
@@ -115,6 +116,19 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
                     title: 'تسجيل الخروج',
                     titleColor: const Color(0xFFC62828),
                     onTap: widget.onSignOut,
+                  ),
+                  _AccountRow(
+                    icon: Icons.delete_forever_rounded,
+                    iconBg: const Color(0xFFFFEBEE),
+                    iconColor: const Color(0xFFC62828),
+                    title: 'حذف حسابي',
+                    titleColor: const Color(0xFFC62828),
+                    onTap: () {
+                      runDeleteAccountFlow(
+                        context,
+                        onDeleted: widget.onSignOut,
+                      );
+                    },
                   ),
                 ],
               );
@@ -259,6 +273,19 @@ class _CustomerAccountScreenState extends State<CustomerAccountScreen> {
                     title: 'تسجيل الخروج',
                     titleColor: const Color(0xFFC62828),
                     onTap: widget.onSignOut,
+                  ),
+                  _AccountRow(
+                    icon: Icons.delete_forever_rounded,
+                    iconBg: const Color(0xFFFFEBEE),
+                    iconColor: const Color(0xFFC62828),
+                    title: 'حذف حسابي',
+                    titleColor: const Color(0xFFC62828),
+                    onTap: () {
+                      runDeleteAccountFlow(
+                        context,
+                        onDeleted: widget.onSignOut,
+                      );
+                    },
                   ),
                 ],
               ),

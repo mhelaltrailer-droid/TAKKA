@@ -228,6 +228,7 @@ export default async function DashboardPage() {
                   <ActionLink href="/dashboard/orders" label="إدارة الطلبات" />
                   <ActionLink href="/dashboard/kitchen/stats" label="إحصائيات" />
                   <ActionLink href="/notifications" label="الإشعارات" />
+                  <ActionLink href="/account" label="حسابي" />
                   <ActionLink href="/role-setup" label="تبديل الدور" />
                 </div>
               </div>

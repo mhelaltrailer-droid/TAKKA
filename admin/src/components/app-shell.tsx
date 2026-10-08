@@ -25,6 +25,7 @@ const kitchenLinks = [
   { href: "/dashboard/menu", label: "المنيو" },
   { href: "/dashboard/orders", label: "الطلبات" },
   { href: "/notifications", label: "الإشعارات" },
+  { href: "/account", label: "حسابي" },
 ] as const;
 
 const customerBottomNav = [

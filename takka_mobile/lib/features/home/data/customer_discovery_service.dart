@@ -16,6 +16,53 @@ class CustomerDiscoveryService {
     return Uri.parse('$base$path');
   }
 
+  /// Best-effort wake for Render free-tier cold starts before heavy GETs.
+  Future<void> _wakeApi() async {
+    try {
+      await http
+          .get(_buildUri('/api/health'))
+          .timeout(const Duration(seconds: 45));
+    } catch (_) {
+      // Ignore — the real request will surface a clearer error.
+    }
+  }
+
+  Future<http.Response> _getWithRetry(
+    Uri uri, {
+    Map<String, String>? headers,
+    int attempts = 3,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    Object? lastError;
+    for (var i = 0; i < attempts; i++) {
+      try {
+        if (i > 0) {
+          await Future<void>.delayed(Duration(milliseconds: 700 * i));
+          await _wakeApi();
+        }
+        final response = await http
+            .get(uri, headers: headers)
+            .timeout(timeout);
+        // Render cold start / proxy often returns 502/503 while waking.
+        if (response.statusCode == 502 ||
+            response.statusCode == 503 ||
+            response.statusCode == 504) {
+          lastError = Exception('الخادم يستيقظ، أعد المحاولة.');
+          continue;
+        }
+        return response;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? Exception('تعذر الاتصال بالخادم.');
+  }
+
+  bool _looksLikeHtml(String body) {
+    final trimmed = body.trimLeft().toLowerCase();
+    return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html');
+  }
+
   Future<MobileAppUser> loadMe({
     required String sessionToken,
   }) async {
@@ -58,6 +105,9 @@ class CustomerDiscoveryService {
       } catch (_) {
         // Keep browsing kitchens even if profile sync is slow/unavailable.
       }
+    } else {
+      // Guest / first open: nudge Render awake before kitchens fetch.
+      await _wakeApi();
     }
 
     final kitchens = await loadNearbyKitchens(
@@ -94,16 +144,22 @@ class CustomerDiscoveryService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final kitchensResponse = await http
-        .get(
-          _buildUri('/api/discovery/kitchens').replace(queryParameters: params),
-          headers: headers,
-        )
-        .timeout(const Duration(seconds: 25));
+    final kitchensResponse = await _getWithRetry(
+      _buildUri('/api/discovery/kitchens').replace(queryParameters: params),
+      headers: headers,
+    );
 
     if (kitchensResponse.statusCode < 200 ||
         kitchensResponse.statusCode >= 300) {
-      throw Exception('Failed to load kitchens: ${kitchensResponse.body}');
+      throw Exception(
+        'تعذر تحميل المطابخ الآن. أعد المحاولة بعد لحظات.',
+      );
+    }
+
+    if (_looksLikeHtml(kitchensResponse.body)) {
+      throw Exception(
+        'تعذر تحميل المطابخ (استجابة غير صالحة من الخادم). تحقق من رابط الـ API.',
+      );
     }
 
     final kitchensJson =

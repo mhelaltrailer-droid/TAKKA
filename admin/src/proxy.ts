@@ -21,6 +21,8 @@ const isAppPublicRoute = createRouteMatcher([
 const isAdminPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/api/health",
+  // Public catalog used by mobile guest browse (and web).
+  "/api/discovery(.*)",
   "/api/mobile(.*)",
   "/api/uploadthing(.*)",
 ]);

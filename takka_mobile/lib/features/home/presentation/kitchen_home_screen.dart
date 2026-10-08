@@ -9,6 +9,7 @@ import '../../../core/realtime/kitchen_new_order_alert_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/confirm_destructive.dart';
 import '../../../core/ui/friendly_error.dart';
+import '../../account/presentation/kitchen_account_screen.dart';
 import '../../auth/data/mobile_me_service.dart';
 import '../../kitchen_management/data/kitchen_management_service.dart';
 import '../../kitchen_management/presentation/kitchen_menu_management_screen.dart';
@@ -205,6 +206,20 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
             },
             icon: const Icon(Icons.notifications_none_rounded),
             tooltip: 'الإشعارات',
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => KitchenAccountScreen(
+                    fallbackName: widget.displayName,
+                    onSignOut: widget.onSignOut,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.person_outline_rounded),
+            tooltip: 'حسابي',
           ),
           IconButton(
             onPressed: widget.onSwitchRole,

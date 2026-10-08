@@ -24,7 +24,7 @@ if (-not $pk) { throw "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY missing in admin/.env" 
 
 $defines = [ordered]@{
   CLERK_PUBLISHABLE_KEY = $pk
-  TAKKA_API_BASE_URL    = "https://takka-admin.onrender.com"
+  TAKKA_API_BASE_URL    = "https://takka-app.onrender.com"
   PUSHER_KEY            = $envMap["NEXT_PUBLIC_PUSHER_KEY"]
   PUSHER_CLUSTER        = $(if ($envMap["NEXT_PUBLIC_PUSHER_CLUSTER"]) { $envMap["NEXT_PUBLIC_PUSHER_CLUSTER"] } else { "eu" })
 }

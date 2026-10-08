@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { requireAppAccount } from "@/lib/app-gate";
 import { db } from "@/lib/db";
 
+import { AccountDeleteButton } from "./account-delete-button";
 import { AccountSignOutButton } from "./account-sign-out-button";
 
 function formatPhone(phone: string | null | undefined) {
@@ -41,10 +42,11 @@ export default async function AccountPage() {
 
   const fullName = dbUser?.fullName || user.fullName || "مستخدم تكة";
   const phone = formatPhone(dbUser?.phoneNumber ?? user.phoneNumber);
+  const isKitchen = user.role === "kitchen_owner";
 
   return (
     <AppShell
-      mode="customer"
+      mode={isKitchen ? "kitchen" : "customer"}
       userId={user.appUserId}
       unreadNotificationsCount={unreadNotificationsCount}
       activeNav="account"
@@ -58,7 +60,7 @@ export default async function AccountPage() {
               <p className="text-2xl font-bold">{fullName}</p>
               <p className="mt-1 text-sm font-semibold text-white/90">{phone}</p>
               <span className="mt-3 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-bold">
-                حساب مشتري
+                {isKitchen ? "حساب مطبخ" : "حساب مشتري"}
               </span>
             </div>
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white text-3xl text-[#3b2418]">
@@ -99,6 +101,7 @@ export default async function AccountPage() {
           </Link>
 
           <AccountSignOutButton />
+          <AccountDeleteButton />
         </section>
       </div>
     </AppShell>

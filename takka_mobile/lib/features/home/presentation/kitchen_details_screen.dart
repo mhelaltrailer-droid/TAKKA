@@ -261,13 +261,6 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        kitchen.addressLine,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.88),
-                        ),
-                      ),
                     ],
                   ),
                 ),
