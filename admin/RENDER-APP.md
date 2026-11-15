@@ -29,7 +29,21 @@ NEXT_PUBLIC_PUSHER_CLUSTER=eu
 NEXT_PUBLIC_TAKKA_SURFACE=app
 
 ## Optional: alert the team on a new /join-kitchen lead
-# If both are unset, the lead is still saved and the admin "جديد" count still updates.
+# Primary = email (SMTP). Telegram + webhook are extras.
+# If none are set, the lead is still saved and the admin "جديد" count still updates.
+#
+# Gmail App Password (requires 2-Step Verification on the Google account):
+# 1. https://myaccount.google.com/security → turn on 2-Step Verification
+# 2. https://myaccount.google.com/apppasswords → create a Mail app password
+# 3. Set on the takka-app Render service:
+# JOIN_KITCHEN_ALERT_EMAIL_TO=takkaapp.eg@gmail.com
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=465
+# SMTP_USER=takkaapp.eg@gmail.com
+# SMTP_PASS=<16-char app password>
+# SMTP_FROM=تكة <takkaapp.eg@gmail.com>
+#
+# Optional extras:
 # TELEGRAM_BOT_TOKEN=
 # TELEGRAM_CHAT_ID=
 # JOIN_KITCHEN_ALERT_WEBHOOK_URL=

@@ -139,18 +139,19 @@ export async function submitJoinKitchenLead(
       source,
     });
 
-    try {
-      await deps.notify({
+    // Fire-and-forget: SMTP/Telegram must not delay or fail the HTTP response.
+    void Promise.resolve(
+      deps.notify({
         id: lead.id,
         fullName,
         district,
         segment: segmentRaw,
         whatsapp,
         source,
-      });
-    } catch (error) {
+      }),
+    ).catch((error) => {
       console.error("[join-kitchen] alert failed", error);
-    }
+    });
 
     return { ok: true, id: lead.id };
   } catch (error) {

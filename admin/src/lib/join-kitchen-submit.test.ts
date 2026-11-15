@@ -47,11 +47,16 @@ const valid = {
 describe("submitJoinKitchenLead", () => {
   it("normalizes the phone, saves the lead, and notifies", async () => {
     const { created, alerts, store } = harness();
+    let resolveAlert!: () => void;
+    const alertDone = new Promise<void>((resolve) => {
+      resolveAlert = resolve;
+    });
     const result = await submitJoinKitchenLead(valid, {
       ip: "203.0.113.8",
       store,
       notify: async (lead) => {
         alerts.push(lead);
+        resolveAlert();
       },
       ...limits(),
     });
@@ -61,6 +66,7 @@ describe("submitJoinKitchenLead", () => {
       (created[0] as { whatsapp: string }).whatsapp,
       "01012345678",
     );
+    await alertDone;
     assert.equal(alerts[0]?.whatsapp, "01012345678");
     assert.equal(alerts[0]?.source, "fb_page");
   });

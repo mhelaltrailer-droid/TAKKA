@@ -1,28 +1,145 @@
+import nodemailer from "nodemailer";
+
 import { kitchenJoinSegmentLabel } from "./kitchen-join-leads";
 import type { KitchenJoinLeadAlert } from "./join-kitchen-submit";
 
 const ALERT_TIMEOUT_MS = 4_000;
+const DEFAULT_EMAIL_TO = "takkaapp.eg@gmail.com";
+const DEFAULT_ADMIN_ORIGIN = "https://takka-admin.onrender.com";
+const CAIRO_TZ = "Africa/Cairo";
 
-function telegramConfig(): { token: string; chatId: string } | null {
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
-  const chatId = process.env.TELEGRAM_CHAT_ID?.trim() ?? "";
-  if (!token || !chatId) return null;
-  return { token, chatId };
+export type SmtpAlertConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+  to: string;
+};
+
+export type KitchenJoinAlertEmail = {
+  to: string;
+  from: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
+type EnvBag = Record<string, string | undefined>;
+
+/** SMTP + recipient. Returns null when any required var is missing. */
+export function smtpAlertConfig(
+  env: EnvBag = process.env,
+): SmtpAlertConfig | null {
+  const host = env.SMTP_HOST?.trim() ?? "";
+  const portRaw = env.SMTP_PORT?.trim() ?? "";
+  const user = env.SMTP_USER?.trim() ?? "";
+  const pass = env.SMTP_PASS?.trim() ?? "";
+  const from = env.SMTP_FROM?.trim() || user;
+  const to = env.JOIN_KITCHEN_ALERT_EMAIL_TO?.trim() || DEFAULT_EMAIL_TO;
+
+  if (!host || !portRaw || !user || !pass || !from || !to) {
+    return null;
+  }
+
+  const port = Number(portRaw);
+  if (!Number.isFinite(port) || port <= 0) return null;
+
+  const secureFlag = env.SMTP_SECURE?.trim().toLowerCase();
+  const secure =
+    secureFlag === "true" ||
+    secureFlag === "1" ||
+    (secureFlag !== "false" && secureFlag !== "0" && port === 465);
+
+  return { host, port, secure, user, pass, from, to };
 }
 
-function webhookConfig(): { url: string; secret: string } | null {
-  const url = process.env.JOIN_KITCHEN_ALERT_WEBHOOK_URL?.trim() ?? "";
-  if (!url) return null;
-  return {
-    url,
-    secret: process.env.JOIN_KITCHEN_ALERT_WEBHOOK_SECRET?.trim() ?? "",
-  };
-}
-
-function whatsappLink(phone: string): string {
+export function whatsappLink(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   const intl = digits.startsWith("0") ? `20${digits.slice(1)}` : digits;
   return `https://wa.me/${intl}`;
+}
+
+export function adminLeadsDashboardUrl(env: EnvBag = process.env): string {
+  const base = (
+    env.JOIN_KITCHEN_ALERT_ADMIN_URL?.trim() ||
+    env.ADMIN_BASE_URL?.trim() ||
+    DEFAULT_ADMIN_ORIGIN
+  ).replace(/\/$/, "");
+  return `${base}/dashboard/admin/leads`;
+}
+
+export function formatCairoDateTime(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat("ar-EG", {
+    timeZone: CAIRO_TZ,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+export function buildKitchenJoinAlertEmail(
+  lead: KitchenJoinLeadAlert,
+  options: {
+    to: string;
+    from: string;
+    now?: Date;
+    adminUrl?: string;
+  },
+): KitchenJoinAlertEmail {
+  const when = formatCairoDateTime(options.now ?? new Date());
+  const segment = kitchenJoinSegmentLabel(lead.segment);
+  const wa = whatsappLink(lead.whatsapp);
+  const adminUrl = options.adminUrl ?? adminLeadsDashboardUrl();
+  const source = lead.source?.trim() || "—";
+
+  const subject = "طلب انضمام مطبخ جديد – تكة";
+  const text = [
+    "طلب انضمام مطبخ جديد على تكة",
+    "",
+    `الاسم: ${lead.fullName}`,
+    `الحي: ${lead.district}`,
+    `النوع: ${segment}`,
+    `واتساب: ${lead.whatsapp}`,
+    `رابط واتساب: ${wa}`,
+    `المصدر (src): ${source}`,
+    `الوقت (القاهرة): ${when}`,
+    "",
+    `لوحة الليدز: ${adminUrl}`,
+  ].join("\n");
+
+  const html = `
+<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.7;color:#5C3016">
+  <p style="font-size:16px;font-weight:700;margin:0 0 12px">طلب انضمام مطبخ جديد على تكة</p>
+  <ul style="padding-inline-start:18px;margin:0">
+    <li><strong>الاسم:</strong> ${escapeHtml(lead.fullName)}</li>
+    <li><strong>الحي:</strong> ${escapeHtml(lead.district)}</li>
+    <li><strong>النوع:</strong> ${escapeHtml(segment)}</li>
+    <li><strong>واتساب:</strong> ${escapeHtml(lead.whatsapp)} — <a href="${escapeHtml(wa)}">${escapeHtml(wa)}</a></li>
+    <li><strong>المصدر (src):</strong> ${escapeHtml(source)}</li>
+    <li><strong>الوقت (القاهرة):</strong> ${escapeHtml(when)}</li>
+  </ul>
+  <p style="margin:16px 0 0">
+    <a href="${escapeHtml(adminUrl)}">فتح لوحة ليدز انضمام المطابخ</a>
+  </p>
+</div>
+`.trim();
+
+  return {
+    to: options.to,
+    from: options.from,
+    subject,
+    text,
+    html,
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function alertText(lead: KitchenJoinLeadAlert): string {
@@ -52,18 +169,80 @@ async function postJson(url: string, body: unknown, headers: HeadersInit) {
   }
 }
 
+async function sendAlertEmail(
+  lead: KitchenJoinLeadAlert,
+  smtp: SmtpAlertConfig,
+  sendMail?: (mail: KitchenJoinAlertEmail) => Promise<void>,
+) {
+  const mail = buildKitchenJoinAlertEmail(lead, {
+    to: smtp.to,
+    from: smtp.from,
+  });
+
+  if (sendMail) {
+    await sendMail(mail);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    },
+    connectionTimeout: ALERT_TIMEOUT_MS,
+    greetingTimeout: ALERT_TIMEOUT_MS,
+    socketTimeout: ALERT_TIMEOUT_MS,
+  });
+
+  await transporter.sendMail({
+    from: mail.from,
+    to: mail.to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+  });
+}
+
+export type NotifyKitchenJoinLeadOptions = {
+  sendMail?: (mail: KitchenJoinAlertEmail) => Promise<void>;
+  env?: EnvBag;
+};
+
 /**
- * Tells the team a lead arrived. No-ops when Telegram and the webhook
- * are unset, and never throws — saving the lead is the important part.
+ * Primary: email over SMTP when configured.
+ * Optional extras: Telegram bot and/or webhook.
+ * Never throws — saving the lead is the important part.
  */
 export async function notifyKitchenJoinLead(
   lead: KitchenJoinLeadAlert,
+  options: NotifyKitchenJoinLeadOptions = {},
 ): Promise<void> {
-  const telegram = telegramConfig();
-  const webhook = webhookConfig();
-  if (!telegram && !webhook) return;
+  const env = options.env ?? process.env;
+  const smtp = smtpAlertConfig(env);
+  const telegramToken = env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+  const telegramChatId = env.TELEGRAM_CHAT_ID?.trim() ?? "";
+  const telegram =
+    telegramToken && telegramChatId
+      ? { token: telegramToken, chatId: telegramChatId }
+      : null;
+  const webhookUrl = env.JOIN_KITCHEN_ALERT_WEBHOOK_URL?.trim() ?? "";
+  const webhook = webhookUrl
+    ? {
+        url: webhookUrl,
+        secret: env.JOIN_KITCHEN_ALERT_WEBHOOK_SECRET?.trim() ?? "",
+      }
+    : null;
+
+  if (!smtp && !telegram && !webhook) return;
 
   const jobs: Promise<void>[] = [];
+
+  if (smtp) {
+    jobs.push(sendAlertEmail(lead, smtp, options.sendMail));
+  }
 
   if (telegram) {
     jobs.push(
