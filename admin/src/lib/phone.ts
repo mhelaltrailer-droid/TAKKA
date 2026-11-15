@@ -1,8 +1,49 @@
-/** Mobile: starts with 01 and is exactly 11 digits, e.g. 01********* */
+/**
+ * Mobile: starts with 01 and is exactly 11 digits, e.g. 01*********.
+ * Shared with Flutter `takka_mobile/lib/core/validation/phone.dart`.
+ *
+ * Accepted input (then stored as 01XXXXXXXXX):
+ * 01…, +201…, 00201…, 201…, and Arabic-Indic / Persian digits.
+ */
 const MOBILE_REGEX = /^01[0-9]{9}$/;
+const ARABIC_INDIC_DIGITS = /[٠-٩۰-۹]/g;
 
+export function toAsciiDigits(input: string): string {
+  return input.replace(ARABIC_INDIC_DIGITS, (char) => {
+    const code = char.charCodeAt(0);
+    if (code >= 0x0660 && code <= 0x0669) {
+      return String(code - 0x0660);
+    }
+    if (code >= 0x06f0 && code <= 0x06f9) {
+      return String(code - 0x06f0);
+    }
+    return char;
+  });
+}
+
+/** National 01XXXXXXXXX when the input is an Egyptian mobile; otherwise cleaned digits. */
 export function normalizeEgyptianPhone(input: string): string {
-  return input.replace(/[\s\-()]/g, "").trim();
+  let value = toAsciiDigits(input)
+    .replace(/[\s\-().\u200e\u200f\u202a-\u202e]/g, "")
+    .trim();
+
+  if (value.startsWith("+")) {
+    value = value.slice(1);
+  }
+
+  let rest: string | null = null;
+  if (value.startsWith("0020")) {
+    rest = value.slice(4);
+  } else if (value.startsWith("20")) {
+    rest = value.slice(2);
+  }
+
+  if (rest != null) {
+    if (/^01[0-9]{9}$/.test(rest)) return rest;
+    if (/^1[0-9]{9}$/.test(rest)) return `0${rest}`;
+  }
+
+  return value;
 }
 
 export function isValidEgyptianPhone(input: string): boolean {

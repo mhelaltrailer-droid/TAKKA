@@ -7,6 +7,7 @@ import {
   parseStoredPolygonRing,
   serializePolygonRing,
 } from "@/lib/district-polygon";
+import { districtSortOrder } from "@/lib/district-order";
 import {
   ensureDefaultObourDistricts,
   listAllObourDistricts,
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
         cityName: OBOUR_CITY_NAME,
         regionName,
         isActive: true,
+        sortOrder: districtSortOrder(regionName),
         polygonRingJson: polygonRingJson ?? null,
       },
       include: {

@@ -28,6 +28,13 @@ PUSHER_SECRET=
 NEXT_PUBLIC_PUSHER_CLUSTER=eu
 NEXT_PUBLIC_TAKKA_SURFACE=app
 
+## Optional: alert the team on a new /join-kitchen lead
+# If both are unset, the lead is still saved and the admin "جديد" count still updates.
+# TELEGRAM_BOT_TOKEN=
+# TELEGRAM_CHAT_ID=
+# JOIN_KITCHEN_ALERT_WEBHOOK_URL=
+# JOIN_KITCHEN_ALERT_WEBHOOK_SECRET=
+
 ## Admin service must keep
 NEXT_PUBLIC_TAKKA_SURFACE=admin
 

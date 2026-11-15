@@ -3,14 +3,40 @@ import type {
   KitchenJoinLeadStatus,
 } from "@prisma/client";
 
+import { isValidEgyptianPhone, normalizeEgyptianPhone } from "./phone";
+
 export const KITCHEN_JOIN_SEGMENTS: {
   value: KitchenJoinLeadSegment;
   label: string;
 }[] = [
   { value: "HOME_COOK", label: "ست بيت" },
   { value: "EXISTING_PAGE", label: "عندي بيدج أو مطبخ" },
-  { value: "BEGINNER", label: "بفكر ابدأ" },
+  { value: "BEGINNER", label: "بفكّر أبدأ" },
 ];
+
+/** Public /join-kitchen copy. Egyptian colloquial, feminine address. */
+export const JOIN_KITCHEN_COPY = {
+  phoneRequired: "اكتبي رقم الواتساب.",
+  phoneInvalid: "رقم الواتساب لازم يكون 11 رقم ويبدأ بـ 01.",
+  nameRequired: "اكتبي اسمك، حرفين على الأقل.",
+  nameTooLong: "الاسم طويل أوي. اكتبيه أقصر.",
+  districtRequired: "اختاري الحي.",
+  districtTooLong: "اسم الحي طويل أوي.",
+  otherDistrictRequired: "اكتبي اسم الحي.",
+  segmentRequired: "اختاري نوع الانضمام.",
+  duplicate:
+    "الرقم مسجّل عندنا بالفعل. فريق تكة هيتواصل معاكي قريبًا لو لسه قيد المتابعة.",
+  generic: "مش قادرين نسجّل دلوقتي. جرّبي تاني.",
+  rateLimited: "طلبات كتير في وقت قصير. استني شوية وجرّبي تاني.",
+  network: "الاتصال مش شغال. تأكدي من الإنترنت وجرّبي تاني.",
+} as const;
+
+export function joinKitchenPhoneError(input: string): string | null {
+  const local = normalizeEgyptianPhone(input);
+  if (!local) return JOIN_KITCHEN_COPY.phoneRequired;
+  if (!isValidEgyptianPhone(local)) return JOIN_KITCHEN_COPY.phoneInvalid;
+  return null;
+}
 
 export const KITCHEN_JOIN_STATUSES: {
   value: KitchenJoinLeadStatus;

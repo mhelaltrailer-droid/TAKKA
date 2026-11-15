@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { serializePolygonRing } from "@/lib/district-polygon";
+import { districtSortOrder, sortDistrictRows } from "@/lib/district-order";
 import { OBOUR_CITY_NAME, OBOUR_DISTRICTS } from "@/lib/obour-areas";
 import { OBOUR_DISTRICT_POLYGONS } from "@/lib/obour-geofence";
 
@@ -49,9 +50,11 @@ async function mergeLegacyDistrict({ merged, legacy }: DistrictMerge) {
       cityName: OBOUR_CITY_NAME,
       regionName: merged,
       isActive: true,
+      sortOrder: districtSortOrder(merged),
     },
     update: {
       isActive: true,
+      sortOrder: districtSortOrder(merged),
     },
   });
 
@@ -96,6 +99,7 @@ export async function ensureDefaultObourDistricts() {
       cityName: OBOUR_CITY_NAME,
       regionName,
       isActive: true,
+      sortOrder: districtSortOrder(regionName),
     })),
     skipDuplicates: true,
   });
@@ -121,28 +125,53 @@ export async function ensureDefaultObourDistricts() {
       data: { polygonRingJson: ringJson },
     });
   }
+
+  await syncCatalogSortOrder();
+}
+
+/** Keep seeded districts in natural order without rewriting custom rows. */
+async function syncCatalogSortOrder() {
+  const rows = await db.region.findMany({
+    where: {
+      cityName: OBOUR_CITY_NAME,
+      regionName: { in: [...OBOUR_DISTRICTS] },
+    },
+    select: { id: true, regionName: true, sortOrder: true },
+  });
+
+  await Promise.all(
+    rows
+      .filter((row) => row.sortOrder !== districtSortOrder(row.regionName))
+      .map((row) =>
+        db.region.update({
+          where: { id: row.id },
+          data: { sortOrder: districtSortOrder(row.regionName) },
+        }),
+      ),
+  );
 }
 
 export async function listActiveObourDistricts() {
   await ensureDefaultObourDistricts();
 
-  return db.region.findMany({
+  const rows = await db.region.findMany({
     where: {
       cityName: OBOUR_CITY_NAME,
       isActive: true,
     },
-    orderBy: [{ regionName: "asc" }],
+    orderBy: [{ sortOrder: "asc" }, { regionName: "asc" }],
   });
+  return sortDistrictRows(rows);
 }
 
 export async function listAllObourDistricts() {
   await ensureDefaultObourDistricts();
 
-  return db.region.findMany({
+  const rows = await db.region.findMany({
     where: {
       cityName: OBOUR_CITY_NAME,
     },
-    orderBy: [{ regionName: "asc" }],
+    orderBy: [{ sortOrder: "asc" }, { regionName: "asc" }],
     include: {
       _count: {
         select: {
@@ -152,6 +181,7 @@ export async function listAllObourDistricts() {
       },
     },
   });
+  return sortDistrictRows(rows);
 }
 
 export async function assertObourLocation(

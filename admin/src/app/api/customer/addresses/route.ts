@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { districtSortOrder } from "@/lib/district-order";
 import { assertObourLocation } from "@/lib/districts";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
       create: {
         cityName,
         regionName,
+        sortOrder: districtSortOrder(regionName),
       },
     });
 

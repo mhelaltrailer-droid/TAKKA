@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { districtSortOrder } from "@/lib/district-order";
 import { assertObourLocation } from "@/lib/districts";
 import { KITCHEN_COORDS_REQUIRED } from "@/lib/kitchen-onboarding-copy";
 import { isValidLatLng } from "@/lib/maps";
@@ -118,6 +119,7 @@ export async function POST(request: Request) {
         cityName,
         regionName,
         isActive: true,
+        sortOrder: districtSortOrder(regionName),
       },
     });
 
