@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import {
   KITCHEN_JOIN_STATUSES,
   kitchenJoinSegmentLabel,
+  kitchenJoinSourceLabel,
   kitchenJoinStatusLabel,
   isKitchenJoinStatus,
 } from "@/lib/kitchen-join-leads";
@@ -182,8 +183,20 @@ export default async function AdminKitchenLeadsPage({
                         </a>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-600">
-                      {lead.source ?? "—"}
+                    <td className="px-4 py-3 text-zinc-700">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">
+                          {kitchenJoinSourceLabel(lead.source)}
+                        </span>
+                        {lead.source ? (
+                          <span
+                            dir="ltr"
+                            className="font-mono text-xs text-zinc-500"
+                          >
+                            {lead.source}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-zinc-600">
                       {lead.createdAt.toLocaleString("ar-EG")}

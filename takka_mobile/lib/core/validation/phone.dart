@@ -1,8 +1,40 @@
-/// Shared with web (`admin/src/lib/phone.ts`): starts with 01, exactly 11 digits.
+/// Shared with web (`admin/src/lib/phone.ts`).
+/// Accepts 01XXXXXXXXX, +20 / 0020 / 20, and Arabic-Indic digits,
+/// then returns the local 01XXXXXXXXX form when the number is Egyptian.
 final RegExp _mobileRegex = RegExp(r'^01[0-9]{9}$');
 
 String normalizePhone(String input) {
-  return input.replaceAll(RegExp(r'[\s\-()]'), '').trim();
+  final buffer = StringBuffer();
+  for (final code in input.runes) {
+    if (code >= 0x0660 && code <= 0x0669) {
+      buffer.writeCharCode(0x30 + code - 0x0660);
+    } else if (code >= 0x06F0 && code <= 0x06F9) {
+      buffer.writeCharCode(0x30 + code - 0x06F0);
+    } else {
+      buffer.writeCharCode(code);
+    }
+  }
+
+  var value = buffer
+      .toString()
+      .replaceAll(RegExp(r'[\s\-().\u200e\u200f\u202a-\u202e]'), '')
+      .trim();
+  if (value.startsWith('+')) {
+    value = value.substring(1);
+  }
+
+  String? rest;
+  if (value.startsWith('0020')) {
+    rest = value.substring(4);
+  } else if (value.startsWith('20')) {
+    rest = value.substring(2);
+  }
+
+  if (rest != null) {
+    if (RegExp(r'^01[0-9]{9}$').hasMatch(rest)) return rest;
+    if (RegExp(r'^1[0-9]{9}$').hasMatch(rest)) return '0$rest';
+  }
+  return value;
 }
 
 bool isValidPhone(String input) {

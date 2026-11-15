@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { districtSortOrder } from "@/lib/district-order";
 
 type AddressPayload = {
   label?: string;
@@ -53,6 +54,7 @@ export async function PATCH(
         create: {
           cityName: payload.cityName.trim(),
           regionName: payload.regionName.trim(),
+          sortOrder: districtSortOrder(payload.regionName.trim()),
         },
       });
 

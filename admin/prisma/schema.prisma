@@ -132,6 +132,8 @@ model Region {
   cityName          String
   regionName        String
   isActive          Boolean           @default(true)
+  /// 1–9 = الحي الأول…التاسع, 100+ = باقي الكتالوج, 1000 = حي مضاف يدويًا.
+  sortOrder         Int               @default(1000)
   /// Closed GeoJSON-style ring as JSON: [[lng,lat],...] (first === last).
   polygonRingJson   String?
   createdAt         DateTime          @default(now())

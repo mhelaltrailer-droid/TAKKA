@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { compareDistrictNames } from "@/lib/district-order";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import { menuItemNeedsAdminReviewWhere } from "@/lib/moderation";
 
@@ -21,7 +22,7 @@ export default async function AdminOperationsPage() {
     db.kitchen.count({ where: { approvalStatus: "PENDING" } }),
     db.menuItem.count({ where: menuItemNeedsAdminReviewWhere() }),
     db.region.findMany({
-      orderBy: [{ cityName: "asc" }, { regionName: "asc" }],
+      orderBy: [{ cityName: "asc" }, { sortOrder: "asc" }, { regionName: "asc" }],
     }),
     db.user.count(),
     db.order.findMany({
@@ -34,6 +35,13 @@ export default async function AdminOperationsPage() {
     }),
     db.kitchenJoinLead.count({ where: { status: "NEW" } }),
   ]);
+
+  regions.sort((a, b) => {
+    const city = a.cityName.localeCompare(b.cityName, "ar");
+    if (city !== 0) return city;
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    return compareDistrictNames(a.regionName, b.regionName);
+  });
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
