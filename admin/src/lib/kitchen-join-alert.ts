@@ -1,6 +1,9 @@
 import nodemailer from "nodemailer";
 
-import { kitchenJoinSegmentLabel } from "./kitchen-join-leads";
+import {
+  kitchenJoinSegmentLabel,
+  kitchenJoinSourceLabel,
+} from "./kitchen-join-leads";
 import type { KitchenJoinLeadAlert } from "./join-kitchen-submit";
 
 const ALERT_TIMEOUT_MS = 4_000;
@@ -91,18 +94,24 @@ export function buildKitchenJoinAlertEmail(
   const segment = kitchenJoinSegmentLabel(lead.segment);
   const wa = whatsappLink(lead.whatsapp);
   const adminUrl = options.adminUrl ?? adminLeadsDashboardUrl();
-  const source = lead.source?.trim() || "—";
+  const sourceLabel = kitchenJoinSourceLabel(lead.source);
+  const sourceCode = lead.source?.trim() || null;
+  const sourceDetail = sourceCode
+    ? sourceLabel === sourceCode
+      ? sourceCode
+      : `${sourceLabel} (${sourceCode})`
+    : sourceLabel;
 
-  const subject = "طلب انضمام مطبخ جديد – تكة";
+  const subject = `طلب انضمام مطبخ جديد – ${sourceLabel} – تكة`;
   const text = [
     "طلب انضمام مطبخ جديد على تكة",
+    `المصدر: ${sourceDetail}`,
     "",
     `الاسم: ${lead.fullName}`,
     `الحي: ${lead.district}`,
     `النوع: ${segment}`,
     `واتساب: ${lead.whatsapp}`,
     `رابط واتساب: ${wa}`,
-    `المصدر (src): ${source}`,
     `الوقت (القاهرة): ${when}`,
     "",
     `لوحة الليدز: ${adminUrl}`,
@@ -110,13 +119,13 @@ export function buildKitchenJoinAlertEmail(
 
   const html = `
 <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.7;color:#5C3016">
-  <p style="font-size:16px;font-weight:700;margin:0 0 12px">طلب انضمام مطبخ جديد على تكة</p>
+  <p style="font-size:16px;font-weight:700;margin:0 0 4px">طلب انضمام مطبخ جديد على تكة</p>
+  <p style="margin:0 0 12px;font-size:15px"><strong>المصدر:</strong> ${escapeHtml(sourceDetail)}</p>
   <ul style="padding-inline-start:18px;margin:0">
     <li><strong>الاسم:</strong> ${escapeHtml(lead.fullName)}</li>
     <li><strong>الحي:</strong> ${escapeHtml(lead.district)}</li>
     <li><strong>النوع:</strong> ${escapeHtml(segment)}</li>
     <li><strong>واتساب:</strong> ${escapeHtml(lead.whatsapp)} — <a href="${escapeHtml(wa)}">${escapeHtml(wa)}</a></li>
-    <li><strong>المصدر (src):</strong> ${escapeHtml(source)}</li>
     <li><strong>الوقت (القاهرة):</strong> ${escapeHtml(when)}</li>
   </ul>
   <p style="margin:16px 0 0">
@@ -143,13 +152,19 @@ function escapeHtml(value: string): string {
 }
 
 function alertText(lead: KitchenJoinLeadAlert): string {
+  const sourceLabel = kitchenJoinSourceLabel(lead.source);
+  const sourceCode = lead.source?.trim();
+  const sourceLine =
+    sourceCode && sourceLabel !== sourceCode
+      ? `${sourceLabel} (${sourceCode})`
+      : sourceLabel;
   return [
     "ليد جديدة — انضمام مطبخ",
+    `المصدر: ${sourceLine}`,
     `الاسم: ${lead.fullName}`,
     `الحي: ${lead.district}`,
     `النوع: ${kitchenJoinSegmentLabel(lead.segment)}`,
     `واتساب: ${lead.whatsapp}`,
-    `المصدر: ${lead.source ?? "—"}`,
     whatsappLink(lead.whatsapp),
   ].join("\n");
 }

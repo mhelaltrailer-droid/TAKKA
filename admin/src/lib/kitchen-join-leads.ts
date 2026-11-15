@@ -90,3 +90,40 @@ export function normalizeLeadSource(
   if (!/^[a-zA-Z0-9_.:-]+$/.test(value)) return null;
   return value;
 }
+
+/** Known ?src= tracking codes → Arabic labels for alerts and admin. */
+export const KITCHEN_JOIN_SOURCE_LABELS: Record<string, string> = {
+  fb_page: "صفحة فيسبوك",
+  ig_bio: "بايو إنستجرام",
+  tiktok_bio: "بايو تيك توك",
+  fb_group_obour: "جروب العبور على فيسبوك",
+  fb_group_food: "جروبات أكل على فيسبوك",
+  whatsapp: "واتساب",
+  wa_business: "واتساب بيزنس",
+  organic_post: "بوست",
+};
+
+export const KITCHEN_JOIN_SOURCE_UNKNOWN = "مباشر / غير معروف";
+
+/**
+ * Human label for a lead source.
+ * Known codes → Arabic. Unknown non-empty codes → raw code. Missing → مباشر / غير معروف.
+ */
+export function kitchenJoinSourceLabel(
+  source: string | null | undefined,
+): string {
+  const value = source?.trim() ?? "";
+  if (!value) return KITCHEN_JOIN_SOURCE_UNKNOWN;
+  return KITCHEN_JOIN_SOURCE_LABELS[value] ?? value;
+}
+
+/** Arabic label plus raw code when the code is known (for dashboards / email detail). */
+export function kitchenJoinSourceDisplay(
+  source: string | null | undefined,
+): { label: string; code: string | null } {
+  const value = source?.trim() || null;
+  return {
+    label: kitchenJoinSourceLabel(value),
+    code: value,
+  };
+}

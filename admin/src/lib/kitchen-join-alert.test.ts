@@ -88,7 +88,7 @@ describe("smtpAlertConfig", () => {
 });
 
 describe("buildKitchenJoinAlertEmail", () => {
-  it("builds an Arabic subject and body with WhatsApp, src, Cairo time, and admin link", () => {
+  it("builds an Arabic subject and body with WhatsApp, src label, Cairo time, and admin link", () => {
     const mail = buildKitchenJoinAlertEmail(lead, {
       to: "takkaapp.eg@gmail.com",
       from: "تكة <takkaapp.eg@gmail.com>",
@@ -96,21 +96,51 @@ describe("buildKitchenJoinAlertEmail", () => {
       adminUrl: "https://takka-admin.onrender.com/dashboard/admin/leads",
     });
 
-    assert.equal(mail.subject, "طلب انضمام مطبخ جديد – تكة");
+    assert.equal(
+      mail.subject,
+      "طلب انضمام مطبخ جديد – بايو إنستجرام – تكة",
+    );
     assert.equal(mail.to, "takkaapp.eg@gmail.com");
+    assert.match(mail.text, /^المصدر: بايو إنستجرام \(ig_bio\)/m);
     assert.match(mail.text, /منى أحمد/);
     assert.match(mail.text, /الحي الأول/);
     assert.match(mail.text, /ست بيت/);
     assert.match(mail.text, /01012345678/);
     assert.match(mail.text, /https:\/\/wa\.me\/201012345678/);
-    assert.match(mail.text, /ig_bio/);
     assert.match(mail.text, /القاهرة/);
     assert.match(
       mail.text,
       /https:\/\/takka-admin\.onrender\.com\/dashboard\/admin\/leads/,
     );
     assert.match(mail.html, /dir="rtl"/);
+    assert.match(mail.html, /بايو إنستجرام \(ig_bio\)/);
     assert.match(mail.html, /https:\/\/wa\.me\/201012345678/);
+  });
+
+  it("puts missing and unknown sources clearly in the subject and body", () => {
+    const missing = buildKitchenJoinAlertEmail(
+      { ...lead, source: null },
+      {
+        to: "takkaapp.eg@gmail.com",
+        from: "تكة <takkaapp.eg@gmail.com>",
+      },
+    );
+    assert.equal(
+      missing.subject,
+      "طلب انضمام مطبخ جديد – مباشر / غير معروف – تكة",
+    );
+    assert.match(missing.text, /^المصدر: مباشر \/ غير معروف/m);
+
+    const unknown = buildKitchenJoinAlertEmail(
+      { ...lead, source: "radio_ad" },
+      {
+        to: "takkaapp.eg@gmail.com",
+        from: "تكة <takkaapp.eg@gmail.com>",
+      },
+    );
+    assert.equal(unknown.subject, "طلب انضمام مطبخ جديد – radio_ad – تكة");
+    assert.match(unknown.text, /^المصدر: radio_ad/m);
+    assert.equal(unknown.text.includes("بايو"), false);
   });
 
   it("uses the default admin leads URL", () => {
@@ -174,9 +204,12 @@ describe("notifyKitchenJoinLead", () => {
     });
 
     assert.equal(mails.length, 1);
-    assert.equal(mails[0].subject, "طلب انضمام مطبخ جديد – تكة");
+    assert.equal(
+      mails[0].subject,
+      "طلب انضمام مطبخ جديد – بايو إنستجرام – تكة",
+    );
     assert.equal(mails[0].to, "takkaapp.eg@gmail.com");
-    assert.match(mails[0].text, /ig_bio/);
+    assert.match(mails[0].text, /بايو إنستجرام \(ig_bio\)/);
     assert.equal(calls.length, 2);
     assert.match(
       calls[0].url,

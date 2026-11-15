@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { JOIN_KITCHEN_COPY, KITCHEN_JOIN_SEGMENTS } from "./kitchen-join-leads";
+import {
+  JOIN_KITCHEN_COPY,
+  KITCHEN_JOIN_SEGMENTS,
+  KITCHEN_JOIN_SOURCE_UNKNOWN,
+  kitchenJoinSourceLabel,
+} from "./kitchen-join-leads";
 import {
   JOIN_KITCHEN_DESCRIPTION,
   JOIN_KITCHEN_OG_IMAGE,
@@ -36,5 +41,32 @@ describe("join-kitchen public copy", () => {
       KITCHEN_JOIN_SEGMENTS.find((item) => item.value === "BEGINNER")?.label,
       "بفكّر أبدأ",
     );
+  });
+});
+
+describe("kitchenJoinSourceLabel", () => {
+  it("maps known src codes to Arabic labels", () => {
+    assert.equal(kitchenJoinSourceLabel("fb_page"), "صفحة فيسبوك");
+    assert.equal(kitchenJoinSourceLabel("ig_bio"), "بايو إنستجرام");
+    assert.equal(kitchenJoinSourceLabel("tiktok_bio"), "بايو تيك توك");
+    assert.equal(
+      kitchenJoinSourceLabel("fb_group_obour"),
+      "جروب العبور على فيسبوك",
+    );
+    assert.equal(
+      kitchenJoinSourceLabel("fb_group_food"),
+      "جروبات أكل على فيسبوك",
+    );
+    assert.equal(kitchenJoinSourceLabel("whatsapp"), "واتساب");
+    assert.equal(kitchenJoinSourceLabel("wa_business"), "واتساب بيزنس");
+    assert.equal(kitchenJoinSourceLabel("organic_post"), "بوست");
+  });
+
+  it("keeps unknown codes and uses the missing-src fallback", () => {
+    assert.equal(kitchenJoinSourceLabel("radio_ad"), "radio_ad");
+    assert.equal(kitchenJoinSourceLabel(null), KITCHEN_JOIN_SOURCE_UNKNOWN);
+    assert.equal(kitchenJoinSourceLabel(""), KITCHEN_JOIN_SOURCE_UNKNOWN);
+    assert.equal(kitchenJoinSourceLabel("   "), KITCHEN_JOIN_SOURCE_UNKNOWN);
+    assert.equal(KITCHEN_JOIN_SOURCE_UNKNOWN, "مباشر / غير معروف");
   });
 });
