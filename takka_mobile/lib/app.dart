@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:clerk_flutter/clerk_flutter.dart';
 
 import 'core/config/app_config.dart';
-import 'core/theme/app_theme.dart';
+import 'core/update/app_update_host.dart';
 import 'core/ui/friendly_error.dart';
 import 'features/auth/data/app_role.dart';
 import 'features/auth/data/mobile_me_service.dart';
@@ -22,11 +22,8 @@ class TakkaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!AppConfig.hasClerkKey) {
-      return MaterialApp(
-        title: 'تكة',
-        debugShowCheckedModeBanner: false,
-        theme: buildTakkaTheme(),
-        home: const Directionality(
+      return const AppUpdateHost(
+        home: Directionality(
           textDirection: TextDirection.rtl,
           child: _MissingConfigScreen(),
         ),
@@ -38,11 +35,8 @@ class TakkaApp extends StatelessWidget {
         publishableKey: AppConfig.clerkPublishableKey,
         isTestMode: AppConfig.clerkPublishableKey.contains('_test_'),
       ),
-      child: MaterialApp(
-        title: 'تكة',
-        debugShowCheckedModeBanner: false,
-        theme: buildTakkaTheme(),
-        home: const Directionality(
+      child: const AppUpdateHost(
+        home: Directionality(
           textDirection: TextDirection.rtl,
           child: SafeArea(
             child: ClerkErrorListener(

@@ -28,3 +28,8 @@ takka_mobile/.pub-cache/
 # IDE / generated
 .idea/
 *.iml
+
+# Android release signing — never commit
+**/key.properties
+**/*.jks
+**/*.keystore

@@ -71,5 +71,10 @@
             <action android:name="android.intent.action.PICK"/>
             <data android:mimeType="image/*"/>
         </intent>
+        <!-- In-app update opens the APK download URL in the browser. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

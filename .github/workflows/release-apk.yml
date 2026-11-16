@@ -1,0 +1,150 @@
+# Builds sideload release APKs and attaches them to a GitHub Release.
+# Manual run: Actions → Release APK → Run workflow.
+# Tag run: push a tag vX.Y.Z (or vX.Y.Z+build) that matches takka_mobile/pubspec.yaml.
+name: Release APK
+
+"on":
+  workflow_dispatch:
+    inputs:
+      universal:
+        description: Also build a universal APK
+        required: false
+        default: true
+        type: boolean
+      include_x86_64:
+        description: Also build an x86_64 APK (emulators only)
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: takka_mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          cache: true
+
+      - name: Resolve version
+        id: version
+        run: bash scripts/resolve_release_version.sh
+
+      - name: Write production dart-defines
+        env:
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          TAKKA_API_BASE_URL: ${{ secrets.TAKKA_API_BASE_URL }}
+          PUSHER_KEY: ${{ secrets.PUSHER_KEY }}
+          PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
+        run: |
+          python3 scripts/write_dart_defines.py dart_defines.json
+          python3 scripts/check_dart_defines.py dart_defines.json
+
+      - name: Check signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: bash scripts/check_signing_env.sh
+
+      - name: Build release APKs
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          TAKKA_UNIVERSAL: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.universal }}
+          TAKKA_X86_64: ${{ github.event_name == 'workflow_dispatch' && inputs.include_x86_64 }}
+        run: |
+          set -euo pipefail
+          args=(--ci)
+          if [ "${TAKKA_UNIVERSAL}" = "true" ]; then
+            args+=(--universal)
+          else
+            args+=(--no-universal)
+          fi
+          if [ "${TAKKA_X86_64}" = "true" ]; then
+            args+=(--x86_64)
+          fi
+          bash scripts/build_release_apk.sh "${args[@]}"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: takka-apk-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.version_code }}
+          path: takka_mobile/build/app/outputs/flutter-apk/dist/*.apk
+          if-no-files-found: error
+
+      - name: Attach APKs to the GitHub Release
+        working-directory: takka_mobile
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          notes=$(mktemp)
+          cat > "$notes" <<EOF
+          ## تكة ${VERSION_NAME} (${VERSION_CODE})
+
+          ملفات التثبيت الجانبي (sideload):
+
+          - \`arm64-v8a\`: معظم موبايلات أندرويد الحديثة. ده الاختيار المعتاد.
+          - \`armeabi-v7a\`: الموبايلات الأقدم.
+          - \`universal\`: ملف واحد يشتغل على الاتنين، وحجمه أكبر.
+          - \`x86_64\`: للمحاكي فقط، ومش بيتبني إلا لو طلبته يدويًا.
+
+          قبل التثبيت، احذف أي نسخة قديمة كانت باسم الحزمة \`com.example.takka_mobile\`. النسخة الجديدة \`com.takka.app\` تطبيق مختلف، والتحديث فوق النسخة القديمة مش هيشتغل.
+
+          ## Takka ${VERSION_NAME} (${VERSION_CODE})
+
+          Sideload APKs:
+
+          - \`arm64-v8a\`: almost all current Android phones.
+          - \`armeabi-v7a\`: older 32-bit phones.
+          - \`universal\`: one file for both, larger download.
+          - \`x86_64\`: emulators only; built only when requested.
+
+          Uninstall any existing install of \`com.example.takka_mobile\` first. \`com.takka.app\` is a different application id and will not update over it.
+          EOF
+          shopt -s nullglob
+          files=(build/app/outputs/flutter-apk/dist/*.apk)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No APKs found to publish." >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --notes-file "$notes" --title "تكة ${VERSION_NAME} (${VERSION_CODE})"
+          else
+            gh release create "$RELEASE_TAG" "${files[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "تكة ${VERSION_NAME} (${VERSION_CODE})" \
+              --notes-file "$notes"
+          fi

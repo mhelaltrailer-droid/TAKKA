@@ -1,5 +1,6 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
 import '../../../core/realtime/pusher_realtime_service.dart';
 import '../../../core/ui/takka_error_retry.dart';
@@ -20,7 +21,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<List<AppNotification>>? _future;
   String? _userChannelName;
 
-  void _onRealtimeEvent(event) {
+  void _onRealtimeEvent(PusherEvent event) {
     if (!mounted || event.eventName != 'notification:new') {
       return;
     }

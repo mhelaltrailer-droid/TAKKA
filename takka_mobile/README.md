@@ -34,16 +34,24 @@ flutter run --dart-define-from-file=dart_defines.json
 
 **Never** build with bare `flutter build apk --release` — that omits the Clerk key and shows «مفتاح Clerk غير مضبوط».
 
-Use the scripts (they sync from `admin/.env` if needed, then pass `--dart-define-from-file`):
+Android application id: `com.takka.app`. Full release steps (GitHub secrets, keystore, Clerk package name, Render update env): [`docs/release-apk.md`](../docs/release-apk.md).
+
+The APK scripts build split APKs (`arm64-v8a`, `armeabi-v7a`) and a universal APK. Add `-IncludeX86_64` / `--x86_64` for emulators, or `-NoUniversal` / `--no-universal` to skip the fat APK.
 
 ```powershell
 powershell -File scripts/build_release_apk.ps1
 powershell -File scripts/build_release_aab.ps1
 ```
 
+```bash
+bash scripts/build_release_apk.sh
+```
+
 - Local secrets live in `dart_defines.json` (gitignored).
 - Template: `dart_defines.example.json`
-- Latest paths: `LATEST_APK_PATH.txt` / `LATEST_AAB_PATH.txt`
+- Output: `build/app/outputs/flutter-apk/dist/`
+- Recommended path: `LATEST_APK_PATH.txt` (universal APK when it was built, otherwise arm64)
+- AAB path: `LATEST_AAB_PATH.txt`
 
 ## Notes
 

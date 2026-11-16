@@ -61,6 +61,24 @@ NEXT_PUBLIC_TAKKA_SURFACE=admin
 4. Signup collects Egyptian phone + name + email.
    Verification code is sent to email.
 
+## Mobile app update prompt (optional)
+
+Public endpoint: `GET /api/mobile/app-version` (no database).
+
+Set these on the **takka-app** Render service when you publish an APK.
+If they are missing or invalid, the endpoint returns `configured: false` and the app shows nothing.
+
+```
+MOBILE_APP_LATEST_VERSION=1.0.0
+MOBILE_APP_LATEST_BUILD=1
+MOBILE_APP_MIN_BUILD=1
+MOBILE_APP_DOWNLOAD_URL=https://github.com/<org>/<repo>/releases/download/v1.0.0/takka-1.0.0-1-universal.apk
+MOBILE_APP_RELEASE_NOTES_AR=أول نسخة.
+```
+
+`MOBILE_APP_LATEST_BUILD` is the number after `+` in `takka_mobile/pubspec.yaml` (`1.0.0+1` → build `1`).
+Builds below `MOBILE_APP_MIN_BUILD` get a forced update dialog. See `docs/release-apk.md`.
+
 ## After deploy
 1. Open https://takka-app.onrender.com
 2. Create account with phone like 01111989094

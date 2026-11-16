@@ -1,4 +1,4 @@
-package com.example.takka_mobile
+package com.takka.app
 
 import io.flutter.embedding.android.FlutterActivity
 

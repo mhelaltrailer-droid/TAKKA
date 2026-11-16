@@ -1,6 +1,5 @@
 /// مراحل مبسّطة ظاهرة للعميل فقط.
 /// الحالات الداخلية للمطبخ تبقى كما هي عبر [orderStatusLabelAr].
-
 enum CustomerOrderStage {
   awaitingKitchen,
   payDeposit,
