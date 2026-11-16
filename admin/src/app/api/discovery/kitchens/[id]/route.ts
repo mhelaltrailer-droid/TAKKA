@@ -106,11 +106,23 @@ export async function GET(
       ? flashRaw
       : null;
 
-  const { flashOffers: _ignored, ...kitchenRest } = kitchen;
+  const {
+    flashOffers: hiddenOffers,
+    isDemo: hiddenKitchenFlag,
+    menuItems,
+    ...kitchenRest
+  } = kitchen;
+  void hiddenOffers;
+  void hiddenKitchenFlag;
 
   return NextResponse.json({
     kitchen: {
       ...kitchenRest,
+      menuItems: menuItems.map((item) => {
+        const { isDemo: hiddenItemFlag, ...itemRest } = item;
+        void hiddenItemFlag;
+        return itemRest;
+      }),
       dishOfTheDay: dishItem
         ? serializeDishOfTheDay({
             ...dishItem,
