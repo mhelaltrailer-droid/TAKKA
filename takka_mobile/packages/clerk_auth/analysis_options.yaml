@@ -4,6 +4,12 @@ analyzer:
   exclude:
     - '**/*.g.dart'
     - 'lib/src/_version.dart'
+    # Upstream integration tests need dev_dependencies that are not vendored.
+    - 'test/**'
+  errors:
+    # Dart 3.12 flags these in the vendored Clerk sources. Behavior is unchanged.
+    unnecessary_library_name: ignore
+    strict_top_level_inference: ignore
 
 formatter:
   page_width: 80

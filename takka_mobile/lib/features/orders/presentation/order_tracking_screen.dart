@@ -348,7 +348,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                             height: 180,
                                             width: double.infinity,
                                             fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => Text(
+                                            errorBuilder: (_, _, _) => Text(
                                               message.fileUrl!,
                                               style: const TextStyle(
                                                 fontSize: 12,

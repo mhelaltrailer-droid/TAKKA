@@ -4,10 +4,12 @@ Push is optional. Until the steps below are done, the Android app and the Render
 
 الإشعارات الخارجية اختيارية. من غير الخطوات دي التطبيق والسيرفر يشتغلوا زي الأول، وتنبيه الطلب جوه التطبيق (Pusher) يفضل شغال.
 
+اسم حزمة أندرويد في Firebase لازم يكون `com.takka.app`. متسجلش `com.example.takka_mobile`. أي تثبيت قديم بالاسم ده يتشال قبل تثبيت النسخة الجديدة.
+
 ## What you will create
 
 - A free Firebase project
-- An Android app whose package name is exactly `com.example.takka_mobile` (do not change `applicationId`)
+- An Android app whose package name is exactly `com.takka.app` (the application id in `takka_mobile/android/app/build.gradle.kts`)
 - `takka_mobile/android/app/google-services.json` (do not commit it)
 - A Firebase service account, stored only in Render env vars
 
@@ -15,14 +17,22 @@ Push is optional. Until the steps below are done, the Android app and the Render
 
 1. Open https://console.firebase.google.com/ and create a project (Spark / free plan is enough). Google Analytics is optional.
 2. Project settings → Your apps → Add app → Android.
-3. Android package name: `com.example.takka_mobile`
+3. Android package name: `com.takka.app`. Do not register `com.example.takka_mobile`. That id is no longer the app, and an old sideload of it must be uninstalled before installing `com.takka.app`.
 4. Download `google-services.json`.
 5. Put it here, and only here:
 
    `takka_mobile/android/app/google-services.json`
 
-   Gradle applies the Google Services plugin only when that file exists. Do not commit a fake file.
-6. Rebuild the APK (`flutter build apk`). The kitchen app will then ask, in Arabic, for notification permission after login.
+   Gradle applies the Google Services plugin only when that file exists. A missing file is fine: the APK still builds and push stays off. Do not commit a fake file.
+6. Rebuild the APK (`bash scripts/build_release_apk.sh` or the PowerShell script). The kitchen app will then ask, in Arabic, for notification permission after login.
+
+GitHub Actions can do step 5 for you. Base64 the file and save it as the secret `GOOGLE_SERVICES_JSON`:
+
+```bash
+base64 -w 0 takka_mobile/android/app/google-services.json
+```
+
+If that secret is empty, the Release APK workflow still builds and prints a warning. Push stays disabled in that APK.
 
 ## 2. Service account for the API
 
@@ -61,3 +71,4 @@ If the env vars or `google-services.json` are missing, step 4 does nothing and t
 - Notification channel id: `takka_alerts` (created by the app on startup).
 - Tokens are stored per user and removed on logout, on token refresh replacement, and when FCM says the token is no longer valid.
 - Do not put the service-account JSON or `google-services.json` in git.
+- The Firebase Android app must use package `com.takka.app`. A `google-services.json` registered to `com.example.takka_mobile` will not match this build; CI rejects that file.

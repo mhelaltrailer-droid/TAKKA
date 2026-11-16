@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
 import '../../../core/kitchen/kitchen_feature_gate.dart';
 import '../../../core/links/external_link.dart';
@@ -29,7 +30,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
   Future<_OrdersPageData>? _future;
   String? _userChannelName;
 
-  void _onRealtimeEvent(event) {
+  void _onRealtimeEvent(PusherEvent event) {
     if (!mounted) {
       return;
     }
@@ -178,7 +179,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                                   await Clipboard.setData(
                                     ClipboardData(text: url),
                                   );
-                                  if (!mounted) return;
+                                  if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
@@ -232,10 +233,8 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                                         await Clipboard.setData(
                                           ClipboardData(text: text),
                                         );
-                                        if (!mounted) return;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
                                             content: Text('تم نسخ العنوان'),
                                           ),
@@ -750,7 +749,7 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
                                           height: 160,
                                           width: double.infinity,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Text(
+                                          errorBuilder: (_, _, _) => Text(
                                             message.fileUrl!,
                                             style: const TextStyle(
                                               fontSize: 12,

@@ -1,5 +1,4 @@
 /// GeoJSON rings: [longitude, latitude] — closed (first == last).
-
 typedef LngLat = ({double lng, double lat});
 
 class ObourDistrictPolygon {

@@ -53,3 +53,8 @@ lib/firebase_options.dart
 dart_defines.json
 LATEST_APK_PATH.txt
 LATEST_AAB_PATH.txt
+
+# Release signing material (also ignored under android/)
+key.properties
+*.jks
+*.keystore

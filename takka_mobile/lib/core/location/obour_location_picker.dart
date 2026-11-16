@@ -190,7 +190,7 @@ class _ObourLocationPickerState extends State<ObourLocationPicker> {
           )
         else
           DropdownButtonFormField<String>(
-            value: selected,
+            initialValue: selected,
             decoration: const InputDecoration(hintText: 'اختر الحي'),
             items: _districts
                 .map(
