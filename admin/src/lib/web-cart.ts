@@ -7,6 +7,7 @@ export type WebCartItem = {
   unitPrice: number;
   depositAmount: number;
   quantity: number;
+  customerNote: string | null;
   orderReadiness: string;
 };
 
@@ -68,7 +69,15 @@ function readStorage(): WebCartState {
           : null,
       kitchenAddressLine: parsed.kitchenAddressLine ?? null,
       kitchenRegionLabel: parsed.kitchenRegionLabel ?? null,
-      items: Array.isArray(parsed.items) ? parsed.items : [],
+      items: Array.isArray(parsed.items)
+      ? parsed.items.map((item) => ({
+          ...item,
+          customerNote:
+            typeof item.customerNote === "string" && item.customerNote.trim()
+              ? item.customerNote.trim()
+              : null,
+        }))
+      : [],
     };
   } catch {
     // ignore
@@ -95,6 +104,25 @@ export function subscribeWebCart(listener: Listener) {
   };
 }
 
+export function replaceWebCart(next: WebCartState) {
+  writeStorage({
+    kitchenId: next.kitchenId,
+    kitchenName: next.kitchenName,
+    kitchenSlug: next.kitchenSlug,
+    kitchenLatitude: next.kitchenLatitude,
+    kitchenLongitude: next.kitchenLongitude,
+    kitchenAddressLine: next.kitchenAddressLine,
+    kitchenRegionLabel: next.kitchenRegionLabel,
+    items: next.items.map((item, index) => ({
+      ...item,
+      id:
+        item.id ||
+        `${item.menuItemId}-${item.menuItemSizeId ?? "base"}-${index}`,
+      customerNote: item.customerNote?.trim() || null,
+    })),
+  });
+}
+
 export function clearWebCart() {
   writeStorage({
     kitchenId: null,
@@ -116,7 +144,10 @@ export function addWebCartItem(params: {
   kitchenLongitude?: number | null;
   kitchenAddressLine?: string | null;
   kitchenRegionLabel?: string | null;
-  item: Omit<WebCartItem, "id" | "quantity"> & { quantity?: number };
+  item: Omit<WebCartItem, "id" | "quantity" | "customerNote"> & {
+    quantity?: number;
+    customerNote?: string | null;
+  };
 }) {
   const current = readStorage();
   if (current.items.length && current.kitchenId !== params.kitchenId) {
@@ -124,10 +155,12 @@ export function addWebCartItem(params: {
   }
 
   const quantity = params.item.quantity ?? 1;
+  const customerNote = params.item.customerNote?.trim() || null;
   const existingIndex = current.items.findIndex(
     (item) =>
       item.menuItemId === params.item.menuItemId &&
-      item.menuItemSizeId === params.item.menuItemSizeId,
+      item.menuItemSizeId === params.item.menuItemSizeId &&
+      (item.customerNote ?? null) === customerNote,
   );
 
   const items = [...current.items];
@@ -147,6 +180,7 @@ export function addWebCartItem(params: {
       unitPrice: params.item.unitPrice,
       depositAmount: params.item.depositAmount,
       quantity,
+      customerNote,
       orderReadiness: params.item.orderReadiness,
     });
   }

@@ -358,6 +358,7 @@ class KitchenDetails {
     required this.longitude,
     required this.averageRating,
     required this.reviewsCount,
+    required this.availabilityStatus,
     required this.menuItems,
     required this.reviews,
     required this.dishOfTheDay,
@@ -383,6 +384,7 @@ class KitchenDetails {
       longitude: (json['longitude'] as num?)?.toDouble(),
       averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0,
       reviewsCount: (json['reviewsCount'] as num?)?.toInt() ?? 0,
+      availabilityStatus: json['availabilityStatus']?.toString() ?? 'OPEN',
       menuItems: (json['menuItems'] as List<dynamic>? ?? const [])
           .map((item) => MenuItemSummary.fromJson(item as Map<String, dynamic>))
           .toList(),
@@ -411,7 +413,10 @@ class KitchenDetails {
   final double? longitude;
   final double averageRating;
   final int reviewsCount;
+  final String availabilityStatus;
   final List<MenuItemSummary> menuItems;
+
+  bool get isOpen => availabilityStatus == 'OPEN';
   final List<KitchenReview> reviews;
   final DealDishOfTheDay? dishOfTheDay;
   final DealFlashOffer? activeFlashOffer;

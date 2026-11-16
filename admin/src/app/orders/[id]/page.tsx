@@ -8,6 +8,8 @@ import { DepositProofForm } from "@/components/deposit-proof-form";
 import { KitchenContactCard } from "@/components/kitchen-contact-card";
 import { LiveRefreshListener } from "@/components/live-refresh-listener";
 import { OrderTimeline } from "@/components/order-timeline";
+import { OrderSupportButton } from "@/components/order-support-button";
+import { ReorderButton } from "@/components/reorder-button";
 import { ReviewForm, ReviewThanksCard } from "@/components/review-form";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -16,6 +18,8 @@ import {
   getCustomerOrderStatusLabel,
 } from "@/lib/customer-order-status";
 import { canCustomerSeeKitchenPhone } from "@/lib/kitchen-contact";
+import { isPreviousOrderStatus } from "@/lib/order-status";
+import { resolveSupportWhatsappNumber } from "@/lib/support-whatsapp";
 import { db } from "@/lib/db";
 
 export default async function CustomerOrderDetailsPage({
@@ -35,6 +39,7 @@ export default async function CustomerOrderDetailsPage({
       kitchen: {
         select: {
           kitchenName: true,
+          slug: true,
           phoneNumber: true,
         },
       },
@@ -108,6 +113,25 @@ export default async function CustomerOrderDetailsPage({
           <p className="mt-1 text-sm leading-7 text-zinc-600">
             المطبخ: {order.kitchen.kitchenName}
           </p>
+          <div className="mt-5 flex max-w-md flex-col gap-2">
+            {order.kitchen.slug ? (
+              <Link
+                href={`/kitchens/${order.kitchen.slug}`}
+                className="flex w-full items-center justify-center rounded-full border border-[#ead9c8] px-4 py-3 text-sm font-bold text-[#3b2418]"
+              >
+                من نفس المطبخ
+              </Link>
+            ) : null}
+            {isPreviousOrderStatus(order.status) ? (
+              <ReorderButton orderId={order.id} />
+            ) : null}
+            <OrderSupportButton
+              orderId={order.id}
+              orderNumber={order.orderNumber}
+              kitchenName={order.kitchen.kitchenName}
+              supportWhatsappNumber={resolveSupportWhatsappNumber(process.env)}
+            />
+          </div>
           <p className="mt-1 text-sm leading-7 text-zinc-600">
             {getCustomerOrderStatusHint(order.status, order.deliveryType)}
           </p>

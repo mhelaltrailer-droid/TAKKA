@@ -1,4 +1,4 @@
-import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { ApprovalStatus, FlashOfferStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
@@ -18,7 +18,6 @@ export async function GET(
     where: {
       OR: [{ id }, { slug: id }],
       approvalStatus: ApprovalStatus.APPROVED,
-      availabilityStatus: AvailabilityStatus.OPEN,
     },
     include: {
       region: true,

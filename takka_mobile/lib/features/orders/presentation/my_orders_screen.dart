@@ -7,7 +7,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../cart/data/order_service.dart';
+import '../../home/presentation/kitchen_details_screen.dart';
+import '../data/order_history_groups.dart';
 import 'order_tracking_screen.dart';
+import 'reorder_flow.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({
@@ -66,6 +69,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   : isPreviousOrderStatus(order.status),
             )
             .toList();
+        final groups = groupOrdersNewestFirst(
+          orders,
+          createdAt: (order) => order.createdAt,
+        );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,13 +123,26 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                           ),
                         ],
                       )
-                    : ListView.separated(
+                    : ListView(
                         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                        itemCount: orders.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          return _OrderCard(order: orders[index]);
-                        },
+                        children: [
+                          for (final group in groups) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8, top: 8),
+                              child: Text(
+                                group.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: TakkaColors.muted,
+                                ),
+                              ),
+                            ),
+                            for (final order in group.orders) ...[
+                              _OrderCard(order: order, dayLabel: group.label),
+                              const SizedBox(height: 12),
+                            ],
+                          ],
+                        ],
                       ),
               ),
             ),
@@ -223,9 +243,13 @@ class _TabChip extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order});
+  const _OrderCard({
+    required this.order,
+    required this.dayLabel,
+  });
 
   final CustomerOrderSummary order;
+  final String dayLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -233,6 +257,12 @@ class _OrderCard extends StatelessWidget {
       order.status,
       deliveryType: order.deliveryType,
     );
+    final previous = isPreviousOrderStatus(order.status);
+    final when = order.createdAt;
+    final clock = when == null ? '' : formatOrderClock(when);
+    final kitchenTarget = order.kitchenSlug.isNotEmpty
+        ? order.kitchenSlug
+        : order.kitchenId;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -279,6 +309,16 @@ class _OrderCard extends StatelessWidget {
                         fontSize: 13,
                       ),
                     ),
+                    if (clock.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '$dayLabel · $clock',
+                        style: const TextStyle(
+                          color: TakkaColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -315,6 +355,50 @@ class _OrderCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          if (kitchenTarget.isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => KitchenDetailsScreen(
+                        kitchenIdOrSlug: kitchenTarget,
+                        title: order.kitchenName,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('من نفس المطبخ'),
+              ),
+            ),
+          if (previous) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => startReorder(context, order.id),
+                child: const Text('اطلب تاني'),
+              ),
+            ),
+          ],
+          if (order.status == 'COMPLETED' && !order.hasReview) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => OrderTrackingScreen(orderId: order.id),
+                    ),
+                  );
+                },
+                child: const Text('قيّم تجربتك'),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -325,7 +409,7 @@ class _OrderCard extends StatelessWidget {
                   ),
                 );
               },
-              child: const Text('تتبع الطلب'),
+              child: Text(previous ? 'تفاصيل الطلب' : 'تتبع الطلب'),
             ),
           ),
         ],

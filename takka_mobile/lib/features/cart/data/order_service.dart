@@ -418,6 +418,47 @@ class OrderService {
     }
   }
 
+  Future<ReorderPreview> loadReorderPreview({
+    required String sessionToken,
+    required String orderId,
+  }) async {
+    final response = await _send(http.get(
+      _buildUri('/api/orders/$orderId/reorder-preview'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+      },
+    ));
+    final json = _decodeMap(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorText(json, 'تعذر تجهيز الطلب تاني.'));
+    }
+    return ReorderPreview.fromJson(json);
+  }
+
+  Future<void> logOrderIssue({
+    required String sessionToken,
+    required String orderId,
+    required String type,
+    String? note,
+  }) async {
+    final response = await _send(http.post(
+      _buildUri('/api/orders/$orderId/issues'),
+      headers: {
+        'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'type': type,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    ));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        _errorText(_decodeMap(response.body), 'تعذر تسجيل المشكلة.'),
+      );
+    }
+  }
+
   Future<void> submitReview({
     required String sessionToken,
     required String orderId,
@@ -500,8 +541,12 @@ class CustomerOrderSummary {
     required this.deliveryType,
     required this.totalAmount,
     required this.depositAmount,
+    required this.kitchenId,
     required this.kitchenName,
+    required this.kitchenSlug,
     required this.itemsCount,
+    required this.createdAt,
+    required this.hasReview,
   });
 
   factory CustomerOrderSummary.fromJson(Map<String, dynamic> json) {
@@ -516,8 +561,12 @@ class CustomerOrderSummary {
       totalAmount: double.tryParse(json['totalAmount']?.toString() ?? '') ?? 0,
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
+      kitchenId: kitchen['id']?.toString() ?? '',
       kitchenName: kitchen['kitchenName']?.toString() ?? 'مطبخ',
+      kitchenSlug: kitchen['slug']?.toString() ?? '',
       itemsCount: items.length,
+      createdAt: _parseDate(json['createdAt']),
+      hasReview: json['review'] != null,
     );
   }
 
@@ -527,8 +576,12 @@ class CustomerOrderSummary {
   final String deliveryType;
   final double totalAmount;
   final double depositAmount;
+  final String kitchenId;
   final String kitchenName;
+  final String kitchenSlug;
   final int itemsCount;
+  final DateTime? createdAt;
+  final bool hasReview;
 }
 
 class CustomerOrderDetails {
@@ -541,7 +594,9 @@ class CustomerOrderDetails {
     required this.deliveryFee,
     required this.totalAmount,
     required this.depositAmount,
+    required this.kitchenId,
     required this.kitchenName,
+    required this.kitchenSlug,
     required this.kitchenPhone,
     required this.addressLine,
     required this.items,
@@ -572,7 +627,9 @@ class CustomerOrderDetails {
       totalAmount: double.tryParse(json['totalAmount']?.toString() ?? '') ?? 0,
       depositAmount:
           double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
+      kitchenId: kitchen['id']?.toString() ?? '',
       kitchenName: kitchen['kitchenName']?.toString() ?? 'مطبخ',
+      kitchenSlug: kitchen['slug']?.toString() ?? '',
       kitchenPhone: kitchen['phoneNumber']?.toString(),
       addressLine: address['addressLine']?.toString(),
       items: (json['items'] as List<dynamic>? ?? const [])
@@ -603,7 +660,9 @@ class CustomerOrderDetails {
   final double deliveryFee;
   final double totalAmount;
   final double depositAmount;
+  final String kitchenId;
   final String kitchenName;
+  final String kitchenSlug;
   final String? kitchenPhone;
   final String? addressLine;
   final List<OrderLineItem> items;
@@ -785,6 +844,135 @@ class AppNotification {
   final String title;
   final String body;
   final bool isRead;
+}
+
+Map<String, dynamic> _decodeMap(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  } catch (_) {}
+  return const {};
+}
+
+String _errorText(Map<String, dynamic> json, String fallback) {
+  final error = json['error']?.toString().trim() ?? '';
+  if (error.isEmpty) return fallback;
+  return error;
+}
+
+class ReorderPreviewItem {
+  const ReorderPreviewItem({
+    required this.menuItemId,
+    required this.menuItemName,
+    required this.menuItemSizeId,
+    required this.sizeName,
+    required this.quantity,
+    required this.customerNote,
+    required this.unitPrice,
+    required this.depositAmount,
+    required this.orderReadiness,
+  });
+
+  factory ReorderPreviewItem.fromJson(Map<String, dynamic> json) {
+    return ReorderPreviewItem(
+      menuItemId: json['menuItemId']?.toString() ?? '',
+      menuItemName: json['menuItemName']?.toString() ?? 'صنف',
+      menuItemSizeId: json['menuItemSizeId']?.toString(),
+      sizeName: json['sizeName']?.toString(),
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      customerNote: json['customerNote']?.toString(),
+      unitPrice: double.tryParse(json['unitPrice']?.toString() ?? '') ?? 0,
+      depositAmount:
+          double.tryParse(json['depositAmount']?.toString() ?? '') ?? 0,
+      orderReadiness: json['orderReadiness']?.toString() ?? 'AVAILABLE_NOW',
+    );
+  }
+
+  final String menuItemId;
+  final String menuItemName;
+  final String? menuItemSizeId;
+  final String? sizeName;
+  final int quantity;
+  final String? customerNote;
+  final double unitPrice;
+  final double depositAmount;
+  final String orderReadiness;
+}
+
+class ReorderPreviewKitchen {
+  const ReorderPreviewKitchen({
+    required this.id,
+    required this.kitchenName,
+    required this.slug,
+    required this.latitude,
+    required this.longitude,
+    required this.addressLine,
+    required this.regionLabel,
+  });
+
+  factory ReorderPreviewKitchen.fromJson(Map<String, dynamic> json) {
+    return ReorderPreviewKitchen(
+      id: json['id']?.toString() ?? '',
+      kitchenName: json['kitchenName']?.toString() ?? 'مطبخ',
+      slug: json['slug']?.toString() ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      addressLine: json['addressLine']?.toString() ?? '',
+      regionLabel: json['regionLabel']?.toString() ?? '',
+    );
+  }
+
+  final String id;
+  final String kitchenName;
+  final String slug;
+  final double? latitude;
+  final double? longitude;
+  final String addressLine;
+  final String regionLabel;
+}
+
+class ReorderPreview {
+  const ReorderPreview({
+    required this.kitchenAvailable,
+    required this.message,
+    required this.kitchen,
+    required this.items,
+    required this.notices,
+  });
+
+  factory ReorderPreview.fromJson(Map<String, dynamic> json) {
+    final kitchenRaw = json['kitchen'];
+    return ReorderPreview(
+      kitchenAvailable: json['kitchenAvailable'] == true,
+      message: json['message']?.toString(),
+      kitchen: kitchenRaw is Map<String, dynamic>
+          ? ReorderPreviewKitchen.fromJson(kitchenRaw)
+          : kitchenRaw is Map
+              ? ReorderPreviewKitchen.fromJson(
+                  Map<String, dynamic>.from(kitchenRaw),
+                )
+              : null,
+      items: (json['items'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => ReorderPreviewItem.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
+      notices: (json['notices'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.trim().isNotEmpty)
+          .toList(),
+    );
+  }
+
+  final bool kitchenAvailable;
+  final String? message;
+  final ReorderPreviewKitchen? kitchen;
+  final List<ReorderPreviewItem> items;
+  final List<String> notices;
 }
 
 DateTime? _parseDate(Object? value) {

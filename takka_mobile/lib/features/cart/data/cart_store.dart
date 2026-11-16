@@ -87,6 +87,32 @@ class CartStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Rebuilds the cart for one kitchen. Used by "اطلب تاني".
+  void replaceWith({
+    required String kitchenId,
+    required String kitchenName,
+    double? kitchenLatitude,
+    double? kitchenLongitude,
+    String? kitchenAddressLine,
+    String? kitchenRegionLabel,
+    required List<CartItem> items,
+  }) {
+    _items
+      ..clear()
+      ..addAll(items);
+    if (items.isEmpty) {
+      _clearKitchenMeta();
+    } else {
+      this.kitchenId = kitchenId;
+      this.kitchenName = kitchenName;
+      this.kitchenLatitude = kitchenLatitude;
+      this.kitchenLongitude = kitchenLongitude;
+      this.kitchenAddressLine = kitchenAddressLine;
+      this.kitchenRegionLabel = kitchenRegionLabel;
+    }
+    notifyListeners();
+  }
+
   void clear() {
     _clearKitchenMeta();
     _items.clear();

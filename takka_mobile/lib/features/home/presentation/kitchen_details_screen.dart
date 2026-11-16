@@ -264,6 +264,22 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                     ],
                   ),
                 ),
+                if (!kitchen.isOpen) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFDBA74)),
+                    ),
+                    child: const Text(
+                      'المطبخ مقفول دلوقتي ومش بيستقبل طلبات. تقدر تشوف المنيو والتقييمات وترجع تطلب لما يفتح.',
+                      style: TextStyle(height: 1.45),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 KitchenLocationActions(
                   latitude: kitchen.latitude,

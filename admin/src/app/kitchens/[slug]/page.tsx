@@ -22,7 +22,6 @@ export default async function KitchenDetailsPage({
     where: {
       slug,
       approvalStatus: ApprovalStatus.APPROVED,
-      availabilityStatus: AvailabilityStatus.OPEN,
     },
     include: {
       region: true,
@@ -153,6 +152,12 @@ export default async function KitchenDetailsPage({
             العودة للمطابخ
           </Link>
           <h1 className="mt-3 text-3xl font-bold">{kitchen.kitchenName}</h1>
+          {kitchen.availabilityStatus !== AvailabilityStatus.OPEN ? (
+            <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-900">
+              المطبخ مقفول دلوقتي ومش بيستقبل طلبات. تقدر تشوف المنيو والتقييمات
+              وترجع تطلب لما يفتح.
+            </p>
+          ) : null}
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-600">
             {kitchen.description || "لا يوجد وصف لهذا المطبخ بعد."}
           </p>

@@ -170,6 +170,7 @@ export function WebCartCheckout({
             ...(item.menuItemSizeId
               ? { menuItemSizeId: item.menuItemSizeId }
               : {}),
+            ...(item.customerNote ? { customerNote: item.customerNote } : {}),
           })),
         }),
       });
@@ -259,6 +260,11 @@ export function WebCartCheckout({
                     {item.sizeName ? (
                       <p className="mt-1 text-sm text-zinc-600">
                         الحجم: {item.sizeName}
+                      </p>
+                    ) : null}
+                    {item.customerNote ? (
+                      <p className="mt-1 text-sm text-zinc-600">
+                        ملاحظة: {item.customerNote}
                       </p>
                     ) : null}
                     <span className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">

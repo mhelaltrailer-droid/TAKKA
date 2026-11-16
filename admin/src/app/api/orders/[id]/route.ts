@@ -20,6 +20,7 @@ export async function GET(
       include: {
         kitchen: {
           select: {
+            id: true,
             kitchenName: true,
             slug: true,
             phoneNumber: true,
@@ -69,6 +70,7 @@ export async function GET(
       order: {
         ...order,
         kitchen: {
+          id: order.kitchen.id,
           kitchenName: order.kitchen.kitchenName,
           slug: order.kitchen.slug,
           phoneNumber: revealPhone ? order.kitchen.phoneNumber : null,

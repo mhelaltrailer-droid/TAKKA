@@ -82,6 +82,19 @@ enum NotificationType {
   SYSTEM
 }
 
+enum OrderIssueType {
+  COLD_FOOD
+  MISSING_ITEM
+  LATE
+  DEPOSIT
+  OTHER
+}
+
+enum OrderIssueStatus {
+  OPEN
+  RESOLVED
+}
+
 enum FlashOfferStatus {
   ACTIVE
   ENDED
@@ -121,6 +134,7 @@ model User {
   customerOrders    Order[]           @relation("CustomerOrders")
   kitchens          Kitchen[]         @relation("KitchenOwners")
   reviews           Review[]
+  orderIssues       OrderIssue[]      @relation("CustomerOrderIssues")
   messages          OrderMessage[]
   uploadedDeposits  DepositProof[]    @relation("DepositUploadedBy")
   reviewedDeposits  DepositProof[]    @relation("DepositReviewedBy")
@@ -202,6 +216,7 @@ model Kitchen {
   flashOffers        FlashOffer[]
   orders             Order[]
   reviews            Review[]
+  orderIssues        OrderIssue[]
   viewEvents         KitchenViewEvent[]
 
   @@index([isDemo])
@@ -384,6 +399,7 @@ model Order {
   depositProofs          DepositProof[]
   messages               OrderMessage[]
   review                 Review?
+  issues                 OrderIssue[]
   notifications          Notification[]
 }
 
@@ -433,6 +449,29 @@ model OrderMessage {
   createdAt    DateTime    @default(now())
   order        Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   sender       User        @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+}
+
+/// Customer complaint logged when they tap support on an order.
+/// Additive table only — safe for `prisma db push` on a live DB.
+/// Logging does not send WhatsApp or email.
+model OrderIssue {
+  id         String           @id @default(cuid())
+  orderId    String
+  customerId String
+  kitchenId  String
+  type       OrderIssueType
+  note       String?
+  status     OrderIssueStatus @default(OPEN)
+  createdAt  DateTime         @default(now())
+  resolvedAt DateTime?
+  order      Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer   User             @relation("CustomerOrderIssues", fields: [customerId], references: [id], onDelete: Cascade)
+  kitchen    Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@index([customerId])
+  @@index([kitchenId])
 }
 
 model Review {

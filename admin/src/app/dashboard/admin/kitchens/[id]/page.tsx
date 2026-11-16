@@ -10,6 +10,7 @@ import {
 } from "@/lib/maps";
 import { getApprovalStatusLabel } from "@/lib/status-labels";
 
+import { setReviewVisibility } from "../../orders/actions";
 import { approveKitchen, rejectKitchen } from "../../actions";
 
 export default async function AdminKitchenReviewPage({
@@ -26,6 +27,13 @@ export default async function AdminKitchenReviewPage({
       region: true,
       paymentMethods: true,
       documents: true,
+      reviews: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          customer: { select: { fullName: true } },
+          order: { select: { orderNumber: true } },
+        },
+      },
       owner: {
         select: {
           fullName: true,
@@ -182,6 +190,59 @@ export default async function AdminKitchenReviewPage({
           ) : (
             <p className="mt-3 text-sm text-red-600">لا توجد صورة بطاقة مرفوعة.</p>
           )}
+        </section>
+
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">تقييمات العملاء</h2>
+          <p className="mt-2 text-sm leading-7 text-zinc-600">
+            صاحب المطبخ مش بيقدر يعدل أو يمسح التقييم. تقدر تخفيه من صفحة
+            المطبخ ومن متوسط التقييم.
+          </p>
+          <div className="mt-5 space-y-3">
+            {kitchen.reviews.length === 0 ? (
+              <p className="rounded-2xl bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
+                لا توجد تقييمات.
+              </p>
+            ) : (
+              kitchen.reviews.map((review) => (
+                <article
+                  key={review.id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-zinc-200 p-4"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {review.customer.fullName || "عميل"} · {review.ratingValue}/5
+                      {review.visibility === "HIDDEN" ? " · مخفي" : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      طلب {review.order.orderNumber}
+                    </p>
+                    {review.comment ? (
+                      <p className="mt-2 text-sm leading-7 text-zinc-700">
+                        {review.comment}
+                      </p>
+                    ) : null}
+                  </div>
+                  <form action={setReviewVisibility}>
+                    <input type="hidden" name="reviewId" value={review.id} />
+                    <input
+                      type="hidden"
+                      name="visibility"
+                      value={review.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"}
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold"
+                    >
+                      {review.visibility === "HIDDEN"
+                        ? "إظهار التقييم"
+                        : "إخفاء التقييم"}
+                    </button>
+                  </form>
+                </article>
+              ))
+            )}
+          </div>
         </section>
 
         {kitchen.approvalStatus === "PENDING" ? (
