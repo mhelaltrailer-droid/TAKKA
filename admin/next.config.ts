@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // firebase-admin is Node-only and must not be bundled by Next.
+  serverExternalPackages: ["firebase-admin"],
 };
 
 export default nextConfig;

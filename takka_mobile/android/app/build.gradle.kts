@@ -141,6 +141,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications uses Java 8+ time APIs on older devices.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -189,4 +191,14 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
+
+// Firebase is optional. Without this file the app builds and runs as before;
+// push stays disabled until the owner adds the real config. See docs/fcm-setup.md.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }

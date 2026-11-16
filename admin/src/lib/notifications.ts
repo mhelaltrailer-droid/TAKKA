@@ -1,6 +1,7 @@
 import { NotificationType } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { sendNotificationPush } from "@/lib/push";
 import { triggerUserEvent } from "@/lib/pusher";
 
 type CreateNotificationInput = {
@@ -28,15 +29,33 @@ export async function createNotification({
     },
   });
 
-  await triggerUserEvent(userId, "notification:new", {
-    id: notification.id,
+  let pusherError: unknown;
+  try {
+    await triggerUserEvent(userId, "notification:new", {
+      id: notification.id,
+      orderId: notification.orderId,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      isRead: notification.isRead,
+      createdAt: notification.createdAt.toISOString(),
+    });
+  } catch (error) {
+    pusherError = error;
+  }
+
+  await sendNotificationPush({
+    userId,
+    notificationId: notification.id,
     orderId: notification.orderId,
     type: notification.type,
     title: notification.title,
     body: notification.body,
-    isRead: notification.isRead,
-    createdAt: notification.createdAt.toISOString(),
   });
+
+  if (pusherError) {
+    throw pusherError;
+  }
 
   return notification;
 }

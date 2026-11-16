@@ -2,9 +2,9 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/kitchen/kitchen_feature_gate.dart';
+import '../../../core/links/external_link.dart';
 import '../../../core/location/maps_links.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
@@ -68,10 +68,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
     final orders = await _orderService.loadKitchenOrders(
       sessionToken: token.jwt,
     );
-    return _OrdersPageData(
-      access: KitchenFeatureAccess.ready,
-      orders: orders,
-    );
+    return _OrdersPageData(access: KitchenFeatureAccess.ready, orders: orders);
   }
 
   Future<void> _subscribeRealtime() async {
@@ -91,9 +88,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('طلبات المطبخ'),
-      ),
+      appBar: AppBar(title: const Text('طلبات المطبخ')),
       body: FutureBuilder<_OrdersPageData>(
         future: _future,
         builder: (context, snapshot) {
@@ -204,16 +199,17 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton.icon(
-                                      onPressed: () async {
-                                        final uri = Uri.parse(
-                                          googleMapsShareUrl(
-                                            order.deliveryLatitude!,
-                                            order.deliveryLongitude!,
+                                      onPressed: () {
+                                        openExternalLink(
+                                          context,
+                                          Uri.parse(
+                                            googleMapsShareUrl(
+                                              order.deliveryLatitude!,
+                                              order.deliveryLongitude!,
+                                            ),
                                           ),
-                                        );
-                                        await launchUrl(
-                                          uri,
-                                          mode: LaunchMode.externalApplication,
+                                          failureMessage:
+                                              mapsLinkFailureMessage,
                                         );
                                       },
                                       icon: const Icon(Icons.map_outlined),
@@ -224,7 +220,11 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       onPressed: () async {
-                                        final text = order.addressLine?.trim().isNotEmpty == true
+                                        final text =
+                                            order.addressLine
+                                                    ?.trim()
+                                                    .isNotEmpty ==
+                                                true
                                             ? order.addressLine!
                                             : formatCoords(
                                                 order.deliveryLatitude!,
@@ -234,8 +234,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                                           ClipboardData(text: text),
                                         );
                                         if (!context.mounted) return;
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
                                             content: Text('تم نسخ العنوان'),
                                           ),
@@ -274,14 +273,19 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                             const SizedBox(height: 10),
                             Text(
                               'الإجمالي: ${order.totalAmount.toStringAsFixed(0)} ج.م',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             if (order.latestDepositProof != null) ...[
                               const SizedBox(height: 8),
                               Text(
                                 'إثبات العربون: ${order.latestDepositProof!.imageUrl}',
                               ),
-                              if (order.latestDepositProof!.reviewStatus.isNotEmpty)
+                              if (order
+                                  .latestDepositProof!
+                                  .reviewStatus
+                                  .isNotEmpty)
                                 Text(
                                   'حالة المراجعة: ${order.latestDepositProof!.reviewStatus}',
                                 ),
@@ -463,9 +467,9 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
             FilledButton(
               onPressed: () {
                 final raw = controller.text.trim();
-                Navigator.of(context).pop(
-                  raw.isEmpty ? 0.0 : double.tryParse(raw),
-                );
+                Navigator.of(
+                  context,
+                ).pop(raw.isEmpty ? 0.0 : double.tryParse(raw));
               },
               child: const Text('تأكيد'),
             ),
@@ -571,9 +575,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
 }
 
 class _KitchenStatusChip extends StatelessWidget {
-  const _KitchenStatusChip({
-    required this.status,
-  });
+  const _KitchenStatusChip({required this.status});
 
   final String status;
 
@@ -713,52 +715,54 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
                 children: _messages.isEmpty
                     ? [const Text('لا توجد رسائل بعد.')]
                     : _messages
-                        .map(
-                          (message) => Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  message.senderName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                          .map(
+                            (message) => Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    message.senderName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
-                                if (message.messageText != null &&
-                                    message.messageText!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(message.messageText!),
-                                  ),
-                                if (message.fileUrl != null &&
-                                    message.fileUrl!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Image.network(
-                                        message.fileUrl!,
-                                        height: 160,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => Text(
+                                  if (message.messageText != null &&
+                                      message.messageText!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(message.messageText!),
+                                    ),
+                                  if (message.fileUrl != null &&
+                                      message.fileUrl!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Image.network(
                                           message.fileUrl!,
-                                          style: const TextStyle(fontSize: 12),
+                                          height: 160,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Text(
+                                            message.fileUrl!,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(),
+                          )
+                          .toList(),
               ),
             ),
             if (widget.readOnly)
@@ -805,10 +809,7 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
 }
 
 class _OrdersPageData {
-  const _OrdersPageData({
-    required this.access,
-    this.orders,
-  });
+  const _OrdersPageData({required this.access, this.orders});
 
   final KitchenFeatureAccess access;
   final List<KitchenOrderSummary>? orders;

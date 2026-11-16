@@ -12,6 +12,7 @@ import 'features/auth/presentation/customer_become_kitchen_prompt.dart';
 import 'features/auth/presentation/guest_browse_shell.dart';
 import 'features/auth/presentation/role_setup_screen.dart';
 import 'core/ui/takka_skeletons.dart';
+import 'core/push/push_notification_service.dart';
 import 'features/home/presentation/kitchen_home_screen.dart';
 import 'features/kitchen_management/presentation/kitchen_onboarding_screen.dart';
 import 'features/orders/presentation/customer_shell_screen.dart';
@@ -81,8 +82,10 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
   AppRole? _pendingRole;
   AppRole? _sessionRoleOverride;
   var _applyRoleFromLogin = false;
+
   /// Customer chose kitchen at login and already owns a kitchen row.
   var _applyKitchenReturnFromLogin = false;
+
   /// Customer chose kitchen at login and must complete onboarding.
   var _showKitchenOnboardingFromLogin = false;
   var _guestBrowse = false;
@@ -114,6 +117,17 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
       _applyKitchenReturnFromLogin = false;
       _showKitchenOnboardingFromLogin = false;
     });
+  }
+
+  Future<void> _signOut(BuildContext context, ClerkAuthState authState) async {
+    try {
+      final token = await authState.sessionToken();
+      await PushNotificationService.instance.unregister(
+        sessionToken: token.jwt,
+      );
+    } catch (_) {}
+    await authState.signOut();
+    _clearPendingRole();
   }
 
   Future<void> _handleCustomerSwitchRole(BuildContext context) async {
@@ -270,20 +284,14 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
         if (resolvedRole == AppRole.customer) {
           return CustomerShellScreen(
             displayName: displayName,
-            onSignOut: () async {
-              await authState.signOut();
-              _clearPendingRole();
-            },
+            onSignOut: () => _signOut(context, authState),
             onSwitchRole: () => _handleCustomerSwitchRole(context),
           );
         }
 
         return KitchenHomeScreen(
           displayName: displayName,
-          onSignOut: () async {
-            await authState.signOut();
-            _clearPendingRole();
-          },
+          onSignOut: () => _signOut(context, authState),
           onSwitchRole: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
@@ -352,9 +360,7 @@ class _LoginKitchenGateState extends State<_LoginKitchenGate> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: CustomerHomeSkeleton(),
-      );
+      return const Scaffold(body: CustomerHomeSkeleton());
     }
 
     return CustomerBecomeKitchenPrompt(
@@ -402,10 +408,7 @@ class _MissingConfigScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   const Text(
                     'مفتاح Clerk غير مضبوط',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
                   const Text(

@@ -44,6 +44,11 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Firebase Android config. See docs/fcm-setup.md. Never commit.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
 # Local secrets for --dart-define-from-file (never commit)
 dart_defines.json
 LATEST_APK_PATH.txt
