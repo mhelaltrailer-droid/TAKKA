@@ -18,6 +18,21 @@ import 'package:meta/meta.dart';
 
 typedef _JsonObject = Map<String, dynamic>;
 
+/// Clerk rejected the persisted client token.
+///
+/// HTTP 401 means this client is no longer valid. Offline errors, timeouts,
+/// and 5xx responses must not use this type — those keep the stored session.
+class ClerkSessionRejected implements Exception {
+  /// Rejection for [statusCode] (typically 401).
+  const ClerkSessionRejected(this.statusCode);
+
+  /// HTTP status returned by the Frontend API.
+  final int statusCode;
+
+  @override
+  String toString() => 'ClerkSessionRejected($statusCode)';
+}
+
 /// [Api] manages communication with the Clerk frontend API
 ///
 class Api with Logging {
@@ -128,6 +143,9 @@ class Api with Logging {
       _tokenCache.updateFrom(resp, client);
       return client;
     }
+    if (resp.statusCode == HttpStatus.unauthorized) {
+      throw ClerkSessionRejected(resp.statusCode);
+    }
     return Client.empty;
   }
 
@@ -136,11 +154,22 @@ class Api with Logging {
     return await _fetchClient(method: HttpMethod.post);
   }
 
-  /// Creates a new [Client] object to manage sessions
+  /// Creates a new [Client] object to manage sessions.
+  ///
+  /// When a client token is already stored, a failed refresh must not call
+  /// [resetClient]. Posting `/client` mints a new client, rotates the token,
+  /// and makes the next sign-in look like a new device (email code again).
   Future<Client> createClient() async {
     if (_tokenCache.hasClientToken) {
-      final client = await currentClient();
-      if (client.isNotEmpty) return client;
+      try {
+        final client = await currentClient();
+        if (client.isNotEmpty) return client;
+        return Client.empty;
+      } on ClerkSessionRejected {
+        rethrow;
+      } on Exception {
+        return Client.empty;
+      }
     }
 
     return await resetClient();

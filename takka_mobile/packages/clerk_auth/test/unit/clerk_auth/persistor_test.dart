@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:clerk_auth/src/clerk_auth/persistor.dart';
 
 import '../../test_helpers.dart';
@@ -43,6 +45,37 @@ void main() {
 
     test('is a const instance', () {
       expect(identical(Persistor.none, Persistor.none));
+    });
+  });
+
+  group('DefaultPersistor', () {
+    late Directory directory;
+
+    setUp(() async {
+      directory = await Directory.systemTemp.createTemp('clerk_persistor_');
+    });
+
+    tearDown(() async {
+      if (directory.existsSync()) {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    test('terminate flushes a debounced write without waiting 600ms', () async {
+      final persistor = DefaultPersistor(getCacheDirectory: () => directory);
+      await persistor.initialize();
+      await persistor.write('client', <String, dynamic>{'id': 'client_kept'});
+      persistor.terminate();
+
+      final file = File('${directory.path}${Platform.pathSeparator}clerk_sdk.json');
+      expect(file.existsSync(), isTrue);
+      expect(file.readAsStringSync(), contains('client_kept'));
+
+      final restored = DefaultPersistor(getCacheDirectory: () => directory);
+      await restored.initialize();
+      final value = await restored.read<Map<String, dynamic>>('client');
+      expect(value?['id'], 'client_kept');
+      restored.terminate();
     });
   });
 }

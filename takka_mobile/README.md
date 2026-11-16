@@ -9,6 +9,8 @@ The app now uses:
 - `POST /api/mobile/role` to persist the selected app role
 - `GET /api/mobile/me` as a mobile-friendly session bootstrap endpoint
 
+A user who has signed in stays signed in across app restarts. The client token is stored in application support (and secure storage), and the last role is cached so customer home or kitchen home opens without the sign-in or role screens. Clerk session lifetime and inactivity timeout still apply; set those in the dashboard using [`docs/clerk-session.md`](../docs/clerk-session.md).
+
 ## Run locally
 
 Start the Next.js backend first from `admin`:

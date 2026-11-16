@@ -29,6 +29,9 @@ class MockPersistor implements Persistor {
     _storage.remove(key);
   }
 
+  @override
+  FutureOr<Iterable<String>> keys() => _storage.keys.toList(growable: false);
+
   void clear() => _storage.clear();
 
   bool containsKey(String key) => _storage.containsKey(key);
@@ -76,7 +79,7 @@ void main() {
       });
 
       test('restores session ID from persistor', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkSession_Id_$cacheId', 'sess_123');
 
         await tokenCache.initialize();
@@ -85,7 +88,7 @@ void main() {
       });
 
       test('restores client token from persistor', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkClient_Token_$cacheId', 'token_abc');
 
         await tokenCache.initialize();
@@ -94,8 +97,37 @@ void main() {
         expect(tokenCache.hasClientToken, true);
       });
 
+      test('cache id does not use process-salted String.hashCode', () {
+        const key = 'pk_test_example';
+        expect(TokenCache.cacheIdFor(key), TokenCache.cacheIdFor(key));
+        expect(TokenCache.cacheIdFor(key), isNot(key.hashCode.toString()));
+        expect(TokenCache.cacheIdFor(key).startsWith('v2'), isTrue);
+      });
+
+      test('migrates tokens stored under a legacy hash suffix', () async {
+        const legacySuffix = '-4821331';
+        await persistor.write(
+          '_clerkClient_Token_$legacySuffix',
+          'token_legacy',
+        );
+        await persistor.write('_clerkSession_Id_$legacySuffix', 'sess_legacy');
+        await persistor.write('_clerkClient_Id_$legacySuffix', 'client_legacy');
+
+        await tokenCache.initialize();
+
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
+        expect(tokenCache.clientToken, 'token_legacy');
+        expect(tokenCache.sessionId, 'sess_legacy');
+        expect(tokenCache.clientId, 'client_legacy');
+        expect(persistor.containsKey('_clerkClient_Token_$cacheId'), isTrue);
+        expect(
+          persistor.containsKey('_clerkClient_Token_$legacySuffix'),
+          isFalse,
+        );
+      });
+
       test('restores client ID from persistor', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkClient_Id_$cacheId', 'client_xyz');
 
         await tokenCache.initialize();
@@ -105,7 +137,7 @@ void main() {
       });
 
       test('restores valid session tokens from persistor', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         final now = DateTime.timestamp().millisecondsSinceEpoch ~/ 1000;
         final jwt = createTestJwt(exp: now + 3600, nbf: now - 60);
 
@@ -123,7 +155,7 @@ void main() {
       });
 
       test('does not restore expired session tokens', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         final now = DateTime.timestamp().millisecondsSinceEpoch ~/ 1000;
         // Create an expired token (exp in the past)
         final jwt = createTestJwt(exp: now - 3600, nbf: now - 7200);
@@ -148,7 +180,7 @@ void main() {
       });
 
       test('returns false when no session ID', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkClient_Token_$cacheId', 'token_abc');
         await tokenCache.initialize();
         expect(tokenCache.canRefreshSessionToken, false);
@@ -156,7 +188,7 @@ void main() {
 
       test('returns true when both client token and session ID exist',
           () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkClient_Token_$cacheId', 'token_abc');
         await persistor.write('_clerkSession_Id_$cacheId', 'sess_123');
         await tokenCache.initialize();
@@ -166,7 +198,7 @@ void main() {
 
     group('clear', () {
       test('clears all cached values', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkClient_Token_$cacheId', 'token_abc');
         await persistor.write('_clerkClient_Id_$cacheId', 'client_xyz');
         await persistor.write('_clerkSession_Id_$cacheId', 'sess_123');
@@ -182,7 +214,7 @@ void main() {
       });
 
       test('deletes values from persistor', () async {
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         await persistor.write('_clerkClient_Token_$cacheId', 'token_abc');
         await tokenCache.initialize();
 
@@ -224,7 +256,7 @@ void main() {
 
         tokenCache.makeAndCacheSessionToken(jwt);
 
-        final cacheId = publishableKey.hashCode;
+        final cacheId = TokenCache.cacheIdFor(publishableKey);
         expect(persistor.containsKey('_clerkSession_Tokens_$cacheId'), true);
       });
     });
