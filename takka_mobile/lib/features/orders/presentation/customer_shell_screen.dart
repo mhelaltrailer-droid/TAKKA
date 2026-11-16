@@ -1,5 +1,11 @@
+import 'dart:async';
+
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/push/push_navigation.dart';
+import '../../../core/push/push_notification_service.dart';
+import '../../../core/push/push_target.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../account/presentation/customer_account_screen.dart';
 import '../../home/presentation/customer_home_screen.dart';
@@ -24,8 +30,59 @@ class CustomerShellScreen extends StatefulWidget {
 
 class _CustomerShellScreenState extends State<CustomerShellScreen> {
   var _index = 0;
+
   /// Only mount a tab after the user opens it (home starts visited).
   final _visited = <int>{0};
+  late final PushTargetHandler _onPushTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    _onPushTarget = (target) {
+      if (!mounted || target.audience != PushAudience.customer) {
+        return false;
+      }
+      openPushTarget(context, target);
+      return true;
+    };
+    PushNotificationService.instance.addListener(_onPushTarget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_enablePush());
+    });
+  }
+
+  @override
+  void dispose() {
+    PushNotificationService.instance.removeListener(_onPushTarget);
+    super.dispose();
+  }
+
+  Future<void> _enablePush() async {
+    if (!mounted) {
+      return;
+    }
+    try {
+      PushNotificationService.instance.flushPending(PushAudience.customer);
+      final authState = ClerkAuth.of(context, listen: false);
+      PushNotificationService.instance.bindSession(() async {
+        try {
+          final token = await authState.sessionToken();
+          return token.jwt;
+        } catch (_) {
+          return null;
+        }
+      });
+      if (!mounted) {
+        return;
+      }
+      await PushNotificationService.instance.ensureEnabled(
+        context,
+        audience: PushAudience.customer,
+      );
+    } catch (error) {
+      debugPrint('Takka customer push setup skipped: $error');
+    }
+  }
 
   void _selectTab(int value) {
     setState(() {
@@ -90,7 +147,10 @@ class _CustomerShellScreenState extends State<CustomerShellScreen> {
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded, color: TakkaColors.primary),
+            selectedIcon: Icon(
+              Icons.person_rounded,
+              color: TakkaColors.primary,
+            ),
             label: 'حسابي',
           ),
         ],

@@ -25,6 +25,13 @@ takka_mobile/build/
 takka_mobile/coverage/
 takka_mobile/.pub-cache/
 
+# Firebase (download locally / set on Render — never commit)
+takka_mobile/android/app/google-services.json
+takka_mobile/ios/Runner/GoogleService-Info.plist
+takka_mobile/lib/firebase_options.dart
+admin/firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # IDE / generated
 .idea/
 *.iml

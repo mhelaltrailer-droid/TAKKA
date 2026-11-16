@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/community/takka_partners_community.dart';
 import '../../../core/kitchen/kitchen_feature_gate.dart';
 import '../../../core/kitchen/kitchen_onboarding_copy.dart';
+import '../../../core/links/external_link.dart';
+import '../../../core/push/push_navigation.dart';
+import '../../../core/push/push_notification_service.dart';
+import '../../../core/push/push_target.dart';
 import '../../../core/realtime/kitchen_new_order_alert_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/confirm_destructive.dart';
@@ -40,18 +45,58 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
   KitchenProfileData? _profile;
   bool _profileLoading = true;
   bool _availabilityBusy = false;
+  late final PushTargetHandler _onPushTarget;
 
   @override
   void initState() {
     super.initState();
+    _onPushTarget = (target) {
+      if (!mounted || target.audience != PushAudience.kitchen) {
+        return false;
+      }
+      openPushTarget(context, target);
+      return true;
+    };
+    PushNotificationService.instance.addListener(_onPushTarget);
     _refreshProfile();
     _startNewOrderAlerts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_enablePush());
+    });
   }
 
   @override
   void dispose() {
+    PushNotificationService.instance.removeListener(_onPushTarget);
     KitchenNewOrderAlertService.instance.stop();
     super.dispose();
+  }
+
+  Future<void> _enablePush() async {
+    if (!mounted) {
+      return;
+    }
+    try {
+      PushNotificationService.instance.flushPending(PushAudience.kitchen);
+      final authState = ClerkAuth.of(context, listen: false);
+      PushNotificationService.instance.bindSession(() async {
+        try {
+          final token = await authState.sessionToken();
+          return token.jwt;
+        } catch (_) {
+          return null;
+        }
+      });
+      if (!mounted) {
+        return;
+      }
+      await PushNotificationService.instance.ensureEnabled(
+        context,
+        audience: PushAudience.kitchen,
+      );
+    } catch (error) {
+      debugPrint('Takka kitchen push setup skipped: $error');
+    }
   }
 
   Future<void> _startNewOrderAlerts() async {
@@ -92,8 +137,7 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
       final confirmed = await confirmDestructive(
         context,
         title: 'إغلاق استقبال الطلبات؟',
-        message:
-            'عند الإغلاق لن يظهر مطبخك للعملاء ولن يستقبل طلبات جديدة.',
+        message: 'عند الإغلاق لن يظهر مطبخك للعملاء ولن يستقبل طلبات جديدة.',
         confirmLabel: 'إغلاق',
       );
       if (!confirmed || !mounted) return;
@@ -124,28 +168,26 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _availabilityBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyErrorMessage(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(error))));
     }
   }
 
   Future<void> _openTakkaFamily() async {
-    final uri = Uri.parse(takkaPartnersCommunityUrl);
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر فتح رابط مجتمع واتساب.')),
-      );
-    }
+    await openExternalLink(
+      context,
+      Uri.parse(takkaPartnersCommunityUrl),
+      failureMessage: whatsAppLinkFailureMessage,
+    );
   }
 
   Future<void> _openFeature(Widget screen) async {
     final access = kitchenFeatureAccessFromStatus(_profile?.approvalStatus);
     if (access == KitchenFeatureAccess.ready) {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => screen),
-      );
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => screen));
       return;
     }
 
@@ -313,7 +355,8 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
           const _KitchenActionTile(
             icon: Icons.insights_outlined,
             title: 'إحصائيات',
-            description: 'طلبات مكتملة وملغاة ومبيعات آخر 30 يومًا أو مدة تختارها.',
+            description:
+                'طلبات مكتملة وملغاة ومبيعات آخر 30 يومًا أو مدة تختارها.',
           ),
         ],
       ),
@@ -362,18 +405,16 @@ class _KitchenAvailabilityCard extends StatelessWidget {
             FilledButton(
               onPressed: busy ? null : onToggle,
               style: FilledButton.styleFrom(
-                backgroundColor:
-                    isOpen ? Colors.white : TakkaColors.primary,
-                foregroundColor:
-                    isOpen ? TakkaColors.deep : Colors.white,
+                backgroundColor: isOpen ? Colors.white : TakkaColors.primary,
+                foregroundColor: isOpen ? TakkaColors.deep : Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: Text(
                 busy
                     ? 'جاري التحديث...'
                     : isOpen
-                        ? 'إغلاق الاستقبال'
-                        : 'فتح استقبال الطلبات',
+                    ? 'إغلاق الاستقبال'
+                    : 'فتح استقبال الطلبات',
               ),
             ),
           ],
@@ -416,9 +457,7 @@ class _KitchenAvailabilityPendingCard extends StatelessWidget {
 }
 
 class _TakkaFamilyJoinCard extends StatelessWidget {
-  const _TakkaFamilyJoinCard({
-    required this.onJoin,
-  });
+  const _TakkaFamilyJoinCard({required this.onJoin});
 
   final VoidCallback onJoin;
 
@@ -448,19 +487,13 @@ class _TakkaFamilyJoinCard extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     takkaFamilyJoinTitle,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              takkaFamilyJoinBody,
-              style: TextStyle(height: 1.55),
-            ),
+            const Text(takkaFamilyJoinBody, style: TextStyle(height: 1.55)),
             const SizedBox(height: 8),
             Text(
               takkaFamilyJoinNote,
@@ -488,9 +521,7 @@ class _TakkaFamilyJoinCard extends StatelessWidget {
 }
 
 class _KitchenIntroCard extends StatelessWidget {
-  const _KitchenIntroCard({
-    required this.displayName,
-  });
+  const _KitchenIntroCard({required this.displayName});
 
   final String displayName;
 
@@ -504,11 +535,7 @@ class _KitchenIntroCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [
-            TakkaColors.deep,
-            Color(0xFF3A2419),
-            TakkaColors.secondary,
-          ],
+          colors: [TakkaColors.deep, Color(0xFF3A2419), TakkaColors.secondary],
         ),
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
@@ -588,18 +615,12 @@ class _KitchenActionTile extends StatelessWidget {
           backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
           child: Icon(icon, color: theme.colorScheme.primary),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
             description,
-            style: TextStyle(
-              color: Colors.grey.shade700,
-              height: 1.5,
-            ),
+            style: TextStyle(color: Colors.grey.shade700, height: 1.5),
           ),
         ),
       ),

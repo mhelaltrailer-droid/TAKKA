@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../links/external_link.dart';
 import 'maps_links.dart';
 
 /// Customer-facing kitchen pin actions (same pattern as kitchen order map buttons).
@@ -40,9 +40,9 @@ class KitchenLocationActions extends StatelessWidget {
   Future<void> _copy(BuildContext context, String text, String success) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(success)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(success)));
   }
 
   @override
@@ -59,10 +59,7 @@ class KitchenLocationActions extends StatelessWidget {
           children: [
             const Text(
               'موقع المطبخ',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             if (_fullAddress.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -87,10 +84,11 @@ class KitchenLocationActions extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: () async {
-                  await launchUrl(
+                onPressed: () {
+                  openExternalLink(
+                    context,
                     Uri.parse(mapsUrl),
-                    mode: LaunchMode.externalApplication,
+                    failureMessage: mapsLinkFailureMessage,
                   );
                 },
                 icon: const Icon(Icons.map_outlined),
