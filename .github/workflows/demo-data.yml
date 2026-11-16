@@ -1,0 +1,35 @@
+name: Demo data
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "seed = add demo kitchens, remove = delete them"
+        required: true
+        default: seed
+        type: choice
+        options: [seed, remove]
+
+jobs:
+  demo-data:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Sync schema (same as Render build)
+        run: npx prisma db push --skip-generate
+      - run: npx prisma generate
+      - name: Seed demo data
+        if: inputs.action == 'seed'
+        run: npm run seed:demo
+      - name: Remove demo data
+        if: inputs.action == 'remove'
+        run: npm run seed:demo:remove
