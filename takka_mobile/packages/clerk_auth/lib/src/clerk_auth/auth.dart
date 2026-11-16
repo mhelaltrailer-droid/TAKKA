@@ -56,24 +56,29 @@ class Auth {
   Future<T?> _catchExternalErrors<T>(
     FutureOr<T?> Function() fn, {
     FutureOr<void> Function()? onFinally,
+    bool reportErrors = true,
   }) async {
     T? result;
 
     try {
       result = await fn();
     } on ExternalError catch (error) {
-      if (error.errors case ExternalErrorCollection errors) {
-        handleError(ClerkError.from(errors));
-      } else {
-        handleError(
-          ClerkError(
-            message: error.toString(),
-            code: error.errorCode ?? ClerkErrorCode.serverErrorResponse,
-          ),
-        );
+      if (reportErrors) {
+        if (error.errors case ExternalErrorCollection errors) {
+          handleError(ClerkError.from(errors));
+        } else {
+          handleError(
+            ClerkError(
+              message: error.toString(),
+              code: error.errorCode ?? ClerkErrorCode.serverErrorResponse,
+            ),
+          );
+        }
       }
     } catch (error) {
-      handleError(error);
+      if (reportErrors) {
+        handleError(error);
+      }
     } finally {
       await onFinally?.call();
     }
@@ -162,30 +167,20 @@ class Auth {
     _api = Api(config: config);
     await _api.initialize();
 
-    final (client, env) = await _fetchClientAndEnv();
+    // Restore before any network call. A slow, offline, or sleeping
+    // backend must not replace a stored session with a signed-out client.
+    await _restorePersistedClientAndEnv();
 
-    if (client.isEmpty) {
-      switch (await config.persistor.read(_kClientKey)) {
-        case Map<String, dynamic> data:
-          _client = Client.fromJson(data);
-        case String data:
-          // backward compatibility with earlier versions
-          _client = Client.fromJson(jsonDecode(data));
+    try {
+      final (client, env) = await _fetchClientAndEnv();
+      if (client.isNotEmpty) {
+        this.client = client;
       }
-    } else {
-      this.client = client;
-    }
-
-    if (env.isEmpty) {
-      switch (await config.persistor.read(_kEnvKey)) {
-        case Map<String, dynamic> data:
-          _env = Environment.fromJson(data);
-        case String data:
-          // backward compatibility with earlier versions
-          _env = Environment.fromJson(jsonDecode(data));
+      if (env.isNotEmpty) {
+        this.env = env;
       }
-    } else {
-      this.env = env;
+    } on ClerkSessionRejected {
+      await signOut();
     }
 
     if (_client.isEmpty || _env.isEmpty) {
@@ -208,7 +203,44 @@ class Auth {
     }
 
     if (config.sessionTokenPolling) {
-      await _pollForSessionToken();
+      // Do not report: nothing is listening yet, and a thrown error here
+      // would abort startup while the user is still signed in locally.
+      await _pollForSessionToken(reportErrors: false);
+    }
+  }
+
+  Future<void> _restorePersistedClientAndEnv() async {
+    try {
+      switch (await config.persistor.read(_kClientKey)) {
+        case final Map<String, dynamic> data:
+          _client = Client.fromJson(data);
+        case final String data:
+          // backward compatibility with earlier versions
+          final decoded = jsonDecode(data);
+          if (decoded is Map<String, dynamic>) {
+            _client = Client.fromJson(decoded);
+          } else if (decoded is Map) {
+            _client = Client.fromJson(Map<String, dynamic>.from(decoded));
+          }
+      }
+    } on Object {
+      _client = Client.empty;
+    }
+
+    try {
+      switch (await config.persistor.read(_kEnvKey)) {
+        case final Map<String, dynamic> data:
+          _env = Environment.fromJson(data);
+        case final String data:
+          final decoded = jsonDecode(data);
+          if (decoded is Map<String, dynamic>) {
+            _env = Environment.fromJson(decoded);
+          } else if (decoded is Map) {
+            _env = Environment.fromJson(Map<String, dynamic>.from(decoded));
+          }
+      }
+    } on Object {
+      _env = Environment.empty;
     }
   }
 
@@ -228,7 +260,9 @@ class Auth {
     config.terminate();
   }
 
-  Future<SessionToken?> _pollForSessionToken() async {
+  Future<SessionToken?> _pollForSessionToken({
+    bool reportErrors = true,
+  }) async {
     _pollTimer?.cancel();
 
     Duration delay = _defaultPollDelay;
@@ -250,8 +284,14 @@ class Auth {
         }
       },
       onFinally: () {
-        _pollTimer = Timer(delay, _pollForSessionToken);
+        // Later ticks are background refreshes. A dead network must not
+        // raise a Clerk error or sign the user out.
+        _pollTimer = Timer(
+          delay,
+          () => _pollForSessionToken(reportErrors: false),
+        );
       },
+      reportErrors: reportErrors,
     );
 
     return sessionToken;
@@ -269,22 +309,51 @@ class Auth {
   }
 
   Future<(Client, Environment)> _fetchClientAndEnv() async {
+    final clientFuture = _api.createClient();
+    final Client client;
     try {
-      final client = await _api.createClient().timeout(_initialisationTimeout);
-      final env = await _api.environment().timeout(_initialisationTimeout);
-      return (client, env);
+      client = await clientFuture.timeout(_initialisationTimeout);
+    } on ClerkSessionRejected {
+      rethrow;
+    } on TimeoutException {
+      unawaited(clientFuture.then((_) {}, onError: (_) {}));
+      return (Client.empty, Environment.empty);
     } on Exception {
       // either get both or neither (shouldn't initialise with different
       // timestamped versions anyway)
       return (Client.empty, Environment.empty);
     }
+
+    final envFuture = _api.environment();
+    try {
+      final env = await envFuture.timeout(_initialisationTimeout);
+      return (client, env);
+    } on TimeoutException {
+      unawaited(envFuture.then((_) {}, onError: (_) {}));
+      return (client, Environment.empty);
+    } on Exception {
+      return (client, Environment.empty);
+    }
   }
 
   /// Refresh the current [Client]
   ///
+  /// A transport failure or non-401 HTTP error keeps the current session.
+  /// HTTP 401 clears it. A 200 whose sessions have ended is applied as-is,
+  /// which signs the user out only when Clerk says the session is gone.
   Future<void> refreshClient() async {
-    client = await _api.currentClient();
-    update();
+    try {
+      final next = await _api.currentClient();
+      if (next.isEmpty) {
+        return;
+      }
+      client = next;
+      update();
+    } on ClerkSessionRejected {
+      await signOut();
+    } on Exception {
+      // Offline or Clerk unreachable: keep the current session.
+    }
   }
 
   /// Reset the current [Client]: clear any [SignUp] or [SignIn] object

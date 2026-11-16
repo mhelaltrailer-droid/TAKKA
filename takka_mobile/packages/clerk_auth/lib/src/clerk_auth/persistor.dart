@@ -25,6 +25,13 @@ abstract class Persistor {
 
   /// Delete data associated with a [key]
   FutureOr<void> delete(String key);
+
+  /// Keys currently stored.
+  ///
+  /// The default is empty so existing [Persistor]s that cannot list keys
+  /// stay valid. [DefaultPersistor] overrides this so legacy token keys
+  /// written with an unstable [String.hashCode] can be migrated.
+  FutureOr<Iterable<String>> keys() => const [];
 }
 
 final class _NonePersistor implements Persistor {
@@ -44,6 +51,9 @@ final class _NonePersistor implements Persistor {
 
   @override
   FutureOr<void> delete(String key) {}
+
+  @override
+  FutureOr<Iterable<String>> keys() => const [];
 }
 
 /// A function which returns a directory for file operations
@@ -89,11 +99,6 @@ class DefaultPersistor implements Persistor {
   }
 
   @override
-  void terminate() {
-    _timer?.cancel();
-  }
-
-  @override
   FutureOr<T?> read<T>(String key) => _cache[key] as T?;
 
   @override
@@ -110,11 +115,36 @@ class DefaultPersistor implements Persistor {
     }
   }
 
+  @override
+  FutureOr<Iterable<String>> keys() => _cache.keys.toList(growable: false);
+
+  /// Write any debounced cache to disk immediately.
+  ///
+  /// [write] waits [_writeDelay] before touching the file. A process kill
+  /// inside that window drops the session, and [terminate] used to cancel
+  /// the timer without flushing. Call this on shutdown and when the app
+  /// backgrounds.
+  void flush() {
+    _timer?.cancel();
+    _timer = null;
+    _writeCacheFileSync();
+  }
+
+  @override
+  void terminate() {
+    flush();
+  }
+
   void _save() {
     _timer?.cancel();
-    _timer = Timer(_writeDelay, () {
-      final data = json.encode(_cache);
-      _cacheFile.writeAsString(data);
-    });
+    _timer = Timer(_writeDelay, _writeCacheFileSync);
+  }
+
+  void _writeCacheFileSync() {
+    if (cacheDirectory == null) {
+      return;
+    }
+    final data = json.encode(_cache);
+    _cacheFile.writeAsStringSync(data);
   }
 }

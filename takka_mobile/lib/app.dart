@@ -1,16 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:clerk_flutter/clerk_flutter.dart';
+import 'dart:async';
 
+import 'package:clerk_auth/clerk_auth.dart';
+import 'package:clerk_flutter/clerk_flutter.dart';
+import 'package:flutter/material.dart';
+
+import 'core/auth/durable_clerk_persistor.dart';
 import 'core/config/app_config.dart';
 import 'core/update/app_update_host.dart';
 import 'core/ui/friendly_error.dart';
 import 'features/auth/data/app_role.dart';
+import 'features/auth/data/app_role_cache.dart';
 import 'features/auth/data/mobile_me_service.dart';
+import 'features/auth/data/restored_home.dart';
 import 'features/auth/presentation/apply_pending_role_screen.dart';
 import 'features/auth/presentation/auth_flow_screen.dart';
 import 'features/auth/presentation/customer_become_kitchen_prompt.dart';
 import 'features/auth/presentation/guest_browse_shell.dart';
 import 'features/auth/presentation/role_setup_screen.dart';
+import 'features/auth/presentation/session_restore_views.dart';
 import 'core/ui/takka_skeletons.dart';
 import 'core/push/push_notification_service.dart';
 import 'features/home/presentation/kitchen_home_screen.dart';
@@ -18,7 +25,11 @@ import 'features/kitchen_management/presentation/kitchen_onboarding_screen.dart'
 import 'features/orders/presentation/customer_shell_screen.dart';
 
 class TakkaApp extends StatelessWidget {
-  const TakkaApp({super.key});
+  const TakkaApp({super.key, this.persistor});
+
+  /// Durable Clerk persistor. [main] opens one before [runApp].
+  /// When null and a Clerk key is present, [_ClerkRoot] opens it itself.
+  final Persistor? persistor;
 
   @override
   Widget build(BuildContext context) {
@@ -31,10 +42,79 @@ class TakkaApp extends StatelessWidget {
       );
     }
 
+    return _ClerkRoot(persistor: persistor);
+  }
+}
+
+class _ClerkRoot extends StatefulWidget {
+  const _ClerkRoot({this.persistor});
+
+  final Persistor? persistor;
+
+  @override
+  State<_ClerkRoot> createState() => _ClerkRootState();
+}
+
+class _ClerkRootState extends State<_ClerkRoot> with WidgetsBindingObserver {
+  Persistor? _persistor;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final provided = widget.persistor;
+    if (provided != null) {
+      _persistor = provided;
+    } else {
+      unawaited(_openPersistor());
+    }
+  }
+
+  Future<void> _openPersistor() async {
+    try {
+      final persistor = await DurableClerkPersistor.open();
+      if (!mounted) return;
+      setState(() => _persistor = persistor);
+    } on Object {
+      if (!mounted) return;
+      setState(() => _persistor = null);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    final persistor = _persistor;
+    if (persistor is DurableClerkPersistor) {
+      unawaited(persistor.flush());
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      final persistor = _persistor;
+      if (persistor is DurableClerkPersistor) {
+        unawaited(persistor.flush());
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final persistor = _persistor;
+    if (persistor == null) {
+      return const SessionRestoreSplash();
+    }
+
     return ClerkAuth(
       config: ClerkAuthConfig(
         publishableKey: AppConfig.clerkPublishableKey,
         isTestMode: AppConfig.clerkPublishableKey.contains('_test_'),
+        persistor: persistor,
+        loading: const SessionRestoreSplash(),
       ),
       child: const AppUpdateHost(
         home: Directionality(
@@ -78,9 +158,17 @@ class _AuthAwareHome extends StatefulWidget {
 
 class _AuthAwareHomeState extends State<_AuthAwareHome> {
   final _meService = const MobileMeService();
+  final _roleCache = AppRoleCache();
 
   AppRole? _pendingRole;
   AppRole? _sessionRoleOverride;
+  AppRole? _cachedRole;
+  AppRole? _serverRole;
+  var _cacheLoaded = false;
+  var _serverSettled = false;
+  var _serverFailed = false;
+  var _roleRefreshStarted = false;
+  var _roleRefreshInFlight = false;
   var _applyRoleFromLogin = false;
 
   /// Customer chose kitchen at login and already owns a kitchen row.
@@ -89,6 +177,25 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
   /// Customer chose kitchen at login and must complete onboarding.
   var _showKitchenOnboardingFromLogin = false;
   var _guestBrowse = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCachedRole());
+  }
+
+  Future<void> _loadCachedRole() async {
+    String? userId;
+    try {
+      userId = ClerkAuth.of(context, listen: false).user?.id;
+    } catch (_) {}
+    final role = await _roleCache.read(userId: userId);
+    if (!mounted) return;
+    setState(() {
+      _cachedRole = role;
+      _cacheLoaded = true;
+    });
+  }
 
   void _setPendingRole(AppRole role, {bool fromLogin = false}) {
     setState(() {
@@ -106,6 +213,11 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
       _applyRoleFromLogin = false;
       _applyKitchenReturnFromLogin = false;
       _showKitchenOnboardingFromLogin = false;
+      _serverRole = null;
+      _serverSettled = false;
+      _serverFailed = false;
+      _cachedRole = null;
+      _roleRefreshStarted = false;
     });
   }
 
@@ -113,10 +225,91 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
     setState(() {
       _pendingRole = role;
       _sessionRoleOverride = role;
+      _cachedRole = role;
       _applyRoleFromLogin = false;
       _applyKitchenReturnFromLogin = false;
       _showKitchenOnboardingFromLogin = false;
     });
+    unawaited(_rememberRole(role));
+  }
+
+  String? _currentUserId() {
+    try {
+      return ClerkAuth.of(context, listen: false).user?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _rememberRole(AppRole role) async {
+    final userId = _currentUserId();
+    if (userId == null || userId.isEmpty) return;
+    await _roleCache.write(userId: userId, role: role);
+  }
+
+  void _scheduleRoleRefresh(ClerkAuthState authState) {
+    if (_roleRefreshStarted) return;
+    _roleRefreshStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_refreshRoleFromServer(authState));
+    });
+  }
+
+  Future<void> _retryRoleRefresh() async {
+    final authState = ClerkAuth.of(context, listen: false);
+    setState(() {
+      _serverSettled = false;
+      _serverFailed = false;
+    });
+    await _refreshRoleFromServer(authState);
+  }
+
+  Future<void> _refreshRoleFromServer(ClerkAuthState authState) async {
+    if (_roleRefreshInFlight) return;
+    _roleRefreshInFlight = true;
+    try {
+      final userId = authState.user?.id;
+      if (userId != null && _cachedRole == null) {
+        final metadata = AppRoleX.fromApiValue(
+          authState.client.user?.publicMetadata?['role']?.toString(),
+        );
+        if (metadata != null) {
+          await _roleCache.write(userId: userId, role: metadata);
+          if (mounted) {
+            setState(() => _cachedRole = metadata);
+          }
+        }
+      }
+
+      final token = await authState.sessionToken().timeout(
+        const Duration(seconds: 8),
+      );
+      final profile = await _meService
+          .loadProfile(sessionToken: token.jwt)
+          .timeout(const Duration(seconds: 12));
+      final role = AppRoleX.fromApiValue(profile.role);
+      if (userId != null && role != null) {
+        await _roleCache.write(userId: userId, role: role);
+      } else if (role == null) {
+        await _roleCache.clear();
+      }
+      if (!mounted) return;
+      setState(() {
+        _serverRole = role;
+        _serverSettled = true;
+        _serverFailed = false;
+        _cachedRole = role;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _serverSettled = true;
+        _serverFailed = true;
+      });
+    } finally {
+      _roleRefreshInFlight = false;
+    }
   }
 
   Future<void> _signOut(BuildContext context, ClerkAuthState authState) async {
@@ -126,6 +319,7 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
         sessionToken: token.jwt,
       );
     } catch (_) {}
+    await _roleCache.clear();
     await authState.signOut();
     _clearPendingRole();
   }
@@ -220,7 +414,9 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
           });
         }
 
-        final resolvedRole = _sessionRoleOverride ?? metadataRole;
+        _scheduleRoleRefresh(authState);
+        final resolvedRole =
+            _sessionRoleOverride ?? _serverRole ?? _cachedRole ?? metadataRole;
 
         if (_showKitchenOnboardingFromLogin) {
           return KitchenOnboardingScreen(
@@ -274,36 +470,71 @@ class _AuthAwareHomeState extends State<_AuthAwareHome> {
           );
         }
 
-        if (resolvedRole == null) {
-          return RoleSetupScreen(
-            initialRole: pendingRole ?? AppRole.customer,
-            onRoleSaved: _markRole,
-          );
-        }
+        final home = resolveRestoredHome(
+          sessionOverride: _sessionRoleOverride,
+          serverRole: _serverRole,
+          serverSettled: _serverSettled,
+          serverFailed: _serverFailed,
+          cachedRole: _cachedRole,
+          metadataRole: metadataRole,
+          cacheLoaded: _cacheLoaded,
+        );
 
-        if (resolvedRole == AppRole.customer) {
-          return CustomerShellScreen(
-            displayName: displayName,
-            onSignOut: () => _signOut(context, authState),
-            onSwitchRole: () => _handleCustomerSwitchRole(context),
-          );
-        }
-
-        return KitchenHomeScreen(
-          displayName: displayName,
-          onSignOut: () => _signOut(context, authState),
-          onSwitchRole: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => RoleSetupScreen(
-                  initialRole: AppRole.customer,
-                  onRoleSaved: _markRole,
-                ),
+        switch (home) {
+          case RestoredHome.splash:
+            return const SessionRestoreSplash();
+          case RestoredHome.retry:
+            return SessionRestoreRetry(
+              onRetry: () {
+                unawaited(_retryRoleRefresh());
+              },
+            );
+          case RestoredHome.roleSetup:
+            return RoleSetupScreen(
+              initialRole: pendingRole ?? AppRole.customer,
+              onRoleSaved: _markRole,
+            );
+          case RestoredHome.customer:
+            return _withRoleBanner(
+              CustomerShellScreen(
+                displayName: displayName,
+                onSignOut: () => _signOut(context, authState),
+                onSwitchRole: () => _handleCustomerSwitchRole(context),
               ),
             );
-          },
-        );
+          case RestoredHome.kitchen:
+            return _withRoleBanner(
+              KitchenHomeScreen(
+                displayName: displayName,
+                onSignOut: () => _signOut(context, authState),
+                onSwitchRole: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RoleSetupScreen(
+                        initialRole: AppRole.customer,
+                        onRoleSaved: _markRole,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+        }
       },
+    );
+  }
+
+  Widget _withRoleBanner(Widget child) {
+    if (!_serverFailed) return child;
+    return Column(
+      children: [
+        OfflineRoleBanner(
+          onRetry: () {
+            unawaited(_retryRoleRefresh());
+          },
+        ),
+        Expanded(child: child),
+      ],
     );
   }
 }

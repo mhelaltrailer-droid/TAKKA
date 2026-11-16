@@ -15,12 +15,28 @@ class TokenCache {
   TokenCache({
     required this.persistor,
     required String publishableKey,
-  }) : _cacheId = publishableKey.hashCode;
+  }) : _cacheId = cacheIdFor(publishableKey);
+
+  /// Stable persistor suffix for [publishableKey].
+  ///
+  /// [String.hashCode] is salted per process and changes every time the
+  /// app is killed. Using it as the storage key made the client token
+  /// unreadable on the next launch, so Clerk minted a new client and the
+  /// user had to sign in (and often confirm email) again.
+  static String cacheIdFor(String publishableKey) {
+    final sanitized = publishableKey.replaceAll(_nonKeyChars, '');
+    final tail = sanitized.length <= 32
+        ? sanitized
+        : sanitized.substring(sanitized.length - 32);
+    return 'v2$tail';
+  }
+
+  static final RegExp _nonKeyChars = RegExp('[^A-Za-z0-9]');
 
   /// The [Persistor] used to store session and client data
   final Persistor persistor;
 
-  final int _cacheId;
+  final String _cacheId;
   final _sessionTokens = <String, SessionToken>{};
 
   String _sessionId = '';
@@ -49,6 +65,8 @@ class TokenCache {
 
   /// Initialise the cache
   Future<void> initialize() async {
+    await _migrateLegacyTokenKeys();
+
     // Read all stored variables first before assignment
     final sessionId = await persistor.read<String>(_sessionIdKey) ?? '';
     _sessionId = sessionId;
@@ -71,6 +89,40 @@ class TokenCache {
 
     final clientId = await persistor.read<String>(_clientIdKey) ?? '';
     _clientId = clientId;
+  }
+
+  /// Older builds stored tokens under `publishableKey.hashCode`, which is
+  /// not stable across process starts. Move the first legacy bundle onto
+  /// [cacheIdFor] so an already-signed-in install keeps its session.
+  Future<void> _migrateLegacyTokenKeys() async {
+    if ((await persistor.read<String>(_clientTokenKey) ?? '').isNotEmpty) {
+      return;
+    }
+
+    final stored = await persistor.keys();
+    String? legacySuffix;
+    for (final key in stored) {
+      if (!key.startsWith('_clerkClient_Token_')) continue;
+      final suffix = key.substring('_clerkClient_Token_'.length);
+      if (suffix == _cacheId || suffix.isEmpty) continue;
+      legacySuffix = suffix;
+      break;
+    }
+    if (legacySuffix == null) return;
+
+    const prefixes = <String>[
+      '_clerkSession_Id_',
+      '_clerkSession_Tokens_',
+      '_clerkClient_Token_',
+      '_clerkClient_Id_',
+    ];
+    for (final prefix in prefixes) {
+      final oldKey = '$prefix$legacySuffix';
+      final value = await persistor.read<Object>(oldKey);
+      if (value == null) continue;
+      await persistor.write<Object>('$prefix$_cacheId', value);
+      await persistor.delete(oldKey);
+    }
   }
 
   /// Dispose of [TokenCache]
