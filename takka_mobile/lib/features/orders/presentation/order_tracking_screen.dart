@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth/session_token.dart';
+import '../../../core/links/external_link.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/customer_order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
@@ -13,10 +13,7 @@ import '../../../core/validation/phone.dart';
 import '../../cart/data/order_service.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
-  const OrderTrackingScreen({
-    super.key,
-    required this.orderId,
-  });
+  const OrderTrackingScreen({super.key, required this.orderId});
 
   final String orderId;
 
@@ -71,9 +68,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('متابعة الطلب'),
-      ),
+      appBar: AppBar(title: const Text('متابعة الطلب')),
       body: FutureBuilder<CustomerOrderDetails>(
         future: _future,
         builder: (context, snapshot) {
@@ -253,7 +248,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         const SizedBox(height: 12),
                         _SummaryText(
                           label: 'سعر الأصناف',
-                          value: '${order.subtotalAmount.toStringAsFixed(0)} ج.م',
+                          value:
+                              '${order.subtotalAmount.toStringAsFixed(0)} ج.م',
                         ),
                         _SummaryText(
                           label: 'رسوم التوصيل',
@@ -265,7 +261,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                         _SummaryText(
                           label: 'العربون',
-                          value: '${order.depositAmount.toStringAsFixed(0)} ج.م',
+                          value:
+                              '${order.depositAmount.toStringAsFixed(0)} ج.م',
                         ),
                       ],
                     ),
@@ -343,7 +340,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                       Padding(
                                         padding: const EdgeInsets.only(top: 8),
                                         child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                           child: Image.network(
                                             message.fileUrl!,
                                             height: 180,
@@ -351,7 +350,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Text(
                                               message.fileUrl!,
-                                              style: const TextStyle(fontSize: 12),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -495,10 +496,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               const SizedBox(height: 8),
               Text(
                 'تم تسجيل تقييمك لمطبخ ${order.kitchenName}. لن يطلب منك التقييم مرة أخرى لهذا الطلب.',
-                style: const TextStyle(
-                  color: Color(0xFF047857),
-                  height: 1.45,
-                ),
+                style: const TextStyle(color: Color(0xFF047857), height: 1.45),
               ),
               const SizedBox(height: 12),
               Row(
@@ -563,10 +561,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             const SizedBox(height: 8),
             Text(
               'كيف كانت تجربتك مع مطبخ ${order.kitchenName}؟',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             const Text(
@@ -617,9 +612,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               onPressed: _submittingReview || _selectedRating < 1
                   ? null
                   : () => _submitReview(order.id),
-              child: Text(
-                _submittingReview ? 'جارٍ الإرسال...' : 'إرسال',
-              ),
+              child: Text(_submittingReview ? 'جارٍ الإرسال...' : 'إرسال'),
             ),
           ],
         ),
@@ -759,10 +752,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     try {
       final tokenJwt = await requireSessionJwt(context);
-      await _orderService.cancelOrder(
-        sessionToken: tokenJwt,
-        orderId: orderId,
-      );
+      await _orderService.cancelOrder(sessionToken: tokenJwt, orderId: orderId);
       setState(() => _future = _load());
     } catch (error) {
       _showError(error);
@@ -813,22 +803,21 @@ List<Widget> _customerTimelineRows(CustomerOrderDetails order) {
     ];
   }
 
-  final pastDeposit = stage == CustomerOrderStage.preparing ||
+  final pastDeposit =
+      stage == CustomerOrderStage.preparing ||
       stage == CustomerOrderStage.onTheWay ||
       stage == CustomerOrderStage.confirmReceipt ||
       stage == CustomerOrderStage.completed;
-  final pastPreparing = stage == CustomerOrderStage.onTheWay ||
+  final pastPreparing =
+      stage == CustomerOrderStage.onTheWay ||
       stage == CustomerOrderStage.confirmReceipt ||
       stage == CustomerOrderStage.completed;
-  final pastDelivery = stage == CustomerOrderStage.confirmReceipt ||
+  final pastDelivery =
+      stage == CustomerOrderStage.confirmReceipt ||
       stage == CustomerOrderStage.completed;
 
   return [
-    _TimelineRow(
-      label: 'تم إرسال الطلب',
-      date: order.placedAt,
-      isDone: true,
-    ),
+    _TimelineRow(label: 'تم إرسال الطلب', date: order.placedAt, isDone: true),
     _TimelineRow(
       label: 'موافقة المطبخ',
       date: order.acceptedAt,
@@ -838,8 +827,8 @@ List<Widget> _customerTimelineRows(CustomerOrderDetails order) {
       label: stage == CustomerOrderStage.depositReview
           ? 'بانتظار تأكيد العربون'
           : stage == CustomerOrderStage.payDeposit
-              ? 'ادفع العربون'
-              : 'تم تأكيد العربون',
+          ? 'ادفع العربون'
+          : 'تم تأكيد العربون',
       date: order.depositConfirmedAt ?? order.depositSubmittedAt,
       isDone: pastDeposit,
     ),
@@ -854,9 +843,7 @@ List<Widget> _customerTimelineRows(CustomerOrderDetails order) {
       isDone: pastDelivery,
     ),
     _TimelineRow(
-      label: stage == CustomerOrderStage.completed
-          ? 'مكتمل'
-          : 'تأكيد الاستلام',
+      label: stage == CustomerOrderStage.completed ? 'مكتمل' : 'تأكيد الاستلام',
       date: order.completedAt,
       isDone: stage == CustomerOrderStage.completed,
     ),
@@ -887,7 +874,9 @@ class _TimelineRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(child: Text(label)),
           Text(
-            date == null ? '--' : '${date!.hour}:${date!.minute.toString().padLeft(2, '0')}',
+            date == null
+                ? '--'
+                : '${date!.hour}:${date!.minute.toString().padLeft(2, '0')}',
             style: TextStyle(color: Colors.grey.shade700),
           ),
         ],
@@ -897,10 +886,7 @@ class _TimelineRow extends StatelessWidget {
 }
 
 class _SummaryText extends StatelessWidget {
-  const _SummaryText({
-    required this.label,
-    required this.value,
-  });
+  const _SummaryText({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -913,10 +899,7 @@ class _SummaryText extends StatelessWidget {
         children: [
           Text(label),
           const Spacer(),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -924,10 +907,7 @@ class _SummaryText extends StatelessWidget {
 }
 
 class _KitchenContactCard extends StatelessWidget {
-  const _KitchenContactCard({
-    required this.kitchenName,
-    required this.phone,
-  });
+  const _KitchenContactCard({required this.kitchenName, required this.phone});
 
   final String kitchenName;
   final String phone;
@@ -947,9 +927,13 @@ class _KitchenContactCard extends StatelessWidget {
     return Uri.parse('https://wa.me/20${_local.substring(1)}');
   }
 
-  Future<void> _launch(Uri? uri) async {
+  Future<void> _launch(
+    BuildContext context,
+    Uri? uri,
+    String failureMessage,
+  ) async {
     if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openExternalLink(context, uri, failureMessage: failureMessage);
   }
 
   @override
@@ -985,7 +969,8 @@ class _KitchenContactCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () => _launch(_telUri),
+                    onPressed: () =>
+                        _launch(context, _telUri, phoneLinkFailureMessage),
                     icon: const Icon(Icons.call_outlined),
                     label: const Text('اتصال'),
                   ),
@@ -994,7 +979,11 @@ class _KitchenContactCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _launch(_whatsAppUri),
+                      onPressed: () => _launch(
+                        context,
+                        _whatsAppUri,
+                        whatsAppLinkFailureMessage,
+                      ),
                       icon: const Icon(Icons.chat_outlined),
                       label: const Text('واتساب'),
                     ),
