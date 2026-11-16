@@ -12,6 +12,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "admin:promote": "node scripts/promote-admin.mjs",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "seed:demo:remove": "tsx scripts/remove-demo-data.ts",
     "postinstall": "prisma generate"
   },
   "engines": {

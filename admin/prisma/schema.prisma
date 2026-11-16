@@ -113,6 +113,8 @@ model User {
   phoneNumber       String?           @unique
   passwordHash      String?
   isActive          Boolean           @default(true)
+  /// Placeholder marketplace accounts. Hidden from customers. No Clerk login.
+  isDemo            Boolean           @default(false)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   customerAddresses CustomerAddress[]
@@ -126,6 +128,8 @@ model User {
   notifications     Notification[]
   kitchenViews      KitchenViewEvent[]
   devicePushTokens  DevicePushToken[]
+
+  @@index([isDemo])
 }
 
 model Region {
@@ -180,6 +184,8 @@ model Kitchen {
   longitude          Float?
   approvalStatus     ApprovalStatus        @default(PENDING)
   availabilityStatus AvailabilityStatus    @default(CLOSED)
+  /// Internal marker so demo kitchens can be removed without touching real rows.
+  isDemo             Boolean               @default(false)
   /// Admin rejection note shown in-app to the kitchen owner.
   rejectionReason    String?
   reviewedAt         DateTime?
@@ -197,6 +203,8 @@ model Kitchen {
   orders             Order[]
   reviews            Review[]
   viewEvents         KitchenViewEvent[]
+
+  @@index([isDemo])
 }
 
 /// One browse visit per kitchen + session + calendar day (for stats / conversion).
@@ -274,6 +282,8 @@ model MenuItem {
   dishOfTheDayQty     Int?
   /// New items start PENDING; existing rows default APPROVED via db push default.
   approvalStatus ApprovalStatus @default(APPROVED)
+  /// Internal marker. Only the demo seed sets this; removal deletes these rows only.
+  isDemo         Boolean        @default(false)
   rejectionReason String?
   /// When an approved item is edited, live fields stay; pending* holds the draft.
   draftStatus ApprovalStatus?
@@ -293,6 +303,8 @@ model MenuItem {
   sizes         MenuItemSize[]
   orderItems    OrderItem[]
   flashOffers   FlashOffer[]
+
+  @@index([isDemo])
 }
 
 /// Time-limited flash deal on a menu item (1–2 hours, limited qty).
