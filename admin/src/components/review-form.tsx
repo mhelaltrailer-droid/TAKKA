@@ -62,7 +62,7 @@ export function ReviewForm({ orderId, kitchenName }: ReviewFormProps) {
         كيف كانت تجربتك مع مطبخ {kitchenName}؟
       </h2>
       <p className="mt-2 text-sm leading-6 text-[#6b4a3a]">
-        اختر النجوم، والتعليق اختياري.
+        قيّم من 1 لـ 5 واكتب تجربتك. التقييم بيتطلب مرة واحدة بعد ما الطلب يخلص.
       </p>
 
       <div className="mt-5 flex items-center justify-center gap-2" dir="ltr">
@@ -98,7 +98,7 @@ export function ReviewForm({ orderId, kitchenName }: ReviewFormProps) {
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           className="w-full rounded-2xl border border-[#ead9c8] bg-white px-4 py-3 text-sm outline-none"
-          placeholder="اكتب رأيك في الأكل أو الخدمة..."
+          placeholder="اكتب تجربتك مع الأكل والخدمة..."
         />
       </div>
 

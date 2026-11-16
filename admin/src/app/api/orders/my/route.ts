@@ -14,8 +14,14 @@ export async function GET() {
       include: {
         kitchen: {
           select: {
+            id: true,
             kitchenName: true,
             slug: true,
+          },
+        },
+        review: {
+          select: {
+            id: true,
           },
         },
         items: {

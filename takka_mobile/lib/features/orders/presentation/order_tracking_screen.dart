@@ -4,6 +4,7 @@ import '../../../core/auth/session_token.dart';
 import '../../../core/links/external_link.dart';
 import '../../../core/network/mobile_upload_service.dart';
 import '../../../core/orders/customer_order_status.dart';
+import '../../../core/orders/order_status.dart';
 import '../../../core/realtime/pusher_realtime_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/friendly_error.dart';
@@ -11,6 +12,9 @@ import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/validation/phone.dart';
 import '../../cart/data/order_service.dart';
+import '../../home/presentation/kitchen_details_screen.dart';
+import 'order_support_sheet.dart';
+import 'reorder_flow.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   const OrderTrackingScreen({super.key, required this.orderId});
@@ -140,6 +144,53 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                         if (order.addressLine != null)
                           Text('العنوان: ${order.addressLine}'),
+                        const SizedBox(height: 14),
+                        if (order.kitchenSlug.isNotEmpty ||
+                            order.kitchenId.isNotEmpty)
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => KitchenDetailsScreen(
+                                      kitchenIdOrSlug:
+                                          order.kitchenSlug.isNotEmpty
+                                              ? order.kitchenSlug
+                                              : order.kitchenId,
+                                      title: order.kitchenName,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Text('من نفس المطبخ'),
+                            ),
+                          ),
+                        if (isPreviousOrderStatus(order.status)) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () => startReorder(context, order.id),
+                              child: const Text('اطلب تاني'),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => openOrderSupportSheet(
+                              context,
+                              orderId: order.id,
+                              orderNumber: order.orderNumber,
+                              kitchenName: order.kitchenName,
+                            ),
+                            child: const Text(
+                              'محتاج مساعدة؟ / عندي مشكلة في الطلب',
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -565,7 +616,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'اختر النجوم، والتعليق اختياري.',
+              'قيّم من 1 لـ 5 واكتب تجربتك. التقييم بيتطلب مرة واحدة بعد ما الطلب يخلص.',
               style: TextStyle(color: TakkaColors.muted, height: 1.45),
             ),
             const SizedBox(height: 16),
@@ -604,7 +655,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               maxLines: 3,
               enabled: !_submittingReview,
               decoration: const InputDecoration(
-                hintText: 'اكتب رأيك في الأكل أو الخدمة... (اختياري)',
+                hintText: 'اكتب تجربتك مع الأكل والخدمة... (اختياري)',
               ),
             ),
             const SizedBox(height: 14),

@@ -16,6 +16,12 @@ export default async function MyOrdersPage() {
         kitchen: {
           select: {
             kitchenName: true,
+            slug: true,
+          },
+        },
+        review: {
+          select: {
+            id: true,
           },
         },
         items: {
@@ -53,8 +59,10 @@ export default async function MyOrdersPage() {
           deliveryType: order.deliveryType,
           totalAmount: Number(order.totalAmount),
           kitchenName: order.kitchen.kitchenName,
+          kitchenSlug: order.kitchen.slug,
           itemsCount: order.items.length,
-          createdAtLabel: order.createdAt.toLocaleString("ar-EG"),
+          createdAt: order.createdAt.toISOString(),
+          hasReview: Boolean(order.review),
         }))}
       />
     </AppShell>

@@ -18,6 +18,7 @@ export default async function AdminOperationsPage() {
     usersCount,
     recentOrders,
     newKitchenLeadsCount,
+    openOrderIssuesCount,
   ] = await Promise.all([
     db.kitchen.count({ where: { approvalStatus: "PENDING" } }),
     db.menuItem.count({ where: menuItemNeedsAdminReviewWhere() }),
@@ -34,6 +35,7 @@ export default async function AdminOperationsPage() {
       },
     }),
     db.kitchenJoinLead.count({ where: { status: "NEW" } }),
+    db.orderIssue.count({ where: { status: "OPEN" } }),
   ]);
 
   regions.sort((a, b) => {
@@ -121,10 +123,11 @@ export default async function AdminOperationsPage() {
               أرشيف المحادثات
             </Link>
             <Link
-              href="/dashboard/orders"
-              className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+              href="/dashboard/admin/orders"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >
-              متابعة الطلبات
+              مشاكل الطلبات
+              {openOrderIssuesCount > 0 ? ` (${openOrderIssuesCount})` : ""}
             </Link>
           </div>
         </header>
