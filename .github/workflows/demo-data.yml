@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "seed = add demo kitchens, remove = delete them"
+        description: "seed = add demo kitchens, remove = delete them, schema = only prisma db push"
         required: true
         default: seed
         type: choice
-        options: [seed, remove]
+        options: [seed, remove, schema]
 
 jobs:
   demo-data:
