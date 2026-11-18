@@ -3,6 +3,7 @@ import { z } from "zod";
 const serverSchema = z.object({
   DATABASE_URL: z.string().min(1),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
+  // Optional so a leftover UPLOADTHING_TOKEN on Render does not fail startup.
   UPLOADTHING_TOKEN: z.string().min(1).optional(),
   PUSHER_APP_ID: z.string().min(1).optional(),
   PUSHER_SECRET: z.string().min(1).optional(),

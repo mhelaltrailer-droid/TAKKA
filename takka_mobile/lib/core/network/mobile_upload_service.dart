@@ -67,56 +67,106 @@ class MobileUploadService {
       return null;
     }
 
-    final request = http.MultipartRequest(
-      'POST',
-      _buildUri('/api/mobile/upload'),
-    )
-      ..headers['Authorization'] = 'Bearer $sessionToken'
-      ..fields['purpose'] = purpose
-      ..files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          file.path,
-          filename: file.name.isNotEmpty ? file.name : 'upload.jpg',
-          contentType: _contentTypeFor(file),
-        ),
-      );
+    final bytes = await _readFile(file);
+    final contentType = _contentTypeFor(file);
+    final mime = '${contentType.type}/${contentType.subtype}';
 
-    final http.Response response;
+    final http.Response presignResponse;
     try {
-      final streamed =
-          await request.send().timeout(const Duration(seconds: 90));
-      response = await http.Response.fromStream(streamed).timeout(
-        const Duration(seconds: 30),
-      );
+      presignResponse = await http
+          .post(
+            _buildUri('/api/mobile/uploads/presign'),
+            headers: {
+              'Authorization': 'Bearer $sessionToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'purpose': purpose,
+              'contentType': mime,
+              'fileName': file.name.isNotEmpty ? file.name : 'upload.jpg',
+              'size': bytes.length,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
     } catch (_) {
       throw UploadException(
         'تعذر الاتصال بالخادم أثناء رفع الصورة. تحقق من الإنترنت وحاول مجددًا.',
       );
     }
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      String message = 'فشل رفع الصورة.';
-      try {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        message = body['error']?.toString() ?? message;
-      } catch (_) {
-        if (response.statusCode == 401) {
-          message = 'يجب تسجيل الدخول أولًا ثم إعادة رفع الصورة.';
-        } else if (response.statusCode == 413) {
-          message = 'حجم الصورة كبير جدًا.';
-        } else {
-          message = 'فشل رفع الصورة (${response.statusCode}).';
-        }
-      }
-      throw UploadException(message);
+    if (presignResponse.statusCode < 200 || presignResponse.statusCode >= 300) {
+      throw UploadException(_errorMessage(presignResponse));
     }
 
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final url = json['url']?.toString();
-    if (url == null || url.isEmpty) {
+    final presign = jsonDecode(presignResponse.body);
+    if (presign is! Map) {
+      throw UploadException('تعذر تجهيز رفع الصورة.');
+    }
+
+    final uploadUrl = presign['uploadUrl']?.toString();
+    final publicUrl = presign['url']?.toString();
+    if (uploadUrl == null ||
+        uploadUrl.isEmpty ||
+        publicUrl == null ||
+        publicUrl.isEmpty) {
       throw UploadException('اكتمل الرفع لكن لم يُرجع رابط الصورة.');
     }
-    return url;
+
+    final putHeaders = <String, String>{};
+    final rawHeaders = presign['headers'];
+    if (rawHeaders is Map) {
+      for (final entry in rawHeaders.entries) {
+        putHeaders['${entry.key}'] = '${entry.value}';
+      }
+    }
+    putHeaders.putIfAbsent('Content-Type', () => mime);
+
+    final http.Response putResponse;
+    try {
+      putResponse = await http
+          .put(
+            Uri.parse(uploadUrl),
+            headers: putHeaders,
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 90));
+    } catch (_) {
+      throw UploadException(
+        'تعذر الاتصال بالخادم أثناء رفع الصورة. تحقق من الإنترنت وحاول مجددًا.',
+      );
+    }
+
+    if (putResponse.statusCode < 200 || putResponse.statusCode >= 300) {
+      throw UploadException('فشل رفع الصورة (${putResponse.statusCode}).');
+    }
+
+    return publicUrl;
+  }
+
+  Future<List<int>> _readFile(XFile file) async {
+    try {
+      return await file.readAsBytes();
+    } catch (_) {
+      throw UploadException('تعذر قراءة الصورة المختارة.');
+    }
+  }
+
+  String _errorMessage(http.Response response) {
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map && body['error'] != null) {
+        return body['error'].toString();
+      }
+    } catch (_) {
+      // Fall through to the status-based message.
+    }
+
+    if (response.statusCode == 401) {
+      return 'يجب تسجيل الدخول أولًا ثم إعادة رفع الصورة.';
+    }
+    if (response.statusCode == 413) {
+      return 'حجم الصورة كبير جدًا.';
+    }
+    return 'فشل رفع الصورة (${response.statusCode}).';
   }
 }
