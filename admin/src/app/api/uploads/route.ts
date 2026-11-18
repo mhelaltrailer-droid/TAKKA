@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       file,
       purpose: purposeRaw,
       role: user.role,
+      ownerId: user.appUserId,
     });
 
     return NextResponse.json(uploaded);

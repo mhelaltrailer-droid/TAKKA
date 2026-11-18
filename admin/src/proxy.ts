@@ -14,8 +14,8 @@ const isAppPublicRoute = createRouteMatcher([
   "/api/discovery(.*)",
   "/api/join-kitchen(.*)",
   "/api/mobile(.*)",
-  // UploadThing webhook + client validation must stay public (Clerk cookies are absent).
-  "/api/uploadthing(.*)",
+  // Presign authenticates inside the route (cookie session or Bearer token).
+  "/api/uploads/presign",
 ]);
 
 const isAdminPublicRoute = createRouteMatcher([
@@ -24,15 +24,15 @@ const isAdminPublicRoute = createRouteMatcher([
   // Public catalog used by mobile guest browse (and web).
   "/api/discovery(.*)",
   "/api/mobile(.*)",
-  "/api/uploadthing(.*)",
+  "/api/uploads/presign",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
   const surface = getTakkaSurface(req.nextUrl.hostname);
   const { pathname } = req.nextUrl;
 
-  // Always skip Clerk protect for UploadThing callbacks/validation.
-  if (pathname.startsWith("/api/uploadthing")) {
+  // Presign authenticates with a cookie session or a Bearer token inside the route.
+  if (pathname === "/api/uploads/presign") {
     return;
   }
 

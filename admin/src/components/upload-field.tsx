@@ -21,19 +21,59 @@ type UploadFieldProps = {
   includeHiddenInput?: boolean;
 };
 
-function uploadWithProgress(
+type PresignResponse = {
+  uploadUrl?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  error?: string;
+};
+
+async function requestPresign(file: File, purpose: string): Promise<{
+  uploadUrl: string;
+  url: string;
+  headers?: Record<string, string>;
+}> {
+  let response: Response;
+  try {
+    response = await fetch("/api/uploads/presign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        purpose,
+        contentType: file.type,
+        fileName: file.name,
+        size: file.size,
+      }),
+    });
+  } catch {
+    throw new Error("تعذر الاتصال بخادم الرفع.");
+  }
+
+  const payload = (await response.json().catch(() => null)) as PresignResponse | null;
+  if (!response.ok || !payload?.uploadUrl || !payload.url) {
+    throw new Error(payload?.error || `فشل رفع الصورة (${response.status || "شبكة"}).`);
+  }
+
+  return {
+    uploadUrl: payload.uploadUrl,
+    url: payload.url,
+    headers: payload.headers,
+  };
+}
+
+function putWithProgress(
+  uploadUrl: string,
   file: File,
-  purpose: string,
+  headers: Record<string, string> | undefined,
   onProgress: (value: number) => void,
-): Promise<{ url: string }> {
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("purpose", purpose);
+    xhr.open("PUT", uploadUrl);
 
-    xhr.open("POST", "/api/uploads");
-    xhr.responseType = "json";
+    for (const [name, value] of Object.entries(headers ?? {})) {
+      xhr.setRequestHeader(name, value);
+    }
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
@@ -43,30 +83,12 @@ function uploadWithProgress(
     };
 
     xhr.onload = () => {
-      const payload =
-        typeof xhr.response === "object" && xhr.response
-          ? xhr.response
-          : (() => {
-              try {
-                return JSON.parse(xhr.responseText) as {
-                  url?: string;
-                  error?: string;
-                };
-              } catch {
-                return { error: "تعذر قراءة رد الخادم." };
-              }
-            })();
-
-      if (xhr.status >= 200 && xhr.status < 300 && payload.url) {
-        resolve({ url: String(payload.url) });
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
         return;
       }
 
-      reject(
-        new Error(
-          payload.error || `فشل رفع الصورة (${xhr.status || "شبكة"}).`,
-        ),
-      );
+      reject(new Error(`فشل رفع الصورة (${xhr.status || "شبكة"}).`));
     };
 
     xhr.onerror = () => {
@@ -78,8 +100,18 @@ function uploadWithProgress(
     };
 
     xhr.timeout = 120_000;
-    xhr.send(formData);
+    xhr.send(file);
   });
+}
+
+async function uploadWithProgress(
+  file: File,
+  purpose: string,
+  onProgress: (value: number) => void,
+): Promise<{ url: string }> {
+  const presign = await requestPresign(file, purpose);
+  await putWithProgress(presign.uploadUrl, file, presign.headers, onProgress);
+  return { url: presign.url };
 }
 
 export function UploadField({
@@ -175,7 +207,7 @@ export function UploadField({
         </button>
 
         <p className="mt-2 text-xs text-zinc-500">
-          صورة فقط (أي صيغة) · تُحفظ WebP · بحد أقصى الحجم المسموح
+          صورة فقط (أي صيغة) · بحد أقصى الحجم المسموح
         </p>
 
         {status === "uploading" ? (

@@ -110,6 +110,12 @@ export default async function AdminOperationsPage() {
               عروض الشريط
             </Link>
             <Link
+              href="/dashboard/admin/media"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              نقل الصور
+            </Link>
+            <Link
               href="/dashboard/admin/leads"
               className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >

@@ -1,21 +1,22 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { UserRole } from "@prisma/client";
 import sharp from "sharp";
-import { UTApi } from "uploadthing/server";
 
 import { db } from "@/lib/db";
+import { putR2Object } from "@/lib/r2-client";
+import {
+  UploadValidationError,
+  UPLOAD_PURPOSES,
+  type UploadPurpose,
+  buildObjectKey,
+  isUploadPurpose,
+} from "@/lib/r2-upload";
 import { type AppRole, isAppRole } from "@/lib/roles";
 
-const utapi = new UTApi();
 const WEBP_QUALITY = 85;
 
-/** Client-facing upload validation errors (map to HTTP 400). */
-export class UploadValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "UploadValidationError";
-  }
-}
+export { UploadValidationError, UPLOAD_PURPOSES, isUploadPurpose };
+export type { UploadPurpose };
 
 function assertImageMimeType(mimeType: string) {
   // Empty MIME is allowed: some mobile clients omit it; sharp validates bytes.
@@ -59,18 +60,6 @@ async function convertImageToWebp(file: File): Promise<File> {
     throw new UploadValidationError("تعذر تحويل الصورة إلى WebP.");
   }
 }
-
-export const UPLOAD_PURPOSES = {
-  kitchenLogo: { maxBytes: 4 * 1024 * 1024, adminOnly: false },
-  kitchenCover: { maxBytes: 8 * 1024 * 1024, adminOnly: false },
-  kitchenDocument: { maxBytes: 8 * 1024 * 1024, adminOnly: false },
-  menuItemImage: { maxBytes: 8 * 1024 * 1024, adminOnly: false },
-  depositProofImage: { maxBytes: 8 * 1024 * 1024, adminOnly: false },
-  chatImage: { maxBytes: 8 * 1024 * 1024, adminOnly: false },
-  promoBannerImage: { maxBytes: 8 * 1024 * 1024, adminOnly: true },
-} as const;
-
-export type UploadPurpose = keyof typeof UPLOAD_PURPOSES;
 
 function fromDatabaseRole(role: UserRole): AppRole {
   switch (role) {
@@ -138,10 +127,6 @@ export async function requireUploadApiUser() {
   };
 }
 
-export function isUploadPurpose(value: string): value is UploadPurpose {
-  return value in UPLOAD_PURPOSES;
-}
-
 export function asUploadFile(value: FormDataEntryValue | null): File | null {
   if (value instanceof File && value.size > 0) {
     return value;
@@ -163,6 +148,7 @@ export async function uploadImageFile(params: {
   file: File;
   purpose: UploadPurpose;
   role: AppRole;
+  ownerId: string;
 }) {
   const config = UPLOAD_PURPOSES[params.purpose];
 
@@ -182,23 +168,24 @@ export async function uploadImageFile(params: {
   }
 
   // Accept any real image bytes, reject non-images, store as WebP.
+  // Kept for older app builds that still POST the file to this server.
   const webpFile = await convertImageToWebp(params.file);
-
-  const result = await utapi.uploadFiles(webpFile);
-
-  if (result.error) {
-    throw new Error(result.error.message || "فشل رفع الصورة.");
-  }
-
-  const url = result.data.ufsUrl || result.data.url;
-  if (!url) {
-    throw new Error("اكتمل الرفع لكن لم يُرجع رابط الصورة.");
-  }
+  const key = buildObjectKey({
+    purpose: params.purpose,
+    ownerId: params.ownerId,
+    extension: "webp",
+  });
+  const body = Buffer.from(await webpFile.arrayBuffer());
+  const stored = await putR2Object({
+    key,
+    body,
+    contentType: "image/webp",
+  });
 
   return {
-    url,
-    key: result.data.key,
+    url: stored.url,
+    key,
     purpose: params.purpose,
-    contentType: "image/webp",
+    contentType: "image/webp" as const,
   };
 }

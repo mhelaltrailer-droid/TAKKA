@@ -18,9 +18,14 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-UPLOADTHING_TOKEN=
-# Optional but recommended so UploadThing callbacks hit the public app URL:
-# UPLOADTHING_CALLBACK_URL=https://takka-app.onrender.com
+# Image uploads (Cloudflare R2). Set the same five vars on TAKKA-admin too.
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=takka-media
+R2_PUBLIC_URL=https://pub-35d18718f36741e68738b3fd193e189e.r2.dev
+# UPLOADTHING_TOKEN is unused by new uploads. Keep it only until the admin
+# media migration has copied old images (لوحة الإدارة → نقل الصور).
 
 PUSHER_APP_ID=
 NEXT_PUBLIC_PUSHER_KEY=
