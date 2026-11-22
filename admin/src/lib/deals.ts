@@ -162,11 +162,7 @@ export function serializeDishOfTheDay(item: {
   };
 }
 
-/**
- * Resolve unit price for an order line: flash offer > dish of the day > regular.
- * Mutates quantity on flash offer / dish of the day when applicable.
- */
-export async function resolveDealUnitPrice(params: {
+type DealPriceParams = {
   kitchenId: string;
   menuItemId: string;
   quantity: number;
@@ -174,7 +170,27 @@ export async function resolveDealUnitPrice(params: {
   isDishOfTheDay: boolean;
   dishOfTheDayPrice: Prisma.Decimal | null;
   dishOfTheDayQty: number | null;
-}): Promise<{ unitPrice: Prisma.Decimal; dealType: "flash" | "dish_of_the_day" | null }> {
+};
+
+function dishApplies(params: DealPriceParams) {
+  return (
+    params.isDishOfTheDay &&
+    params.dishOfTheDayPrice != null &&
+    (params.dishOfTheDayQty == null ||
+      params.dishOfTheDayQty >= params.quantity)
+  );
+}
+
+/**
+ * Same deal choice as order creation, without decrementing stock.
+ * Quotes must use this so a preview cannot consume a flash or dish portion.
+ */
+export async function selectDealUnitPrice(params: DealPriceParams): Promise<{
+  unitPrice: Prisma.Decimal;
+  dealType: "flash" | "dish_of_the_day" | null;
+  flashOfferId: string | null;
+  flashQuantityLeft: number | null;
+}> {
   await expireStaleFlashOffers([params.kitchenId]);
 
   const flash = await db.flashOffer.findFirst({
@@ -188,9 +204,85 @@ export async function resolveDealUnitPrice(params: {
   });
 
   if (flash) {
+    return {
+      unitPrice: flash.offerPrice,
+      dealType: "flash",
+      flashOfferId: flash.id,
+      flashQuantityLeft: flash.quantityLeft,
+    };
+  }
+
+  if (dishApplies(params) && params.dishOfTheDayPrice != null) {
+    return {
+      unitPrice: params.dishOfTheDayPrice,
+      dealType: "dish_of_the_day",
+      flashOfferId: null,
+      flashQuantityLeft: null,
+    };
+  }
+
+  return {
+    unitPrice: params.regularUnitPrice,
+    dealType: null,
+    flashOfferId: null,
+    flashQuantityLeft: null,
+  };
+}
+
+async function takeDishOfTheDay(params: DealPriceParams): Promise<{
+  unitPrice: Prisma.Decimal;
+  dealType: "dish_of_the_day" | null;
+} | null> {
+  if (!dishApplies(params) || params.dishOfTheDayPrice == null) {
+    return null;
+  }
+
+  if (params.dishOfTheDayQty != null) {
+    const updated = await db.menuItem.updateMany({
+      where: {
+        id: params.menuItemId,
+        isDishOfTheDay: true,
+        dishOfTheDayQty: { gte: params.quantity },
+      },
+      data: {
+        dishOfTheDayQty: { decrement: params.quantity },
+      },
+    });
+    if (updated.count !== 1) {
+      return { unitPrice: params.regularUnitPrice, dealType: null };
+    }
+    const after = await db.menuItem.findUnique({
+      where: { id: params.menuItemId },
+      select: { dishOfTheDayQty: true },
+    });
+    if (after?.dishOfTheDayQty != null && after.dishOfTheDayQty <= 0) {
+      await db.menuItem.update({
+        where: { id: params.menuItemId },
+        data: { isDishOfTheDay: false },
+      });
+    }
+  }
+
+  return {
+    unitPrice: params.dishOfTheDayPrice,
+    dealType: "dish_of_the_day",
+  };
+}
+
+/**
+ * Resolve unit price for an order line: flash offer > dish of the day > regular.
+ * Mutates quantity on flash offer / dish of the day when applicable.
+ */
+export async function resolveDealUnitPrice(params: DealPriceParams): Promise<{
+  unitPrice: Prisma.Decimal;
+  dealType: "flash" | "dish_of_the_day" | null;
+}> {
+  const selected = await selectDealUnitPrice(params);
+
+  if (selected.dealType === "flash" && selected.flashOfferId) {
     const updated = await db.flashOffer.updateMany({
       where: {
-        id: flash.id,
+        id: selected.flashOfferId,
         status: FlashOfferStatus.ACTIVE,
         quantityLeft: { gte: params.quantity },
       },
@@ -200,49 +292,24 @@ export async function resolveDealUnitPrice(params: {
     });
 
     if (updated.count === 1) {
-      const after = await db.flashOffer.findUnique({ where: { id: flash.id } });
+      const after = await db.flashOffer.findUnique({
+        where: { id: selected.flashOfferId },
+      });
       if (after && after.quantityLeft <= 0) {
         await db.flashOffer.update({
-          where: { id: flash.id },
+          where: { id: selected.flashOfferId },
           data: { status: FlashOfferStatus.ENDED, endedReason: "SOLD_OUT" },
         });
       }
-      return { unitPrice: flash.offerPrice, dealType: "flash" };
+      return { unitPrice: selected.unitPrice, dealType: "flash" };
     }
+  } else if (selected.dealType === "dish_of_the_day") {
+    const dish = await takeDishOfTheDay(params);
+    return dish ?? { unitPrice: params.regularUnitPrice, dealType: null };
+  } else {
+    return { unitPrice: params.regularUnitPrice, dealType: null };
   }
 
-  if (
-    params.isDishOfTheDay &&
-    params.dishOfTheDayPrice != null &&
-    (params.dishOfTheDayQty == null || params.dishOfTheDayQty >= params.quantity)
-  ) {
-    if (params.dishOfTheDayQty != null) {
-      const updated = await db.menuItem.updateMany({
-        where: {
-          id: params.menuItemId,
-          isDishOfTheDay: true,
-          dishOfTheDayQty: { gte: params.quantity },
-        },
-        data: {
-          dishOfTheDayQty: { decrement: params.quantity },
-        },
-      });
-      if (updated.count !== 1) {
-        return { unitPrice: params.regularUnitPrice, dealType: null };
-      }
-      const after = await db.menuItem.findUnique({
-        where: { id: params.menuItemId },
-        select: { dishOfTheDayQty: true },
-      });
-      if (after?.dishOfTheDayQty != null && after.dishOfTheDayQty <= 0) {
-        await db.menuItem.update({
-          where: { id: params.menuItemId },
-          data: { isDishOfTheDay: false },
-        });
-      }
-    }
-    return { unitPrice: params.dishOfTheDayPrice, dealType: "dish_of_the_day" };
-  }
-
-  return { unitPrice: params.regularUnitPrice, dealType: null };
+  const dish = await takeDishOfTheDay(params);
+  return dish ?? { unitPrice: params.regularUnitPrice, dealType: null };
 }

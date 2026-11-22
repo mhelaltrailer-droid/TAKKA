@@ -634,6 +634,19 @@ model KitchenOrderPolicy {
   updatedAt                 DateTime @updatedAt
 }
 
+/// Singleton row id = "default". Edited at /dashboard/admin/service-area.
+/// Columns have no schema defaults on purpose: the app seeds the row from
+/// service-area.ts the first time delivery coordinates are checked.
+model ServiceArea {
+  id               String   @id
+  label            String
+  centerLatitude   Float
+  centerLongitude  Float
+  radiusKm         Float
+  outOfAreaMessage String
+  updatedAt        DateTime @updatedAt
+}
+
 /// Durable suspension history. Closing a suspension sets endedAt; the row stays.
 model KitchenSuspensionRecord {
   id            String                  @id @default(cuid())

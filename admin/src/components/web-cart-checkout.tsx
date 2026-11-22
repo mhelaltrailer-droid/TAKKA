@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { CheckoutPricingSummary } from "@/components/checkout-pricing-summary";
 import type { DeliveryCoords } from "@/components/delivery-location-picker";
@@ -13,6 +13,7 @@ import {
   getOrderReadinessLabel,
 } from "@/lib/order-readiness";
 import {
+  applyWebCartQuote,
   clearWebCart,
   getWebCart,
   subscribeWebCart,
@@ -62,6 +63,63 @@ const emptyCart: WebCartState = {
   items: [],
 };
 
+type QuoteNotice = {
+  orderable: boolean;
+  blockingError: string | null;
+  changes: Array<{ message?: string }>;
+  lines: Array<{
+    available?: boolean;
+    unitPrice?: number | null;
+    depositAmount?: number | null;
+  }>;
+};
+
+async function requestCheckoutQuote(input: {
+  cart: WebCartState;
+  deliveryType: "pickup" | "delivery";
+  customerAddressId?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
+}): Promise<QuoteNotice> {
+  const response = await fetch("/api/checkout/quote", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kitchenId: input.cart.kitchenId,
+      deliveryType: input.deliveryType,
+      customerAddressId: input.customerAddressId,
+      deliveryLatitude: input.deliveryLatitude,
+      deliveryLongitude: input.deliveryLongitude,
+      items: input.cart.items.map((item) => ({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        ...(item.menuItemSizeId
+          ? { menuItemSizeId: item.menuItemSizeId }
+          : {}),
+        ...(item.customerNote ? { customerNote: item.customerNote } : {}),
+        expectedUnitPrice: item.unitPrice,
+        expectedDepositAmount: item.depositAmount,
+      })),
+    }),
+  });
+  const result = (await response.json().catch(() => ({}))) as Partial<QuoteNotice> & {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(result.error || "تعذر مراجعة أسعار السلة.");
+  }
+  return {
+    orderable: result.orderable === true,
+    blockingError: result.blockingError ?? null,
+    changes: Array.isArray(result.changes) ? result.changes : [],
+    lines: Array.isArray(result.lines) ? result.lines : [],
+  };
+}
+
+function quoteNeedsReview(quote: QuoteNotice) {
+  return !quote.orderable || quote.changes.length > 0;
+}
+
 function coordsFromAddress(
   address: CustomerAddress | undefined,
 ): DeliveryCoords | null {
@@ -106,12 +164,34 @@ export function WebCartCheckout({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<QuoteNotice | null>(null);
+  const restoredQuote = useRef(false);
 
   const selectedAddress = addresses.find(
     (address) => address.id === selectedAddressId,
   );
   const locationHint = coordsFromAddress(selectedAddress);
   const addressesReturnHref = `/addresses?returnTo=${encodeURIComponent(pathname)}`;
+
+  useEffect(() => {
+    if (restoredQuote.current) return;
+    restoredQuote.current = true;
+    const current = getWebCart();
+    if (!current.kitchenId || current.items.length === 0) return;
+    void (async () => {
+      try {
+        const quote = await requestCheckoutQuote({
+          cart: current,
+          deliveryType: "pickup",
+        });
+        if (!quoteNeedsReview(quote)) return;
+        applyWebCartQuote(quote.lines);
+        setNotice(quote);
+      } catch {
+        // The confirm action quotes again.
+      }
+    })();
+  }, []);
 
   function selectAddress(addressId: string) {
     const address = addresses.find((item) => item.id === addressId);
@@ -146,6 +226,22 @@ export function WebCartCheckout({
         throw new Error(
           "لا يوجد رقم هاتف مسجّل على حسابك. حدّث بيانات الحساب قبل إرسال الطلب.",
         );
+      }
+
+      const quote = await requestCheckoutQuote({
+        cart,
+        deliveryType,
+        customerAddressId:
+          deliveryType === "delivery" ? selectedAddressId : undefined,
+        deliveryLatitude:
+          deliveryType === "delivery" ? deliveryCoords?.latitude : undefined,
+        deliveryLongitude:
+          deliveryType === "delivery" ? deliveryCoords?.longitude : undefined,
+      });
+      if (quoteNeedsReview(quote)) {
+        applyWebCartQuote(quote.lines);
+        setNotice(quote);
+        return;
       }
 
       const response = await fetch("/api/orders", {
@@ -195,9 +291,43 @@ export function WebCartCheckout({
     }
   }
 
+  const reviewDialog = notice ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+        <h3 className="text-xl font-semibold">
+          {notice.orderable ? "مراجعة السلة" : "مراجعة الطلب"}
+        </h3>
+        <div className="mt-3 space-y-2 text-sm leading-7 text-zinc-700">
+          {notice.blockingError ? <p>{notice.blockingError}</p> : null}
+          {notice.changes.map((change, index) => (
+            <p key={`${change.message ?? "change"}-${index}`}>{change.message}</p>
+          ))}
+          {notice.changes.length > 0 ? (
+            <p className="font-medium">
+              السلة اتحدثت. راجعها ثم أكّد الطلب مرة تانية.
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setNotice(null)}
+          className="mt-5 w-full rounded-full bg-[var(--brand-primary)] px-5 py-3 text-sm font-semibold text-white"
+        >
+          حسنًا
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (!cart.items.length) {
     return (
-      <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+      <>
+        {reviewDialog}
+        <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
         <h2 className="text-xl font-semibold">السلة فارغة</h2>
         <p className="mt-2 text-sm leading-7 text-zinc-600">
           ارجع إلى المنيو وأضف بعض الأصناف أولًا.
@@ -208,12 +338,15 @@ export function WebCartCheckout({
         >
           تصفح المطابخ
         </Link>
-      </section>
+        </section>
+      </>
     );
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+    <>
+      {reviewDialog}
+      <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="space-y-6">
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">
@@ -516,6 +649,7 @@ export function WebCartCheckout({
           {loading ? "جارٍ إرسال الطلب..." : "إرسال الطلب"}
         </button>
       </aside>
-    </div>
+      </div>
+    </>
   );
 }

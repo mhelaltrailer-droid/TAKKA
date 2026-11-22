@@ -44,7 +44,7 @@ There is no root `README.md`. Planning docs live at the repo root (`PRD.MD`, `Te
 
 ### Prisma models (current)
 
-`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`.
+`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`, `ServiceArea`.
 
 Enums include `UserRole`, `ApprovalStatus`, `AvailabilityStatus` (`OPEN`, `BUSY`, `CLOSED`), `KitchenSuspensionLevel` (`LEVEL_1`, `LEVEL_2`), `KitchenResponseKind`, `DeliveryType`, `OrderReadiness`, `OrderStatus`, `PaymentType`, and others in the same schema file. A `DeliveryType` enum already exists; a full courier/delivery feature is **not** built yet (see decisions and Next steps).
 
@@ -177,6 +177,19 @@ Decided and in this PR (do not treat it as an open proposal). Values below are t
 - Accept/reject writes durable `kitchenRespondedAt` and `kitchenResponse` so later status changes do not erase the decision. Admin audit: `/dashboard/admin/kitchen-performance` (sortable overview) and `/dashboard/admin/kitchens/[id]/audit` (date range, counts, acceptance rate, average response, ratings, complaints, suspension history).
 
 **How the timeout runs on Render.** No extra service and no required env var. `GET /api/health` awaits the sweep. UptimeRobot already pings that about every 5 minutes, which also keeps the free web service awake, so a timed-out order is cancelled on the next ping after the deadline (worst case about timeout + 5 minutes). The same sweep runs when a kitchen opens its profile or orders, when a customer opens orders, and when an order is created. Optional `GET` or `POST /api/cron/kitchen-acceptance` runs it too. If `CRON_SECRET` is set, that route requires header `x-cron-secret` or `Authorization: Bearer <secret>`. The health sweep does not use the secret. TAKKA-admin still owns `prisma db push`; do not add it back to TAKKA-App. The schema change is additive for `db push`: new enum values are not used as column defaults in the same change, new order/kitchen columns are nullable, and `KitchenOrderPolicy` / `KitchenSuspensionRecord` are new tables.
+
+---
+
+## 7.2 Checkout quote, delivery geofence, and persistent cart (2026-11-22)
+
+Decided and in this PR. Do not hardcode a replacement for the service-area numbers or the out-of-area sentence.
+
+- **`POST /api/checkout/quote`** takes the same body as `POST /api/orders` (`kitchenId`, `deliveryType`, `customerAddressId`, delivery coordinates, `items[]` of `menuItemId`, `menuItemSizeId`, `quantity`). Each line may also send `expectedUnitPrice` and `expectedDepositAmount` for comparison only. Those fields are never the charged price. The quote uses `pricing.ts` and `selectDealUnitPrice` in `deals.ts` (the same choice as order creation, without decrementing flash or dish-of-the-day stock). Response: per-line `unitPrice`, `depositAmount`, `availability` (`available` / `unavailable` / `inactive`), `subtotal`, `deposit`, `changes[]`, and `kitchen` (`availabilityStatus` `OPEN` / `BUSY` / `CLOSED`, `suspended`, `orderable`). Busy, Closed, suspended, and unapproved kitchens are not orderable, and so is a cart with an unavailable or inactive line. A price or deposit change alone leaves `orderable` true; the client still must confirm again.
+- **Confirm flow.** Flutter cart (`cart_screen.dart`, `CartStore`, `order_service.dart`) and the web cart (`web-cart-checkout.tsx`) call the quote before creating the order. If anything changed or the kitchen/location is not orderable, they show an Arabic dialog, update the cart from the quote, and require another confirm. Opening the cart also revalidates a restored cart (pickup quote, so a missing pin is not an error yet).
+- **Service area.** New singleton table `ServiceArea` (id `default`): `label`, `centerLatitude`, `centerLongitude`, `radiusKm`, `outOfAreaMessage`. No column defaults. The first coordinate check seeds مدينة العبور at about `30.226988, 31.483791` with radius **10 km** (covers the city outline) and the Arabic rejection sentence. Edit at `/dashboard/admin/service-area`. Order create, the quote, and address save/update reject coordinates outside that circle with the saved sentence. Pickup skips the check. Missing delivery pins still use the existing “pin required” error.
+- **Persistent app cart.** `CartStore` writes `takka_cart_v1` in `shared_preferences` and reloads it at startup. App version was not bumped. Web cart was already in `localStorage`.
+- **Map pin.** The Flutter delivery picker marker drags (drag updates the pin; tap-to-move stays). The web Leaflet marker was already draggable.
+- **Deploy.** TAKKA-admin’s `prisma db push` creates `ServiceArea`. Do not add `db push` to TAKKA-App.
 
 ---
 
