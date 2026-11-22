@@ -72,6 +72,7 @@ type MenuItem = {
 };
 
 export function KitchenMenuCart({
+  acceptingOrders = true,
   kitchenId,
   kitchenName,
   kitchenSlug,
@@ -82,6 +83,7 @@ export function KitchenMenuCart({
   menuItems,
   isSignedIn = true,
 }: {
+  acceptingOrders?: boolean;
   kitchenId: string;
   kitchenName: string;
   kitchenSlug: string;
@@ -132,6 +134,10 @@ export function KitchenMenuCart({
   }
 
   function addItem(item: MenuItem) {
+    if (!acceptingOrders) {
+      setMessage("المطبخ مش بيستقبل طلبات دلوقتي.");
+      return;
+    }
     if (!isSignedIn) {
       setGuestPromptOpen(true);
       return;
@@ -295,10 +301,11 @@ export function KitchenMenuCart({
             ) : null}
             <button
               type="button"
+              disabled={!acceptingOrders}
               onClick={() => addItem(item)}
-              className="mt-4 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+              className="mt-4 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
-              إضافة للسلة
+              {acceptingOrders ? "إضافة للسلة" : "غير متاح للطلب الآن"}
             </button>
           </article>
         ))

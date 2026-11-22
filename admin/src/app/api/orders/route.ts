@@ -1,6 +1,5 @@
 import {
   ApprovalStatus,
-  AvailabilityStatus,
   DeliveryType,
   NotificationType,
   Prisma,
@@ -9,6 +8,11 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { sweepOverdueKitchenOrders } from "@/lib/kitchen-acceptance-sweep";
+import {
+  kitchenAcceptsOrders,
+  unavailableOrderError,
+} from "@/lib/kitchen-order-rules";
 import { resolveDealUnitPrice } from "@/lib/deals";
 import { effectiveCatalogPriceDecimal } from "@/lib/pricing";
 import { createNotification } from "@/lib/notifications";
@@ -43,6 +47,7 @@ function toMoney(value: Prisma.Decimal | number) {
 export async function POST(request: Request) {
   try {
     const user = await requireAuth();
+    await sweepOverdueKitchenOrders();
     const payload = (await request.json()) as CreateOrderPayload;
 
     if (!payload.kitchenId || !Array.isArray(payload.items) || !payload.items.length) {
@@ -67,6 +72,7 @@ export async function POST(request: Request) {
         regionId: true,
         availabilityStatus: true,
         approvalStatus: true,
+        suspendedAt: true,
       },
     });
 
@@ -81,11 +87,19 @@ export async function POST(request: Request) {
       );
     }
 
-    if (kitchen.availabilityStatus !== AvailabilityStatus.OPEN) {
+    if (
+      !kitchenAcceptsOrders({
+        approvalStatus: kitchen.approvalStatus,
+        availabilityStatus: kitchen.availabilityStatus,
+        suspended: kitchen.suspendedAt != null,
+      })
+    ) {
       return NextResponse.json(
         {
-          error:
-            "المطبخ مغلق حاليًا ولا يستقبل طلبات. جرّب مطبخًا آخر أو عد لاحقًا.",
+          error: unavailableOrderError({
+            availabilityStatus: kitchen.availabilityStatus,
+            suspended: kitchen.suspendedAt != null,
+          }),
         },
         { status: 400 },
       );

@@ -144,6 +144,28 @@ describe("buildReorderPreview", () => {
     assert.match(preview.notices.join("\n"), /الحجم مش متاح/);
   });
 
+  it("explains a busy or suspended kitchen and does not return items", () => {
+    const busy = buildReorderPreview({
+      kitchen: { ...kitchen, availabilityStatus: "BUSY" },
+      orderItems: [ordered],
+      menuItems: [menu()],
+    });
+    assert.equal(busy.kitchenAvailable, false);
+    assert.match(busy.message ?? "", /مشغول/);
+
+    const suspended = buildReorderPreview({
+      kitchen: {
+        ...kitchen,
+        availabilityStatus: "CLOSED",
+        suspended: true,
+      },
+      orderItems: [ordered],
+      menuItems: [menu()],
+    });
+    assert.match(suspended.message ?? "", /مشغول/);
+    assert.equal(suspended.items.length, 0);
+  });
+
   it("explains a closed kitchen and does not return items", () => {
     const preview = buildReorderPreview({
       kitchen: { ...kitchen, availabilityStatus: "CLOSED" },

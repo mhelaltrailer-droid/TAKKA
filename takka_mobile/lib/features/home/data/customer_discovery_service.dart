@@ -295,6 +295,7 @@ class KitchenSummary {
     required this.menuItemsCount,
     required this.menuItemNames,
     required this.menuItemCategoryIds,
+    required this.availabilityStatus,
   });
 
   factory KitchenSummary.fromJson(Map<String, dynamic> json) {
@@ -325,6 +326,7 @@ class KitchenSummary {
       menuItemsCount: (json['menuItemsCount'] as num?)?.toInt() ?? 0,
       menuItemNames: menuItemNames,
       menuItemCategoryIds: menuItemCategoryIds,
+      availabilityStatus: json['availabilityStatus']?.toString() ?? 'OPEN',
     );
   }
 
@@ -341,6 +343,10 @@ class KitchenSummary {
   final int menuItemsCount;
   final List<String> menuItemNames;
   final List<String> menuItemCategoryIds;
+  final String availabilityStatus;
+
+  bool get isBusy => availabilityStatus == 'BUSY';
+  bool get isOpen => availabilityStatus == 'OPEN';
 }
 
 class KitchenDetails {
@@ -417,6 +423,19 @@ class KitchenDetails {
   final List<MenuItemSummary> menuItems;
 
   bool get isOpen => availabilityStatus == 'OPEN';
+  bool get isBusy => availabilityStatus == 'BUSY';
+
+  /// Matches the web banners in admin/src/lib/kitchen-order-rules.ts.
+  String? get availabilityBanner {
+    if (isBusy) {
+      return 'المطبخ مشغول دلوقتي ومش بيستقبل طلبات. تقدر تشوف المنيو والتقييمات وترجع تطلب لما يفضى.';
+    }
+    if (!isOpen) {
+      return 'المطبخ مقفول دلوقتي ومش بيستقبل طلبات. تقدر تشوف المنيو والتقييمات وترجع تطلب لما يفتح.';
+    }
+    return null;
+  }
+
   final List<KitchenReview> reviews;
   final DealDishOfTheDay? dishOfTheDay;
   final DealFlashOffer? activeFlashOffer;

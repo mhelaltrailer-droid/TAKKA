@@ -1,7 +1,9 @@
-import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { ApprovalStatus, FlashOfferStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { customerListedKitchenFilter } from "@/lib/kitchen-visibility";
+import { customerFacingAvailability } from "@/lib/kitchen-order-rules";
 import {
   expireStaleFlashOffers,
   serializeDishOfTheDay,
@@ -15,59 +17,61 @@ export async function GET(request: Request) {
   const regionName = searchParams.get("regionName")?.trim();
   const query = searchParams.get("q")?.trim() ?? "";
 
+  const filters: Prisma.KitchenWhereInput[] = [customerListedKitchenFilter()];
+  if (regionName) {
+    filters.push({
+      region: {
+        regionName,
+        cityName,
+      },
+    });
+  }
+  if (query) {
+    filters.push({
+      OR: [
+        {
+          kitchenName: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          description: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          menuItems: {
+            some: {
+              isAvailable: true,
+              approvalStatus: ApprovalStatus.APPROVED,
+              OR: [
+                {
+                  name: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  categoryId: {
+                    equals: query,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+  }
+
   const kitchens = await db.kitchen.findMany({
     where: {
       approvalStatus: ApprovalStatus.APPROVED,
-      availabilityStatus: AvailabilityStatus.OPEN,
       cityName,
-      ...(regionName
-        ? {
-            region: {
-              regionName,
-              cityName,
-            },
-          }
-        : {}),
-      ...(query
-        ? {
-            OR: [
-              {
-                kitchenName: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              {
-                description: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              {
-                menuItems: {
-                  some: {
-                    isAvailable: true,
-                    approvalStatus: ApprovalStatus.APPROVED,
-                    OR: [
-                      {
-                        name: {
-                          contains: query,
-                          mode: "insensitive",
-                        },
-                      },
-                      {
-                        categoryId: {
-                          equals: query,
-                          mode: "insensitive",
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
+      AND: filters,
     },
     select: {
       id: true,
@@ -79,6 +83,8 @@ export async function GET(request: Request) {
       cityName: true,
       averageRating: true,
       reviewsCount: true,
+      availabilityStatus: true,
+      suspendedAt: true,
       region: {
         select: {
           regionName: true,
@@ -145,9 +151,14 @@ export async function GET(request: Request) {
     kitchens: kitchens.map((kitchen) => {
       const dishItem = dishByKitchen.get(kitchen.id) ?? null;
       const flash = kitchen.flashOffers[0];
+      const { suspendedAt, ...publicKitchen } = kitchen;
 
       return {
-        ...kitchen,
+        ...publicKitchen,
+        availabilityStatus: customerFacingAvailability(
+          publicKitchen.availabilityStatus,
+          suspendedAt != null,
+        ),
         menuItemsCount: kitchen.menuItems.length,
         menuItemNames: kitchen.menuItems.map((item) => item.name),
         menuItemCategoryIds: [

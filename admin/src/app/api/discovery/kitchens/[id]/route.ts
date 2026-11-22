@@ -2,6 +2,7 @@ import { ApprovalStatus, FlashOfferStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { customerFacingAvailability } from "@/lib/kitchen-order-rules";
 import {
   expireStaleFlashOffers,
   serializeDishOfTheDay,
@@ -109,14 +110,25 @@ export async function GET(
     flashOffers: hiddenOffers,
     isDemo: hiddenKitchenFlag,
     menuItems,
+    suspendedAt,
+    suspensionLevel: hiddenSuspensionLevel,
+    suspensionReason: hiddenSuspensionReason,
+    suspensionNotificationId: hiddenSuspensionNotificationId,
     ...kitchenRest
   } = kitchen;
+  void hiddenSuspensionLevel;
+  void hiddenSuspensionReason;
+  void hiddenSuspensionNotificationId;
   void hiddenOffers;
   void hiddenKitchenFlag;
 
   return NextResponse.json({
     kitchen: {
       ...kitchenRest,
+      availabilityStatus: customerFacingAvailability(
+        kitchen.availabilityStatus,
+        suspendedAt != null,
+      ),
       menuItems: menuItems.map((item) => {
         const { isDemo: hiddenItemFlag, ...itemRest } = item;
         void hiddenItemFlag;

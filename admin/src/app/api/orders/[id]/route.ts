@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { sweepOverdueKitchenOrders } from "@/lib/kitchen-acceptance-sweep";
 import { canCustomerSeeKitchenPhone } from "@/lib/kitchen-contact";
 
 export async function GET(
@@ -10,6 +11,7 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth();
+    await sweepOverdueKitchenOrders();
     const { id } = await params;
 
     const order = await db.order.findFirst({

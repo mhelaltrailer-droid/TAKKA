@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { ApprovalStatus, FlashOfferStatus } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 
 import { KitchenLocationActions } from "@/components/kitchen-location-actions";
@@ -8,6 +8,10 @@ import { GuestAwareLink } from "@/components/guest-sign-up-prompt";
 import { RecordKitchenView } from "@/components/record-kitchen-view";
 import { db } from "@/lib/db";
 import { expireStaleFlashOffers } from "@/lib/deals";
+import {
+  customerAvailabilityBanner,
+  customerFacingAvailability,
+} from "@/lib/kitchen-order-rules";
 
 export default async function KitchenDetailsPage({
   params,
@@ -139,6 +143,11 @@ export default async function KitchenDetailsPage({
   if (dishItem) cartItemsById.set(dishItem.id, dishItem);
   if (flashMenuItem) cartItemsById.set(flashMenuItem.id, flashMenuItem);
   const cartMenuItems = Array.from(cartItemsById.values());
+  const customerStatus = customerFacingAvailability(
+    kitchen.availabilityStatus,
+    kitchen.suspendedAt != null,
+  );
+  const availabilityBanner = customerAvailabilityBanner(customerStatus);
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-10">
@@ -152,10 +161,9 @@ export default async function KitchenDetailsPage({
             العودة للمطابخ
           </Link>
           <h1 className="mt-3 text-3xl font-bold">{kitchen.kitchenName}</h1>
-          {kitchen.availabilityStatus !== AvailabilityStatus.OPEN ? (
+          {availabilityBanner ? (
             <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-900">
-              المطبخ مقفول دلوقتي ومش بيستقبل طلبات. تقدر تشوف المنيو والتقييمات
-              وترجع تطلب لما يفتح.
+              {availabilityBanner}
             </p>
           ) : null}
           <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-600">
@@ -198,6 +206,7 @@ export default async function KitchenDetailsPage({
         <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <KitchenMenuCart
+              acceptingOrders={customerStatus === "OPEN"}
               kitchenId={kitchen.id}
               kitchenName={kitchen.kitchenName}
               kitchenSlug={kitchen.slug}

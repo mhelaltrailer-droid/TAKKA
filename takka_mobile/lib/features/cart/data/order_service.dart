@@ -123,7 +123,9 @@ class OrderService {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to create order: ${response.body}');
+      throw Exception(
+        _errorText(_decodeMap(response.body), 'تعذر إرسال الطلب.'),
+      );
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -217,12 +219,17 @@ class OrderService {
   Future<void> rejectKitchenOrder({
     required String sessionToken,
     required String orderId,
+    String? reason,
   }) async {
     final response = await http.post(
       _buildUri('/api/kitchen/orders/$orderId/reject'),
       headers: {
         'Authorization': 'Bearer $sessionToken',
+        'Content-Type': 'application/json',
       },
+      body: jsonEncode({
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      }),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -610,6 +617,7 @@ class CustomerOrderDetails {
     required this.depositConfirmedAt,
     required this.deliveredAt,
     required this.completedAt,
+    required this.cancelCustomerMessage,
   });
 
   factory CustomerOrderDetails.fromJson(Map<String, dynamic> json) {
@@ -649,6 +657,7 @@ class CustomerOrderDetails {
       depositConfirmedAt: _parseDate(json['depositConfirmedAt']),
       deliveredAt: _parseDate(json['deliveredAt']),
       completedAt: _parseDate(json['completedAt']),
+      cancelCustomerMessage: json['cancelCustomerMessage']?.toString(),
     );
   }
 
@@ -676,6 +685,7 @@ class CustomerOrderDetails {
   final DateTime? depositConfirmedAt;
   final DateTime? deliveredAt;
   final DateTime? completedAt;
+  final String? cancelCustomerMessage;
 }
 
 class OrderLineItem {

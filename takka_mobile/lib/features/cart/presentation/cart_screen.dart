@@ -2,6 +2,7 @@ import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/location/kitchen_location_actions.dart';
+import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_skeletons.dart';
 import '../../../core/validation/phone.dart';
 import '../../home/data/customer_discovery_service.dart';
@@ -695,7 +696,7 @@ class _CartScreenState extends State<CartScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('تعذر إرسال الطلب: $error'),
+          content: Text(friendlyErrorMessage(error)),
         ),
       );
     } finally {

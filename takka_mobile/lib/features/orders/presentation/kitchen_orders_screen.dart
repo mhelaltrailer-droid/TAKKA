@@ -368,10 +368,15 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
         OutlinedButton(
           onPressed: () async {
             try {
+              final reason = await _askRejectReason(context);
+              if (reason == null || !mounted) {
+                return;
+              }
               final token = await authState.sessionToken();
               await _orderService.rejectKitchenOrder(
                 sessionToken: token.jwt,
                 orderId: order.id,
+                reason: reason,
               );
               setState(() => _future = _load());
             } catch (error) {
@@ -441,6 +446,38 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
     }
 
     return actions;
+  }
+
+  Future<String?> _askRejectReason(BuildContext context) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('رفض الطلب'),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'سبب الرفض (اختياري)',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('رجوع'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('رفض الطلب'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    return result;
   }
 
   Future<double?> _askDeliveryFee(BuildContext context) async {
