@@ -64,6 +64,18 @@ export default async function AdminOperationsPage() {
               العودة إلى اللوحة
             </Link>
             <Link
+              href="/dashboard/admin/kitchen-policy"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              قواعد قبول الطلبات
+            </Link>
+            <Link
+              href="/dashboard/admin/kitchen-performance"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              أداء المطابخ
+            </Link>
+            <Link
               href="/dashboard/admin/kitchens"
               className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white"
             >

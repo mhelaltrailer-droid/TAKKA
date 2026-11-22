@@ -6,6 +6,7 @@ import { OrderStatus } from "@prisma/client";
 
 import { LiveNotificationBell } from "@/components/live-notification-bell";
 import { KitchenAvailabilityToggle } from "@/components/kitchen-availability-toggle";
+import { KitchenSuspensionBanner } from "@/components/kitchen-suspension-banner";
 import { StatusPill } from "@/components/status-pill";
 import { TakkaFamilyJoinCard } from "@/components/takka-family-join-card";
 import { requireAuth } from "@/lib/auth";
@@ -193,16 +194,35 @@ export default async function DashboardPage() {
                         tone={
                           kitchen.availabilityStatus === "OPEN"
                             ? "success"
-                            : "neutral"
+                            : kitchen.availabilityStatus === "BUSY"
+                              ? "warning"
+                              : "neutral"
                         }
                       />
+                      {kitchen.suspendedAt ? (
+                        <StatusPill
+                          label={
+                            kitchen.suspensionLevel === "LEVEL_2"
+                              ? "موقوف مستوى 2 — يظهر للعملاء مشغول"
+                              : "موقوف مستوى 1 — يظهر للعملاء مشغول"
+                          }
+                          tone="danger"
+                        />
+                      ) : null}
                     </div>
+                    {kitchen.suspendedAt ? (
+                      <KitchenSuspensionBanner
+                        canAcknowledge={kitchen.suspensionLevel !== "LEVEL_2"}
+                        reason={
+                          kitchen.suspensionReason ||
+                          (kitchen.suspensionLevel === "LEVEL_2"
+                            ? "تم إيقاف المطبخ. فريق تكة هيراجع الحالة."
+                            : "تم إيقاف استقبال الطلبات. اضغط «فهمت» لإعادة الاستقبال.")
+                        }
+                      />
+                    ) : null}
                     <KitchenAvailabilityToggle
-                      initialStatus={
-                        kitchen.availabilityStatus === "OPEN"
-                          ? "OPEN"
-                          : "CLOSED"
-                      }
+                      initialStatus={kitchen.availabilityStatus}
                       approvalStatus={kitchen.approvalStatus}
                     />
                     <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-[#6b4a3a]">

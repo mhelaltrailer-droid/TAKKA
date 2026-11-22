@@ -1,11 +1,17 @@
 import { effectiveCatalogPrice } from "@/lib/pricing";
+import {
+  REORDER_BUSY_MESSAGE,
+  REORDER_CLOSED_MESSAGE,
+  type AvailabilityCode,
+} from "@/lib/kitchen-order-rules";
 
 export type ReorderKitchenInput = {
   id: string;
   kitchenName: string;
   slug: string;
   approvalStatus: "PENDING" | "APPROVED" | "REJECTED";
-  availabilityStatus: "OPEN" | "CLOSED";
+  availabilityStatus: AvailabilityCode;
+  suspended?: boolean;
   latitude: number | null;
   longitude: number | null;
   addressLine: string;
@@ -78,8 +84,6 @@ export type ReorderPreview = {
   notices: string[];
 };
 
-const CLOSED_MESSAGE =
-  "المطبخ مقفول دلوقتي ومش بيستقبل طلبات. تقدر تطلب تاني لما يفتح.";
 const UNAVAILABLE_MESSAGE =
   "المطبخ مش متاح دلوقتي. جرّب مطبخ تاني أو ارجع بعدين.";
 const EMPTY_MESSAGE = "مفيش أصناف من الطلب ده متاحة دلوقتي.";
@@ -143,15 +147,24 @@ export function buildReorderPreview(input: {
   menuItems: ReorderMenuItem[];
 }): ReorderPreview {
   const kitchen = input.kitchen;
-  if (
+  const notAccepting =
     !kitchen ||
     kitchen.approvalStatus !== "APPROVED" ||
-    kitchen.availabilityStatus !== "OPEN"
-  ) {
+    kitchen.suspended === true ||
+    kitchen.availabilityStatus !== "OPEN";
+  if (notAccepting) {
     const missingOrRejected = !kitchen || kitchen.approvalStatus !== "APPROVED";
+    const busy =
+      Boolean(kitchen) &&
+      !missingOrRejected &&
+      (kitchen?.suspended === true || kitchen?.availabilityStatus === "BUSY");
     return {
       kitchenAvailable: false,
-      message: missingOrRejected ? UNAVAILABLE_MESSAGE : CLOSED_MESSAGE,
+      message: missingOrRejected
+        ? UNAVAILABLE_MESSAGE
+        : busy
+          ? REORDER_BUSY_MESSAGE
+          : REORDER_CLOSED_MESSAGE,
       kitchen: kitchen ? kitchenView(kitchen) : null,
       items: [],
       removed: [],

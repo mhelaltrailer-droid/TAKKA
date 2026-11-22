@@ -8,10 +8,15 @@ import {
   googleMapsShareUrl,
   isValidLatLng,
 } from "@/lib/maps";
-import { getApprovalStatusLabel } from "@/lib/status-labels";
+import {
+  getApprovalStatusLabel,
+  getAvailabilityStatusLabel,
+} from "@/lib/status-labels";
+import { customerFacingAvailability } from "@/lib/kitchen-order-rules";
 
 import { setReviewVisibility } from "../../orders/actions";
 import { approveKitchen, rejectKitchen } from "../../actions";
+import { reactivateKitchen } from "../../kitchen-policy/actions";
 
 export default async function AdminKitchenReviewPage({
   params,
@@ -71,6 +76,35 @@ export default async function AdminKitchenReviewPage({
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-bold">{kitchen.kitchenName}</h1>
             <StatusPill
+              label={getAvailabilityStatusLabel(kitchen.availabilityStatus)}
+              tone={
+                kitchen.availabilityStatus === "OPEN"
+                  ? "success"
+                  : kitchen.availabilityStatus === "BUSY"
+                    ? "warning"
+                    : "neutral"
+              }
+            />
+            {kitchen.suspendedAt ? (
+              <StatusPill
+                label={
+                  kitchen.suspensionLevel === "LEVEL_2"
+                    ? "موقوف مستوى 2"
+                    : "موقوف مستوى 1"
+                }
+                tone="danger"
+              />
+            ) : null}
+            <StatusPill
+              label={`ظاهر للعميل: ${getAvailabilityStatusLabel(
+                customerFacingAvailability(
+                  kitchen.availabilityStatus,
+                  kitchen.suspendedAt != null,
+                ),
+              )}`}
+              tone="info"
+            />
+            <StatusPill
               label={getApprovalStatusLabel(kitchen.approvalStatus)}
               tone={
                 kitchen.approvalStatus === "APPROVED"
@@ -84,12 +118,34 @@ export default async function AdminKitchenReviewPage({
           <p className="mt-3 text-sm text-zinc-600">
             مراجعة كاملة لبيانات المطبخ قبل الاعتماد أو الرفض.
           </p>
-          <Link
-            href="/dashboard/admin/kitchens"
-            className="mt-4 inline-flex text-sm font-medium text-[var(--brand-secondary)] underline"
-          >
-            العودة لقائمة المطابخ
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <Link
+              href="/dashboard/admin/kitchens"
+              className="inline-flex text-sm font-medium text-[var(--brand-secondary)] underline"
+            >
+              العودة لقائمة المطابخ
+            </Link>
+            <Link
+              href={`/dashboard/admin/kitchens/${kitchen.id}/audit`}
+              className="inline-flex text-sm font-medium text-[var(--brand-secondary)] underline"
+            >
+              سجل الأداء والإيقاف
+            </Link>
+          </div>
+          {kitchen.suspendedAt ? (
+            <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-950">
+              <p>{kitchen.suspensionReason || "المطبخ موقوف عن استقبال الطلبات."}</p>
+              <form action={reactivateKitchen} className="mt-3">
+                <input type="hidden" name="kitchenId" value={kitchen.id} />
+                <button
+                  type="submit"
+                  className="rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white"
+                >
+                  إعادة التفعيل
+                </button>
+              </form>
+            </div>
+          ) : null}
         </header>
 
         <section className="grid gap-6 md:grid-cols-2">
@@ -192,7 +248,10 @@ export default async function AdminKitchenReviewPage({
           )}
         </section>
 
-        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <section
+          id="reviews"
+          className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+        >
           <h2 className="text-xl font-semibold">تقييمات العملاء</h2>
           <p className="mt-2 text-sm leading-7 text-zinc-600">
             صاحب المطبخ مش بيقدر يعدل أو يمسح التقييم. تقدر تخفيه من صفحة

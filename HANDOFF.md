@@ -2,7 +2,7 @@
 
 This file is the onboarding brief for any coding agent (Claude, Cursor, etc.) continuing work on Takka. Read it before changing code. Do **not** ask the owner questions this document already answers. Write code comments and PRs in English. When you talk to the owner, use Egyptian Arabic.
 
-آخر تحديث: 19 نوفمبر 2026 (Africa/Cairo, UTC+2)
+آخر تحديث: 22 نوفمبر 2026 (Africa/Cairo, UTC+2)
 
 ---
 
@@ -44,9 +44,9 @@ There is no root `README.md`. Planning docs live at the repo root (`PRD.MD`, `Te
 
 ### Prisma models (current)
 
-`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`.
+`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`.
 
-Enums include `UserRole`, `ApprovalStatus`, `AvailabilityStatus`, `DeliveryType`, `OrderReadiness`, `OrderStatus`, `PaymentType`, and others in the same schema file. A `DeliveryType` enum already exists; a full courier/delivery feature is **not** built yet (see decisions and Next steps).
+Enums include `UserRole`, `ApprovalStatus`, `AvailabilityStatus` (`OPEN`, `BUSY`, `CLOSED`), `KitchenSuspensionLevel` (`LEVEL_1`, `LEVEL_2`), `KitchenResponseKind`, `DeliveryType`, `OrderReadiness`, `OrderStatus`, `PaymentType`, and others in the same schema file. A `DeliveryType` enum already exists; a full courier/delivery feature is **not** built yet (see decisions and Next steps).
 
 Demo kitchens are marked internally with `isDemo` so they can be removed in one command before real customers arrive. Scripts: `npm run seed:demo` and `npm run seed:demo:remove` in `admin/`. See `docs/demo-data.md`. Existing media in the database was test data and may be deleted later.
 
@@ -158,8 +158,25 @@ What the merged R2 work does:
 - Demo kitchens: one per neighborhood, three full items each, look real to users, flagged `isDemo` internally.
 - Prefers Cursor Auto for coding agents when credits allow. If Auto is unavailable, use Grok 4.7. Warn the owner before any request that would consume a lot of usage.
 - Merges need the owner's approval. Do not merge PRs yourself.
+- **Deposits are not a conflict with the 22 Nov 2026 competitor notes.** Takka already records transfer deposits on `DepositProof`. In those notes, «cash outside the app» means delivery/courier money only, not the deposit. See `docs/replica/summary.md`.
 
 Older product decisions and marketing rules are in the launch log (see §11) and the root planning markdown files.
+
+---
+
+## 7.1 Kitchen availability, acceptance timeout, and suspension (DECIDED 2026-11-22)
+
+Decided and in this PR (do not treat it as an open proposal). Values below are the seeded defaults. After the first read they live in `KitchenOrderPolicy` (id `default`) and are edited at `/dashboard/admin/kitchen-policy`. Do not hardcode replacements in app code.
+
+- `AvailabilityStatus`: `OPEN`, `BUSY`, `CLOSED`. The kitchen app (web dashboard and Flutter) has an Open / Busy / Closed selector. **Busy does not expire**; the kitchen changes it manually.
+- Customers see Busy kitchens labelled مشغول and cannot order. Closed kitchens cannot be ordered from either. Discovery still lists Open and Busy (and a suspended kitchen, shown as Busy). Closed stays off the browse list. Order creation rejects Busy, Closed, and suspended kitchens on the server.
+- If a kitchen does not accept or explicitly reject a new order within **10 minutes**, the order is auto-cancelled as `CANCELLED_BEFORE_DEPOSIT` with `cancelReason = KITCHEN_NO_RESPONSE`. The customer notification and order screen use the saved message, default: «المطبخ غير جاهز لاستقبال طلبك الآن، حاول في وقت لاحق». An explicit kitchen reject is `REJECTED_BY_KITCHEN` plus a stored `kitchenRejectReason` and does **not** count. Customer cancels do not count.
+- Only no-response auto-cancels count. Suspend on either rolling window: **3 in 24 hours (level 1)** or **20 in 90 days (level 2)**. If both are hit, level 2 wins. Busy/Closed kitchens receive no new orders, so nothing new counts while they stay in those states.
+- **Level 1** notifies the kitchen with the saved text (default mentions the 3/24h case and tells them to use Busy, then tap «فهمت»). Tapping «فهمت» (or marking that warning read) lifts it. **Level 2** uses its own saved text (default says Takka will review and contact them). Reading it does **not** lift it. Only admin **إعادة التفعيل** lifts level 2. Both levels look **Busy** to customers, not Closed.
+- Each suspension is a `KitchenSuspensionRecord` (level, reason, start, end, how it ended: kitchen «فهمت», admin reactivate and which user, or upgraded to level 2). `AdminAction` also logs `KITCHEN_SUSPENDED` / `KITCHEN_REACTIVATED`.
+- Accept/reject writes durable `kitchenRespondedAt` and `kitchenResponse` so later status changes do not erase the decision. Admin audit: `/dashboard/admin/kitchen-performance` (sortable overview) and `/dashboard/admin/kitchens/[id]/audit` (date range, counts, acceptance rate, average response, ratings, complaints, suspension history).
+
+**How the timeout runs on Render.** No extra service and no required env var. `GET /api/health` awaits the sweep. UptimeRobot already pings that about every 5 minutes, which also keeps the free web service awake, so a timed-out order is cancelled on the next ping after the deadline (worst case about timeout + 5 minutes). The same sweep runs when a kitchen opens its profile or orders, when a customer opens orders, and when an order is created. Optional `GET` or `POST /api/cron/kitchen-acceptance` runs it too. If `CRON_SECRET` is set, that route requires header `x-cron-secret` or `Authorization: Bearer <secret>`. The health sweep does not use the secret. TAKKA-admin still owns `prisma db push`; do not add it back to TAKKA-App. The schema change is additive for `db push`: new enum values are not used as column defaults in the same change, new order/kitchen columns are nullable, and `KitchenOrderPolicy` / `KitchenSuspensionRecord` are new tables.
 
 ---
 
@@ -175,7 +192,7 @@ Do not start the heavy build items without the owner. Warn before any high-usage
 6. **Google Play** launch (customers). Play Console signup fee is a later owner step.
 7. Owner should fix or delete vault entry `5270388` (Takka admin login has the wrong password). Admin login currently works via Clerk email code.
 8. Package «قِدرة الحي» (weekly menu, limited portions + cutoff, pickup windows, group cook) — discussion only, not implemented. If the owner writes that phrase, bring up the four proposals. Details are in the launch log.
-9. Still open product questions: commission vs subscription, cancellation / deposit refund policy, hygiene requirements before activating a kitchen.
+9. Still open product questions: commission vs subscription, cancellation / deposit **refund** policy, hygiene requirements before activating a kitchen. Taking a deposit is not itself a conflict with the 22 Nov 2026 notes: Takka already stores `DepositProof` deposits, and «cash outside the app» in those notes means delivery/courier money only (`docs/replica/summary.md`).
 10. Gmail 2-Step Verification / App Password for join-kitchen alert email was still locked as of 2026-11-16; do not assume SMTP is live.
 11. Firebase project registration for `com.takka.app`, `google-services.json`, and `FIREBASE_SERVICE_ACCOUNT_JSON` on Render — after Google account unlock. FCM scaffolding is already in APK 1.0.1. See `docs/fcm-setup.md` and `docs/release-apk.md`.
 
@@ -227,6 +244,8 @@ These are **proposals**, not decisions. They do not override §7, §8, or §9. A
 - Enable regular Neon backups, not only before the R2 migration (the one-time R2 migration is already done).
 - Consider whether the public repo should expose the Cloudflare account ID and public bucket URL in §6 (not secrets, but they could be removed if the repo stays public).
 
+**Order acceptance timeout** was decided on 2026-11-22 and moved out of this proposal list into §7.1 (in PR).
+
 **Additional proposals (added 2026-11-19, also not approved)**
 
 Technical:
@@ -238,7 +257,6 @@ Technical:
 
 Product / operations:
 
-- **Order acceptance timeout.** If a kitchen does not respond within a set window (for example 10–15 minutes), auto-cancel the order and notify the customer. A pending order with no reply is the fastest way to lose trust in a new marketplace. Needs a product decision on the exact window and a dedicated PR.
 - **Deposit proof verification.** Deposits are paid by transfer and confirmed through `DepositProof` images, so fake or reused screenshots are possible. Require the kitchen to confirm receipt manually before the order starts, and flag an image that was already uploaded for another order. Needs a dedicated PR.
 - **Solve the cold start (kitchens vs customers).** Kitchens with no customers lose interest quickly. Before launch, collect a waitlist of Obour customers (Facebook group, a simple form) and have each kitchen bring its first customers from people it already knows. Give each kitchen its own **link and QR code** for its page to share. Agents must not post or send anything without approval (§9).
 - **Kitchen onboarding and support.** Most home kitchens are not tech-savvy, and a bad first experience can make them leave. Plan a short Arabic video (about 2 minutes) showing how to receive an order, a clear WhatsApp support number (`SUPPORT_WHATSAPP_NUMBER`), and weekly follow-up during the first month.
@@ -319,6 +337,8 @@ Suggested priority if only five are chosen: (1) sound alert plus open/closed and
 
 ## 10. Useful links and docs
 
+- Competitor notes summary (22 Nov 2026): `docs/replica/summary.md`
+- Kitchen order policy and audit (decided 22 Nov 2026, in PR): §7.1
 - Clerk sessions: `docs/clerk-session.md`
 - Demo data: `docs/demo-data.md`
 - FCM: `docs/fcm-setup.md`

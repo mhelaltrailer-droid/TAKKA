@@ -705,6 +705,17 @@ class _KitchenCard extends StatelessWidget {
                           '${kitchen.cityName} - ${kitchen.regionName}',
                           style: TextStyle(color: Colors.grey.shade700),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          kitchen.isBusy ? 'مشغول' : 'مفتوح',
+                          style: TextStyle(
+                            color: kitchen.isBusy
+                                ? const Color(0xFFB45309)
+                                : const Color(0xFF047857),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
                         if (kitchen.menuItemNames.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(

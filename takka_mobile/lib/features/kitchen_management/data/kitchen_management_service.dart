@@ -332,6 +332,24 @@ class KitchenManagementService {
 
     return json['availabilityStatus']?.toString() ?? availabilityStatus;
   }
+
+  Future<void> acknowledgeSuspension({
+    required String sessionToken,
+  }) async {
+    final response = await http.post(
+      _buildUri('/api/kitchen/suspension/acknowledge'),
+      headers: {'Authorization': 'Bearer $sessionToken'},
+    );
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        json['error']?.toString() ?? 'تعذر تأكيد قراءة التنبيه',
+      );
+    }
+    if (json['requiresAdmin'] == true) {
+      throw Exception('الإيقاف ده محتاج إعادة تفعيل من إدارة تكة.');
+    }
+  }
 }
 
 class KitchenProfileData {
@@ -350,6 +368,9 @@ class KitchenProfileData {
     required this.approvalStatus,
     required this.availabilityStatus,
     required this.rejectionReason,
+    required this.suspendedAt,
+    required this.suspensionReason,
+    required this.suspensionLevel,
   });
 
   factory KitchenProfileData.fromJson(Map<String, dynamic> json) {
@@ -379,6 +400,9 @@ class KitchenProfileData {
       approvalStatus: json['approvalStatus']?.toString() ?? 'PENDING',
       availabilityStatus: json['availabilityStatus']?.toString() ?? 'CLOSED',
       rejectionReason: json['rejectionReason']?.toString(),
+      suspendedAt: DateTime.tryParse(json['suspendedAt']?.toString() ?? ''),
+      suspensionReason: json['suspensionReason']?.toString(),
+      suspensionLevel: json['suspensionLevel']?.toString(),
     );
   }
 
@@ -400,6 +424,9 @@ class KitchenProfileData {
       approvalStatus: approvalStatus,
       availabilityStatus: availabilityStatus ?? this.availabilityStatus,
       rejectionReason: rejectionReason,
+      suspendedAt: suspendedAt,
+      suspensionReason: suspensionReason,
+      suspensionLevel: suspensionLevel,
     );
   }
 
@@ -417,6 +444,13 @@ class KitchenProfileData {
   final String approvalStatus;
   final String availabilityStatus;
   final String? rejectionReason;
+  final DateTime? suspendedAt;
+  final String? suspensionReason;
+  final String? suspensionLevel;
+
+  bool get isSuspended => suspendedAt != null;
+  bool get canAcknowledgeSuspension =>
+      isSuspended && suspensionLevel != 'LEVEL_2';
 }
 
 class KitchenManagedMenuItem {

@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { sweepOverdueKitchenOrders } from "@/lib/kitchen-acceptance-sweep";
 import { districtSortOrder } from "@/lib/district-order";
 import { assertObourLocation } from "@/lib/districts";
 import { KITCHEN_COORDS_REQUIRED } from "@/lib/kitchen-onboarding-copy";
@@ -35,6 +36,7 @@ type KitchenProfilePayload = {
 export async function GET() {
   try {
     const user = await requireAuth();
+    await sweepOverdueKitchenOrders();
 
     const kitchen = await db.kitchen.findUnique({
       where: {

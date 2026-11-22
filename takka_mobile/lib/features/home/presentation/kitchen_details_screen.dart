@@ -264,7 +264,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                     ],
                   ),
                 ),
-                if (!kitchen.isOpen) ...[
+                if (kitchen.availabilityBanner case final banner?) ...[
                   const SizedBox(height: 14),
                   Container(
                     width: double.infinity,
@@ -274,9 +274,9 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFFDBA74)),
                     ),
-                    child: const Text(
-                      'المطبخ مقفول دلوقتي ومش بيستقبل طلبات. تقدر تشوف المنيو والتقييمات وترجع تطلب لما يفتح.',
-                      style: TextStyle(height: 1.45),
+                    child: Text(
+                      banner,
+                      style: const TextStyle(height: 1.45),
                     ),
                   ),
                 ],
@@ -570,9 +570,13 @@ class _MenuItemCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () => _openAddToCartSheet(context),
+                onPressed: kitchen.isOpen
+                    ? () => _openAddToCartSheet(context)
+                    : null,
                 icon: const Icon(Icons.add_shopping_cart_rounded),
-                label: const Text('إضافة للسلة'),
+                label: Text(
+                  kitchen.isOpen ? 'إضافة للسلة' : 'غير متاح للطلب الآن',
+                ),
               ),
             ),
           ],
@@ -832,6 +836,9 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
   }
 
   void _addToCart() {
+    if (!widget.kitchen.isOpen) {
+      return;
+    }
     final selectedSize = widget.item.sizes.where((size) => size.id == _selectedSizeId).firstOrNull;
     final unitPrice = selectedSize?.catalogPrice ?? _dealBasePrice();
     final depositAmount = selectedSize?.depositAmount ?? widget.item.depositAmount;

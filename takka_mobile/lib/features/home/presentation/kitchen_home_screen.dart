@@ -45,6 +45,8 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
   KitchenProfileData? _profile;
   bool _profileLoading = true;
   bool _availabilityBusy = false;
+  bool _ackBusy = false;
+  bool _suspensionPromptOpen = false;
   late final PushTargetHandler _onPushTarget;
 
   @override
@@ -122,9 +124,87 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
         _profile = profile;
         _profileLoading = false;
       });
+      await _maybePromptSuspension();
     } catch (_) {
       if (!mounted) return;
       setState(() => _profileLoading = false);
+    }
+  }
+
+  Future<void> _maybePromptSuspension() async {
+    final profile = _profile;
+    if (!mounted ||
+        profile == null ||
+        !profile.isSuspended ||
+        _suspensionPromptOpen) {
+      return;
+    }
+    _suspensionPromptOpen = true;
+    final canAcknowledge = profile.canAcknowledgeSuspension;
+    final reason = profile.suspensionReason?.trim().isNotEmpty == true
+        ? profile.suspensionReason!
+        : canAcknowledge
+        ? 'تم إيقاف استقبال الطلبات. العملاء يشوفون المطبخ مشغول. اضغط «فهمت» لإعادة الاستقبال.'
+        : 'تم إيقاف المطبخ. فريق تكة هيراجع الحالة، وقراءة التنبيه مش بتفك الإيقاف.';
+    final acknowledged = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('استقبال الطلبات متوقف'),
+          content: Text(reason),
+          actions: [
+            if (!canAcknowledge)
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('حسنًا'),
+              )
+            else ...[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('لاحقًا'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('فهمت'),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+    _suspensionPromptOpen = false;
+    if (acknowledged == true) {
+      await _acknowledgeSuspension();
+    }
+  }
+
+  Future<void> _acknowledgeSuspension() async {
+    if (_ackBusy) return;
+    setState(() => _ackBusy = true);
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      await _service.acknowledgeSuspension(sessionToken: token.jwt);
+      if (!mounted) return;
+      setState(() => _ackBusy = false);
+      await _refreshProfile();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _ackBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyErrorMessage(error))),
+      );
+    }
+  }
+
+  String _availabilitySavedMessage(String resolved) {
+    switch (resolved) {
+      case 'OPEN':
+        return 'المطبخ مفتوح الآن ويظهر للعملاء.';
+      case 'BUSY':
+        return 'المطبخ مشغول الآن. العملاء يشوفونه مشغول ولا يمكنهم الطلب لحد ما تغيّر الحالة.';
+      default:
+        return 'تم إغلاق المطبخ ولن يظهر للعملاء.';
     }
   }
 
@@ -132,6 +212,17 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
     if (_availabilityBusy || _profile == null) return;
     if (_profile!.approvalStatus != 'APPROVED') return;
     if (_profile!.availabilityStatus == nextStatus) return;
+
+    if (nextStatus == 'BUSY') {
+      final confirmed = await confirmDestructive(
+        context,
+        title: 'تحويل المطبخ إلى مشغول؟',
+        message:
+            'العملاء هيشوفوا المطبخ مشغول ومش هيقدروا يطلبوا لحد ما تغيّر الحالة بنفسك.',
+        confirmLabel: 'مشغول',
+      );
+      if (!confirmed || !mounted) return;
+    }
 
     if (nextStatus == 'CLOSED') {
       final confirmed = await confirmDestructive(
@@ -157,13 +248,7 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
         _availabilityBusy = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            resolved == 'OPEN'
-                ? 'المطبخ مفتوح الآن ويظهر للعملاء.'
-                : 'تم إغلاق المطبخ ولن يظهر للعملاء.',
-          ),
-        ),
+        SnackBar(content: Text(_availabilitySavedMessage(resolved))),
       );
     } catch (error) {
       if (!mounted) return;
@@ -232,7 +317,7 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final approved = _profile?.approvalStatus == 'APPROVED';
-    final isOpen = _profile?.availabilityStatus == 'OPEN';
+    final availability = _profile?.availabilityStatus ?? 'CLOSED';
 
     return Scaffold(
       appBar: AppBar(
@@ -287,10 +372,19 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
             )
           else ...[
             if (approved) ...[
+              if (_profile?.isSuspended == true) ...[
+                _KitchenSuspensionCard(
+                  reason: _profile?.suspensionReason,
+                  canAcknowledge: _profile?.canAcknowledgeSuspension == true,
+                  busy: _ackBusy,
+                  onAcknowledge: _acknowledgeSuspension,
+                ),
+                const SizedBox(height: 16),
+              ],
               _KitchenAvailabilityCard(
-                isOpen: isOpen,
+                status: availability,
                 busy: _availabilityBusy,
-                onToggle: () => _setAvailability(isOpen ? 'CLOSED' : 'OPEN'),
+                onSelect: _setAvailability,
               ),
               const SizedBox(height: 16),
               _TakkaFamilyJoinCard(onJoin: _openTakkaFamily),
@@ -364,25 +458,95 @@ class _KitchenHomeScreenState extends State<KitchenHomeScreen> {
   }
 }
 
-class _KitchenAvailabilityCard extends StatelessWidget {
-  const _KitchenAvailabilityCard({
-    required this.isOpen,
+class _KitchenSuspensionCard extends StatelessWidget {
+  const _KitchenSuspensionCard({
+    required this.reason,
+    required this.canAcknowledge,
     required this.busy,
-    required this.onToggle,
+    required this.onAcknowledge,
   });
 
-  final bool isOpen;
+  final String? reason;
+  final bool canAcknowledge;
   final bool busy;
-  final VoidCallback onToggle;
+  final VoidCallback onAcknowledge;
 
   @override
   Widget build(BuildContext context) {
+    final text = reason?.trim().isNotEmpty == true
+        ? reason!.trim()
+        : 'تم إيقاف استقبال الطلبات. العملاء يشوفون المطبخ مشغول.';
     return Card(
-      color: isOpen ? const Color(0xFFECFDF5) : const Color(0xFFFFF8F1),
+      color: const Color(0xFFFFF7ED),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Color(0xFFFDBA74)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'استقبال الطلبات متوقف',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(text, style: const TextStyle(height: 1.5)),
+            const SizedBox(height: 8),
+            Text(
+              canAcknowledge
+                  ? 'العملاء يشوفون المطبخ مشغول ولا يستطيعون الطلب لحد ما تضغط «فهمت».'
+                  : 'العملاء يشوفون المطبخ مشغول. قراءة التنبيه لا تفك هذا الإيقاف، وفريق تكة فقط يقدر يعيد التفعيل.',
+              style: const TextStyle(height: 1.5),
+            ),
+            if (canAcknowledge) ...[
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: busy ? null : onAcknowledge,
+                child: Text(busy ? 'جاري التأكيد...' : 'فهمت'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KitchenAvailabilityCard extends StatelessWidget {
+  const _KitchenAvailabilityCard({
+    required this.status,
+    required this.busy,
+    required this.onSelect,
+  });
+
+  final String status;
+  final bool busy;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (status) {
+      'OPEN' => 'المطبخ مفتوح للعملاء',
+      'BUSY' => 'المطبخ مشغول',
+      _ => 'المطبخ مغلق',
+    };
+    final body = switch (status) {
+      'OPEN' =>
+        'يظهر مطبخك للعملاء ويمكنهم إرسال طلبات. الحالة تفضل مفتوح لحد ما تغيّرها بنفسك.',
+      'BUSY' =>
+        'يظهر مطبخك للعملاء كـ «مشغول» ولا يستقبل طلبات جديدة. الحالة تفضل مشغول لحد ما تغيّرها بنفسك.',
+      _ => 'لن يظهر مطبخك في استعراض المطابخ ولن يستقبل طلبات جديدة.',
+    };
+    final openTone = status == 'OPEN';
+
+    return Card(
+      color: openTone ? const Color(0xFFECFDF5) : const Color(0xFFFFF8F1),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
         side: BorderSide(
-          color: isOpen ? const Color(0xFFA7F3D0) : const Color(0xFFE8D5C4),
+          color: openTone ? const Color(0xFFA7F3D0) : const Color(0xFFE8D5C4),
         ),
       ),
       child: Padding(
@@ -391,31 +555,34 @@ class _KitchenAvailabilityCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              isOpen ? 'المطبخ مفتوح للعملاء' : 'المطبخ مغلق',
+              title,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
-            Text(
-              isOpen
-                  ? 'يظهر مطبخك في «تاكل ايه؟» واستعراض المطابخ ويمكن استقبال الطلبات.'
-                  : 'لن يظهر مطبخك للعملاء حتى تفتح استقبال الطلبات.',
-              style: TextStyle(height: 1.5, color: Colors.grey.shade800),
-            ),
+            Text(body, style: TextStyle(height: 1.5, color: Colors.grey.shade800)),
             const SizedBox(height: 14),
-            FilledButton(
-              onPressed: busy ? null : onToggle,
-              style: FilledButton.styleFrom(
-                backgroundColor: isOpen ? Colors.white : TakkaColors.primary,
-                foregroundColor: isOpen ? TakkaColors.deep : Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              child: Text(
-                busy
-                    ? 'جاري التحديث...'
-                    : isOpen
-                    ? 'إغلاق الاستقبال'
-                    : 'فتح استقبال الطلبات',
-              ),
+            Row(
+              children: [
+                for (final option in const [
+                  ('OPEN', 'مفتوح'),
+                  ('BUSY', 'مشغول'),
+                  ('CLOSED', 'مغلق'),
+                ])
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: option.$1 == status
+                          ? FilledButton(
+                              onPressed: null,
+                              child: Text(busy ? '...' : option.$2),
+                            )
+                          : OutlinedButton(
+                              onPressed: busy ? null : () => onSelect(option.$1),
+                              child: Text(option.$2),
+                            ),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),

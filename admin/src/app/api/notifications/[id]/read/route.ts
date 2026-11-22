@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { liftSuspensionForReadNotification } from "@/lib/kitchen-suspension";
 
 export async function PATCH(
   _request: Request,
@@ -27,6 +28,11 @@ export async function PATCH(
         { status: 404 },
       );
     }
+
+    await liftSuspensionForReadNotification({
+      notificationId: id,
+      ownerUserId: user.appUserId,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

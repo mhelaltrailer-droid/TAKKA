@@ -3,6 +3,7 @@
 import {
   DeliveryType,
   DepositReviewStatus,
+  KitchenResponseKind,
   MessageType,
   NotificationType,
   OrderStatus,
@@ -12,6 +13,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { normalizeRejectReason } from "@/lib/kitchen-response";
 import { createNotification } from "@/lib/notifications";
 import { getAllowedNextStatuses } from "@/lib/order-status";
 import { triggerOrderEvent } from "@/lib/pusher";
@@ -91,6 +93,8 @@ export async function acceptOrder(formData: FormData) {
       totalAmount: order.subtotalAmount.add(deliveryFee),
       status: OrderStatus.ACCEPTED_AWAITING_DEPOSIT,
       acceptedAt: new Date(),
+      kitchenRespondedAt: new Date(),
+      kitchenResponse: KitchenResponseKind.ACCEPTED,
     },
   });
 
@@ -112,12 +116,14 @@ export async function acceptOrder(formData: FormData) {
 
 export async function rejectOrder(formData: FormData) {
   const orderId = getString(formData, "orderId");
+  const rejectReason = getString(formData, "rejectReason");
   const order = await getKitchenOrder(orderId);
 
   if (order.status !== OrderStatus.PENDING_KITCHEN_APPROVAL) {
     throw new Error("هذا الطلب لم يعد في مرحلة انتظار القبول.");
   }
 
+  const respondedAt = new Date();
   await db.order.update({
     where: {
       id: order.id,
@@ -125,7 +131,10 @@ export async function rejectOrder(formData: FormData) {
     data: {
       status: OrderStatus.REJECTED_BY_KITCHEN,
       cancelledBy: UserRole.KITCHEN_OWNER,
-      cancelledAt: new Date(),
+      cancelledAt: respondedAt,
+      kitchenRespondedAt: respondedAt,
+      kitchenResponse: KitchenResponseKind.REJECTED,
+      kitchenRejectReason: normalizeRejectReason(rejectReason),
     },
   });
 

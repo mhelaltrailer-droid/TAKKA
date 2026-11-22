@@ -1,4 +1,9 @@
-import { DeliveryType, NotificationType, OrderStatus } from "@prisma/client";
+import {
+  DeliveryType,
+  KitchenResponseKind,
+  NotificationType,
+  OrderStatus,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
@@ -69,6 +74,7 @@ export async function POST(
       );
     }
 
+    const respondedAt = new Date();
     await db.order.update({
       where: {
         id: order.id,
@@ -77,7 +83,9 @@ export async function POST(
         deliveryFee: deliveryFee.toFixed(2),
         totalAmount: order.subtotalAmount.add(deliveryFee),
         status: OrderStatus.ACCEPTED_AWAITING_DEPOSIT,
-        acceptedAt: new Date(),
+        acceptedAt: respondedAt,
+        kitchenRespondedAt: respondedAt,
+        kitchenResponse: KitchenResponseKind.ACCEPTED,
       },
     });
 

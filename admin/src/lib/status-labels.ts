@@ -20,6 +20,8 @@ export function getAvailabilityStatusLabel(status: AvailabilityStatus) {
   switch (status) {
     case AvailabilityStatus.OPEN:
       return "مفتوح";
+    case AvailabilityStatus.BUSY:
+      return "مشغول";
     case AvailabilityStatus.CLOSED:
       return "مغلق";
   }

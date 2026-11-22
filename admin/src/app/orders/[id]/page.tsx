@@ -21,6 +21,7 @@ import { canCustomerSeeKitchenPhone } from "@/lib/kitchen-contact";
 import { isPreviousOrderStatus } from "@/lib/order-status";
 import { resolveSupportWhatsappNumber } from "@/lib/support-whatsapp";
 import { db } from "@/lib/db";
+import { sweepOverdueKitchenOrders } from "@/lib/kitchen-acceptance-sweep";
 
 export default async function CustomerOrderDetailsPage({
   params,
@@ -28,6 +29,7 @@ export default async function CustomerOrderDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireAuth();
+  await sweepOverdueKitchenOrders();
   const { id } = await params;
 
   const order = await db.order.findFirst({
@@ -133,7 +135,9 @@ export default async function CustomerOrderDetailsPage({
             />
           </div>
           <p className="mt-1 text-sm leading-7 text-zinc-600">
-            {getCustomerOrderStatusHint(order.status, order.deliveryType)}
+            {order.cancelCustomerMessage?.trim()
+              ? order.cancelCustomerMessage
+              : getCustomerOrderStatusHint(order.status, order.deliveryType)}
           </p>
         </header>
 

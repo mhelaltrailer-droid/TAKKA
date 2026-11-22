@@ -129,10 +129,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          customerOrderStatusHint(
-                            order.status,
-                            deliveryType: order.deliveryType,
-                          ),
+                          (order.cancelCustomerMessage?.trim().isNotEmpty ??
+                                  false)
+                              ? order.cancelCustomerMessage!.trim()
+                              : customerOrderStatusHint(
+                                  order.status,
+                                  deliveryType: order.deliveryType,
+                                ),
                           style: TextStyle(
                             color: Colors.grey.shade700,
                             height: 1.45,

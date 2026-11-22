@@ -1,4 +1,4 @@
-import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { ApprovalStatus, FlashOfferStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
@@ -7,6 +7,7 @@ import {
   serializeDishOfTheDay,
   serializeFlashOffer,
 } from "@/lib/deals";
+import { acceptingOrdersKitchenFilter } from "@/lib/kitchen-visibility";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 
 export async function GET(request: Request) {
@@ -15,8 +16,7 @@ export async function GET(request: Request) {
   const regionName = searchParams.get("regionName")?.trim();
 
   const kitchenWhere = {
-    approvalStatus: ApprovalStatus.APPROVED,
-    availabilityStatus: AvailabilityStatus.OPEN,
+    ...acceptingOrdersKitchenFilter(),
     cityName,
     ...(regionName
       ? {

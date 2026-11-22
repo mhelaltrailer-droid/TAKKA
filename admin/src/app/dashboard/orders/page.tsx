@@ -420,8 +420,13 @@ export default async function OrdersPage() {
                               </button>
                             </form>
 
-                            <form action={rejectOrder}>
+                            <form action={rejectOrder} className="space-y-2">
                               <input type="hidden" name="orderId" value={order.id} />
+                              <input
+                                name="rejectReason"
+                                placeholder="سبب الرفض (اختياري)"
+                                className="w-full rounded-2xl border border-zinc-300 px-3 py-2 text-sm outline-none"
+                              />
                               <button
                                 type="submit"
                                 className="w-full rounded-full border border-red-200 px-4 py-3 text-sm font-medium text-red-600"

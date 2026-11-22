@@ -1,8 +1,9 @@
-import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { ApprovalStatus, FlashOfferStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { getCurrentAppUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { acceptingOrdersKitchenFilter } from "@/lib/kitchen-visibility";
 import { ensureDefaultPromoBanners } from "@/lib/promos";
 
 function formatPriceLabel(value: number) {
@@ -114,10 +115,7 @@ async function createBannerFromKitchenDeal(payload: {
         status: FlashOfferStatus.ACTIVE,
         endsAt: { gt: new Date() },
         quantityLeft: { gt: 0 },
-        kitchen: {
-          approvalStatus: ApprovalStatus.APPROVED,
-          availabilityStatus: AvailabilityStatus.OPEN,
-        },
+        kitchen: acceptingOrdersKitchenFilter(),
         menuItem: {
           approvalStatus: ApprovalStatus.APPROVED,
         },
@@ -154,10 +152,7 @@ async function createBannerFromKitchenDeal(payload: {
         approvalStatus: ApprovalStatus.APPROVED,
         dishOfTheDayPrice: { not: null },
         OR: [{ dishOfTheDayQty: null }, { dishOfTheDayQty: { gt: 0 } }],
-        kitchen: {
-          approvalStatus: ApprovalStatus.APPROVED,
-          availabilityStatus: AvailabilityStatus.OPEN,
-        },
+        kitchen: acceptingOrdersKitchenFilter(),
       },
       include: {
         kitchen: {

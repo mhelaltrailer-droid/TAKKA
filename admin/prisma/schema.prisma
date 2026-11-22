@@ -22,7 +22,24 @@ enum ApprovalStatus {
 
 enum AvailabilityStatus {
   OPEN
+  BUSY
   CLOSED
+}
+
+enum KitchenSuspensionLevel {
+  LEVEL_1
+  LEVEL_2
+}
+
+enum KitchenSuspensionEnd {
+  ACKNOWLEDGED
+  ADMIN_REACTIVATED
+  UPGRADED
+}
+
+enum KitchenResponseKind {
+  ACCEPTED
+  REJECTED
 }
 
 enum DeliveryType {
@@ -139,6 +156,7 @@ model User {
   uploadedDeposits  DepositProof[]    @relation("DepositUploadedBy")
   reviewedDeposits  DepositProof[]    @relation("DepositReviewedBy")
   adminActions      AdminAction[]
+  suspensionEnds    KitchenSuspensionRecord[] @relation("SuspensionEndedBy")
   notifications     Notification[]
   kitchenViews      KitchenViewEvent[]
   devicePushTokens  DevicePushToken[]
@@ -198,6 +216,13 @@ model Kitchen {
   longitude          Float?
   approvalStatus     ApprovalStatus        @default(PENDING)
   availabilityStatus AvailabilityStatus    @default(CLOSED)
+  /// Set while a no-response suspension is active. Customers see BUSY.
+  /// LEVEL_1 lifts when the owner taps «فهمت». LEVEL_2 lifts only from admin Reactivate.
+  suspendedAt        DateTime?
+  suspensionLevel    KitchenSuspensionLevel?
+  suspensionReason   String?
+  /// Warning notification for the active suspension.
+  suspensionNotificationId String?
   /// Internal marker so demo kitchens can be removed without touching real rows.
   isDemo             Boolean               @default(false)
   /// Admin rejection note shown in-app to the kitchen owner.
@@ -218,8 +243,10 @@ model Kitchen {
   reviews            Review[]
   orderIssues        OrderIssue[]
   viewEvents         KitchenViewEvent[]
+  suspensions        KitchenSuspensionRecord[]
 
   @@index([isDemo])
+  @@index([suspendedAt])
 }
 
 /// One browse visit per kitchen + session + calendar day (for stats / conversion).
@@ -381,7 +408,14 @@ model Order {
   deliveryLongitude      Float?
   kitchenNotes           String?
   cancelledBy            UserRole?
+  /// Machine or human reason. KITCHEN_NO_RESPONSE is an auto-cancel, not a reject.
   cancelReason           String?
+  /// Snapshot of the customer message used when the order was auto-cancelled.
+  cancelCustomerMessage  String?
+  /// Durable kitchen decision. Not cleared when the order moves to a later status.
+  kitchenRespondedAt     DateTime?
+  kitchenResponse        KitchenResponseKind?
+  kitchenRejectReason    String?
   placedAt               DateTime          @default(now())
   acceptedAt             DateTime?
   depositSubmittedAt     DateTime?
@@ -401,6 +435,9 @@ model Order {
   review                 Review?
   issues                 OrderIssue[]
   notifications          Notification[]
+
+  @@index([status, placedAt])
+  @@index([kitchenId, cancelReason, cancelledAt])
 }
 
 model OrderItem {
@@ -491,13 +528,14 @@ model Review {
 
 model AdminAction {
   id          String   @id @default(cuid())
-  adminUserId String
+  /// Null when the actor is the system (for example an automatic suspension).
+  adminUserId String?
   targetType  String
   targetId    String
   actionType  String
   actionNotes String?
   createdAt   DateTime @default(now())
-  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  adminUser   User?    @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 }
 
 model Notification {
@@ -575,4 +613,40 @@ model KitchenJoinLead {
   @@index([whatsapp])
   @@index([source])
   @@index([createdAt])
+}
+
+/// Singleton row id = "default". Edited at /dashboard/admin/kitchen-policy.
+/// Columns have no schema defaults on purpose: the app seeds the row from
+/// kitchen-order-rules.ts the first time it is read, and the admin dashboard
+/// is the source of truth after that.
+model KitchenOrderPolicy {
+  id                        String   @id
+  acceptanceTimeoutMinutes  Int
+  shortWindowCount          Int
+  shortWindowHours          Int
+  longWindowCount           Int
+  longWindowDays            Int
+  customerNoResponseMessage String
+  /// Shown to the kitchen for a level-1 suspension. Owner can lift it with «فهمت».
+  level1SuspensionMessage   String
+  /// Shown to the kitchen for a level-2 suspension. Only an admin can lift it.
+  level2SuspensionMessage   String
+  updatedAt                 DateTime @updatedAt
+}
+
+/// Durable suspension history. Closing a suspension sets endedAt; the row stays.
+model KitchenSuspensionRecord {
+  id            String                  @id @default(cuid())
+  kitchenId     String
+  level         KitchenSuspensionLevel
+  reason        String
+  startedAt     DateTime                @default(now())
+  endedAt       DateTime?
+  endKind       KitchenSuspensionEnd?
+  endedByUserId String?
+  kitchen       Kitchen                 @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  endedBy       User?                   @relation("SuspensionEndedBy", fields: [endedByUserId], references: [id])
+
+  @@index([kitchenId, startedAt])
+  @@index([startedAt])
 }

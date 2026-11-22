@@ -1,4 +1,4 @@
-import { ApprovalStatus, AvailabilityStatus, FlashOfferStatus } from "@prisma/client";
+import { ApprovalStatus, FlashOfferStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { getCurrentAppUser } from "@/lib/auth";
@@ -8,6 +8,7 @@ import {
   serializeDishOfTheDay,
   serializeFlashOffer,
 } from "@/lib/deals";
+import { acceptingOrdersKitchenFilter } from "@/lib/kitchen-visibility";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
 
 export type PromoDealOption = {
@@ -33,8 +34,7 @@ export async function GET() {
 
     const kitchens = await db.kitchen.findMany({
       where: {
-        approvalStatus: ApprovalStatus.APPROVED,
-        availabilityStatus: AvailabilityStatus.OPEN,
+        ...acceptingOrdersKitchenFilter(),
         cityName: OBOUR_CITY_NAME,
       },
       select: { id: true },

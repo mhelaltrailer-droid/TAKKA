@@ -16,10 +16,11 @@ export async function PATCH(request: Request) {
 
     if (
       nextStatus !== AvailabilityStatus.OPEN &&
+      nextStatus !== AvailabilityStatus.BUSY &&
       nextStatus !== AvailabilityStatus.CLOSED
     ) {
       return NextResponse.json(
-        { error: "حالة التوفر غير صحيحة. استخدم OPEN أو CLOSED." },
+        { error: "حالة التوفر غير صحيحة. استخدم OPEN أو BUSY أو CLOSED." },
         { status: 400 },
       );
     }
@@ -32,6 +33,7 @@ export async function PATCH(request: Request) {
         id: true,
         approvalStatus: true,
         availabilityStatus: true,
+        suspendedAt: true,
       },
     });
 
@@ -58,6 +60,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({
         success: true,
         availabilityStatus: kitchen.availabilityStatus,
+        suspended: Boolean(kitchen.suspendedAt),
       });
     }
 
@@ -72,13 +75,19 @@ export async function PATCH(request: Request) {
         id: true,
         availabilityStatus: true,
         approvalStatus: true,
+        suspendedAt: true,
       },
     });
 
     return NextResponse.json({
       success: true,
-      kitchen: updated,
+      kitchen: {
+        id: updated.id,
+        availabilityStatus: updated.availabilityStatus,
+        approvalStatus: updated.approvalStatus,
+      },
       availabilityStatus: updated.availabilityStatus,
+      suspended: Boolean(updated.suspendedAt),
     });
   } catch (error) {
     const message =

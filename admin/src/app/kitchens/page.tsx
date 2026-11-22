@@ -1,8 +1,10 @@
-import { ApprovalStatus, AvailabilityStatus } from "@prisma/client";
+import { ApprovalStatus } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { customerFacingAvailability } from "@/lib/kitchen-order-rules";
+import { customerListedKitchenFilter } from "@/lib/kitchen-visibility";
 import { listActiveFoodCategories } from "@/lib/food-category-catalog";
 import { DEFAULT_FOOD_CATEGORIES } from "@/lib/food-categories";
 import { listActivePromoBanners } from "@/lib/promos";
@@ -15,7 +17,7 @@ export default async function KitchensPage() {
     db.kitchen.findMany({
       where: {
         approvalStatus: ApprovalStatus.APPROVED,
-        availabilityStatus: AvailabilityStatus.OPEN,
+        ...customerListedKitchenFilter(),
       },
       include: {
         region: true,
@@ -69,6 +71,10 @@ export default async function KitchensPage() {
           slug: kitchen.slug,
           kitchenName: kitchen.kitchenName,
           description: kitchen.description,
+          availabilityStatus: customerFacingAvailability(
+            kitchen.availabilityStatus,
+            kitchen.suspendedAt != null,
+          ),
           averageRating: kitchen.averageRating,
           region: {
             cityName: kitchen.region.cityName,

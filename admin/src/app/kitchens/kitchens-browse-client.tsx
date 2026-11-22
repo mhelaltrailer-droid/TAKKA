@@ -21,6 +21,7 @@ export type BrowseKitchen = {
   slug: string;
   kitchenName: string;
   description: string | null;
+  availabilityStatus: "OPEN" | "BUSY" | "CLOSED";
   averageRating: number;
   region: {
     cityName: string;
@@ -117,13 +118,20 @@ function resolveDiscoveryKitchens(
 }
 
 function KitchenCard({ kitchen }: { kitchen: BrowseKitchen }) {
+  const busy = kitchen.availabilityStatus === "BUSY";
   return (
     <article className="border border-[#ead9c8] bg-white p-6">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-xl font-semibold">{kitchen.kitchenName}</h3>
-          <span className="bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
-            مفتوح
+          <span
+            className={
+              busy
+                ? "bg-amber-50 px-3 py-1 text-xs text-amber-800"
+                : "bg-emerald-50 px-3 py-1 text-xs text-emerald-700"
+            }
+          >
+            {busy ? "مشغول" : "مفتوح"}
           </span>
         </div>
         <p className="text-sm leading-7 text-[#6b4a3a]">

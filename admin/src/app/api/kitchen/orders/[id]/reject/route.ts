@@ -1,18 +1,27 @@
-import { NotificationType, OrderStatus, UserRole } from "@prisma/client";
+import {
+  KitchenResponseKind,
+  NotificationType,
+  OrderStatus,
+  UserRole,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { normalizeRejectReason } from "@/lib/kitchen-response";
 import { createNotification } from "@/lib/notifications";
 import { triggerOrderEvent } from "@/lib/pusher";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireAuth();
     const { id } = await params;
+    const payload = (await request.json().catch(() => ({}))) as {
+      reason?: string;
+    };
 
     const kitchen = await db.kitchen.findUnique({
       where: {
@@ -54,6 +63,7 @@ export async function POST(
       );
     }
 
+    const respondedAt = new Date();
     await db.order.update({
       where: {
         id: order.id,
@@ -61,7 +71,10 @@ export async function POST(
       data: {
         status: OrderStatus.REJECTED_BY_KITCHEN,
         cancelledBy: UserRole.KITCHEN_OWNER,
-        cancelledAt: new Date(),
+        cancelledAt: respondedAt,
+        kitchenRespondedAt: respondedAt,
+        kitchenResponse: KitchenResponseKind.REJECTED,
+        kitchenRejectReason: normalizeRejectReason(payload.reason),
       },
     });
 
