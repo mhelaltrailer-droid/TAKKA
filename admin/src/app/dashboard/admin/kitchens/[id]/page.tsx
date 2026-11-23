@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import { StatusPill } from "@/components/status-pill";
+import { WatermarkedImage } from "@/components/watermarked-image";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getImageDisplaySettings } from "@/lib/image-display-settings";
 import {
   formatCoords,
   googleMapsShareUrl,
@@ -26,28 +28,31 @@ export default async function AdminKitchenReviewPage({
   await requireRole(["admin"]);
   const { id } = await params;
 
-  const kitchen = await db.kitchen.findUnique({
-    where: { id },
-    include: {
-      region: true,
-      paymentMethods: true,
-      documents: true,
-      reviews: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          customer: { select: { fullName: true } },
-          order: { select: { orderNumber: true } },
+  const [kitchen, imageSettings] = await Promise.all([
+    db.kitchen.findUnique({
+      where: { id },
+      include: {
+        region: true,
+        paymentMethods: true,
+        documents: true,
+        reviews: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            customer: { select: { fullName: true } },
+            order: { select: { orderNumber: true } },
+          },
+        },
+        owner: {
+          select: {
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+          },
         },
       },
-      owner: {
-        select: {
-          fullName: true,
-          email: true,
-          phoneNumber: true,
-        },
-      },
-    },
-  });
+    }),
+    getImageDisplaySettings(),
+  ]);
 
   if (!kitchen) {
     return (
@@ -162,8 +167,15 @@ export default async function AdminKitchenReviewPage({
           )}
           {kitchen.coverImageUrl ? (
             <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={kitchen.coverImageUrl} alt="غلاف المطبخ" className="h-56 w-full object-cover" />
+              <WatermarkedImage
+                src={kitchen.coverImageUrl}
+                alt="غلاف المطبخ"
+                kitchenName={kitchen.kitchenName}
+                enabled={imageSettings.watermarkEnabled}
+                position={imageSettings.watermarkPosition}
+                className="h-56 w-full"
+                imgClassName="h-56 w-full object-cover"
+              />
               <p className="px-4 py-3 text-sm font-medium">صورة الغلاف</p>
             </div>
           ) : (

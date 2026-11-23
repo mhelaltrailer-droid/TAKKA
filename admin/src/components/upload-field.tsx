@@ -2,6 +2,9 @@
 
 import { useId, useRef, useState } from "react";
 
+import { prepareImageForUpload } from "@/lib/client-image-prepare";
+import { IMAGE_MAX_LONG_EDGE } from "@/lib/image-settings";
+
 type UploadFieldProps = {
   endpoint:
     | "kitchenLogo"
@@ -146,7 +149,8 @@ export function UploadField({
     setErrorMessage(null);
 
     try {
-      const result = await uploadWithProgress(file, endpoint, setProgress);
+      const prepared = await prepareImageForUpload(file, endpoint);
+      const result = await uploadWithProgress(prepared, endpoint, setProgress);
       setFileUrl(result.url);
       setStatus("done");
       setProgress(100);
@@ -207,7 +211,7 @@ export function UploadField({
         </button>
 
         <p className="mt-2 text-xs text-zinc-500">
-          صورة فقط (أي صيغة) · بحد أقصى الحجم المسموح
+          صورة فقط · تُضغط تلقائيًا (حافة ≤ {IMAGE_MAX_LONG_EDGE}px) قبل الرفع
         </p>
 
         {status === "uploading" ? (

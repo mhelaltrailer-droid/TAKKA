@@ -3,6 +3,10 @@ import { UserRole } from "@prisma/client";
 import sharp from "sharp";
 
 import { db } from "@/lib/db";
+import {
+  IMAGE_EXPORT_QUALITY_PERCENT,
+  IMAGE_MAX_LONG_EDGE,
+} from "@/lib/image-settings";
 import { putR2Object } from "@/lib/r2-client";
 import {
   UploadValidationError,
@@ -13,7 +17,7 @@ import {
 } from "@/lib/r2-upload";
 import { type AppRole, isAppRole } from "@/lib/roles";
 
-const WEBP_QUALITY = 85;
+const WEBP_QUALITY = IMAGE_EXPORT_QUALITY_PERCENT;
 
 export { UploadValidationError, UPLOAD_PURPOSES, isUploadPurpose };
 export type { UploadPurpose };
@@ -46,6 +50,12 @@ async function convertImageToWebp(file: File): Promise<File> {
   try {
     const webpBuffer = await sharp(input, { failOn: "error", animated: false })
       .rotate()
+      .resize({
+        width: IMAGE_MAX_LONG_EDGE,
+        height: IMAGE_MAX_LONG_EDGE,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
       .webp({ quality: WEBP_QUALITY })
       .toBuffer();
 

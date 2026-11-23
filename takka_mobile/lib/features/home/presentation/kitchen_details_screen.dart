@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/images/image_display_settings.dart';
 import '../../../core/location/kitchen_location_actions.dart';
 import '../../../core/orders/order_readiness.dart';
 import '../../../core/ui/friendly_error.dart';
 import '../../../core/ui/takka_error_retry.dart';
 import '../../../core/ui/takka_skeletons.dart';
+import '../../../core/widgets/watermarked_network_image.dart';
 import '../../auth/presentation/guest_sign_up_prompt.dart';
 import '../../cart/data/cart_store.dart';
 import '../../cart/presentation/cart_screen.dart';
@@ -85,13 +87,17 @@ class KitchenDetailsScreen extends StatefulWidget {
 class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
   final _cart = CartStore.instance;
   final _service = const CustomerDiscoveryService();
-  late Future<KitchenDetails> _future = _loadDetails();
+  final _imageSettingsClient = ImageDisplaySettingsClient();
+  late Future<_KitchenDetailsPageData> _future = _loadPage();
   var _viewRecorded = false;
 
-  Future<KitchenDetails> _loadDetails() async {
-    final details = await _service.loadKitchenDetails(
-      kitchenIdOrSlug: widget.kitchenIdOrSlug,
-    );
+  Future<_KitchenDetailsPageData> _loadPage() async {
+    final results = await Future.wait<Object>([
+      _service.loadKitchenDetails(kitchenIdOrSlug: widget.kitchenIdOrSlug),
+      _imageSettingsClient.fetch(),
+    ]);
+    final details = results[0] as KitchenDetails;
+    final imageSettings = results[1] as ImageDisplaySettings;
     if (!_viewRecorded && mounted) {
       _viewRecorded = true;
       String? token;
@@ -111,7 +117,10 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         ),
       );
     }
-    return details;
+    return _KitchenDetailsPageData(
+      kitchen: details,
+      imageSettings: imageSettings,
+    );
   }
 
   @override
@@ -147,7 +156,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<KitchenDetails>(
+      body: FutureBuilder<_KitchenDetailsPageData>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -159,22 +168,20 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
               child: TakkaErrorRetry(
                 onRetry: () {
                   setState(() {
-                    _future = _service.loadKitchenDetails(
-                      kitchenIdOrSlug: widget.kitchenIdOrSlug,
-                    );
+                    _future = _loadPage();
                   });
                 },
               ),
             );
           }
 
-          final kitchen = snapshot.data!;
+          final page = snapshot.data!;
+          final kitchen = page.kitchen;
+          final imageSettings = page.imageSettings;
 
           return RefreshIndicator(
             onRefresh: () async {
-              final future = _service.loadKitchenDetails(
-                kitchenIdOrSlug: widget.kitchenIdOrSlug,
-              );
+              final future = _loadPage();
               setState(() {
                 _future = future;
               });
@@ -183,6 +190,20 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                if (kitchen.coverImageUrl != null &&
+                    kitchen.coverImageUrl!.trim().isNotEmpty) ...[
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: WatermarkedNetworkImage(
+                      imageUrl: kitchen.coverImageUrl!,
+                      kitchenName: kitchen.kitchenName,
+                      enabled: imageSettings.watermarkEnabled,
+                      position: imageSettings.watermarkPosition,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -311,6 +332,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                               kitchen: kitchen,
                               item: item,
                               isGuest: widget.isGuest,
+                              imageSettings: imageSettings,
                             ),
                           )
                           .toList(),
@@ -384,15 +406,27 @@ List<MenuItemSummary> _menuItemsForCustomer(KitchenDetails kitchen) {
   return byId.values.toList();
 }
 
+class _KitchenDetailsPageData {
+  const _KitchenDetailsPageData({
+    required this.kitchen,
+    required this.imageSettings,
+  });
+
+  final KitchenDetails kitchen;
+  final ImageDisplaySettings imageSettings;
+}
+
 class _MenuItemCard extends StatelessWidget {
   const _MenuItemCard({
     required this.kitchen,
     required this.item,
+    required this.imageSettings,
     this.isGuest = false,
   });
 
   final KitchenDetails kitchen;
   final MenuItemSummary item;
+  final ImageDisplaySettings imageSettings;
   final bool isGuest;
 
   @override
@@ -412,6 +446,8 @@ class _MenuItemCard extends StatelessWidget {
             ? (item.dishOfTheDayPrice ?? dish?.dishOfTheDayPrice)
             : null);
 
+    final imageUrl = item.imageUrl?.trim();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -419,6 +455,19 @@ class _MenuItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: WatermarkedNetworkImage(
+                  imageUrl: imageUrl,
+                  kitchenName: kitchen.kitchenName,
+                  enabled: imageSettings.watermarkEnabled,
+                  position: imageSettings.watermarkPosition,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 Expanded(

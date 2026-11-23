@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { WatermarkedImage } from "@/components/watermarked-image";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getImageDisplaySettings } from "@/lib/image-display-settings";
 import { listAllFoodCategories } from "@/lib/food-category-catalog";
 import { getFoodCategoryById } from "@/lib/food-categories";
 import { menuItemNeedsAdminReviewWhere } from "@/lib/moderation";
@@ -9,7 +11,7 @@ import { menuItemNeedsAdminReviewWhere } from "@/lib/moderation";
 export default async function AdminMenuItemsQueuePage() {
   await requireRole(["admin"]);
 
-  const [items, categories] = await Promise.all([
+  const [items, categories, imageSettings] = await Promise.all([
     db.menuItem.findMany({
       where: menuItemNeedsAdminReviewWhere(),
       include: {
@@ -24,6 +26,7 @@ export default async function AdminMenuItemsQueuePage() {
       orderBy: { updatedAt: "desc" },
     }),
     listAllFoodCategories().catch(() => []),
+    getImageDisplaySettings(),
   ]);
 
   const labelBySlug = new Map(
@@ -80,11 +83,14 @@ export default async function AdminMenuItemsQueuePage() {
                 >
                   <div className="flex gap-4">
                     {(isDraft ? item.pendingImageUrl : item.imageUrl) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <WatermarkedImage
                         src={(isDraft ? item.pendingImageUrl : item.imageUrl) || ""}
                         alt={title}
-                        className="h-20 w-20 rounded-2xl object-cover"
+                        kitchenName={item.kitchen.kitchenName}
+                        enabled={imageSettings.watermarkEnabled}
+                        position={imageSettings.watermarkPosition}
+                        className="h-20 w-20 shrink-0 rounded-2xl"
+                        imgClassName="h-20 w-20 rounded-2xl object-cover"
                       />
                     ) : (
                       <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-100 text-xs text-zinc-500">

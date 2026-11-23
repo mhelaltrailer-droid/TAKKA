@@ -70,6 +70,12 @@ export default async function AdminOperationsPage() {
               قواعد قبول الطلبات
             </Link>
             <Link
+              href="/dashboard/admin/image-settings"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              إعدادات الصور
+            </Link>
+            <Link
               href="/dashboard/admin/kitchen-performance"
               className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >

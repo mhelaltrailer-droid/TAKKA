@@ -634,6 +634,18 @@ model KitchenOrderPolicy {
   updatedAt                 DateTime @updatedAt
 }
 
+/// Singleton row id = "default". Edited at /dashboard/admin/image-settings.
+/// Controls display-time watermarks and on-device food-photo enhancement.
+/// Seeded from image-settings.ts on first read; admin dashboard is source of truth after that.
+model ImageDisplaySettings {
+  id                  String   @id
+  watermarkEnabled    Boolean
+  enhancementEnabled  Boolean
+  /// bottomLeft | bottomRight | topLeft | topRight
+  watermarkPosition   String
+  updatedAt           DateTime @updatedAt
+}
+
 /// Durable suspension history. Closing a suspension sets endedAt; the row stays.
 model KitchenSuspensionRecord {
   id            String                  @id @default(cuid())

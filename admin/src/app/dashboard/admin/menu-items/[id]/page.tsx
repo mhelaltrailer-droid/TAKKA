@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import { StatusPill } from "@/components/status-pill";
+import { WatermarkedImage } from "@/components/watermarked-image";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getImageDisplaySettings } from "@/lib/image-display-settings";
 import { listAllFoodCategories } from "@/lib/food-category-catalog";
 import { getFoodCategoryById } from "@/lib/food-categories";
 import { parsePendingSizes } from "@/lib/moderation";
@@ -22,19 +24,22 @@ export default async function AdminMenuItemReviewPage({
   await requireRole(["admin"]);
   const { id } = await params;
 
-  const item = await db.menuItem.findUnique({
-    where: { id },
-    include: {
-      sizes: { orderBy: { createdAt: "asc" } },
-      kitchen: {
-        select: {
-          id: true,
-          kitchenName: true,
-          approvalStatus: true,
+  const [item, imageSettings] = await Promise.all([
+    db.menuItem.findUnique({
+      where: { id },
+      include: {
+        sizes: { orderBy: { createdAt: "asc" } },
+        kitchen: {
+          select: {
+            id: true,
+            kitchenName: true,
+            approvalStatus: true,
+          },
         },
       },
-    },
-  });
+    }),
+    getImageDisplaySettings(),
+  ]);
 
   if (!item) {
     return (
@@ -111,11 +116,14 @@ export default async function AdminMenuItemReviewPage({
               {isDraft ? "النسخة المقترحة" : "بيانات الصنف"}
             </h2>
             {reviewImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <WatermarkedImage
                 src={reviewImage}
                 alt={reviewName}
-                className="mt-4 max-h-56 w-full rounded-2xl object-cover"
+                kitchenName={item.kitchen.kitchenName}
+                enabled={imageSettings.watermarkEnabled}
+                position={imageSettings.watermarkPosition}
+                className="mt-4 max-h-56 w-full rounded-2xl"
+                imgClassName="max-h-56 w-full rounded-2xl object-cover"
               />
             ) : null}
             <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-700">
@@ -160,11 +168,14 @@ export default async function AdminMenuItemReviewPage({
             <div className="rounded-3xl border border-zinc-200 bg-white p-5">
               <h2 className="font-semibold">النسخة الحالية (للعملاء)</h2>
               {item.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <WatermarkedImage
                   src={item.imageUrl}
                   alt={item.name}
-                  className="mt-4 max-h-56 w-full rounded-2xl object-cover"
+                  kitchenName={item.kitchen.kitchenName}
+                  enabled={imageSettings.watermarkEnabled}
+                  position={imageSettings.watermarkPosition}
+                  className="mt-4 max-h-56 w-full rounded-2xl"
+                  imgClassName="max-h-56 w-full rounded-2xl object-cover"
                 />
               ) : null}
               <div className="mt-4 space-y-2 text-sm leading-7 text-zinc-700">
