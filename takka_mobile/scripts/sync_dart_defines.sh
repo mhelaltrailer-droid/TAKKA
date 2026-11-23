@@ -22,6 +22,8 @@ wanted = {
     "NEXT_PUBLIC_PUSHER_CLUSTER": "PUSHER_CLUSTER",
 }
 found = {}
+sentry_key = ""
+sentry_dsn = ""
 with open(path, encoding="utf-8") as handle:
     for raw in handle:
         line = raw.strip()
@@ -29,15 +31,21 @@ with open(path, encoding="utf-8") as handle:
             continue
         key, value = line.split("=", 1)
         key = key.strip()
-        if key not in wanted:
-            continue
         value = value.strip().strip('"').strip("'")
-        found[wanted[key]] = value
+        if key in wanted:
+            found[wanted[key]] = value
+        elif key == "Sentry_key" and value:
+            sentry_key = value
+        elif key == "SENTRY_DSN" and value:
+            sentry_dsn = value
 missing = [src for src, dest in wanted.items() if dest != "PUSHER_CLUSTER" and not found.get(dest)]
 if missing:
     sys.stderr.write("Missing in admin/.env: " + ", ".join(missing) + "\n")
     sys.exit(1)
-for key in ("CLERK_PUBLISHABLE_KEY", "PUSHER_KEY", "PUSHER_CLUSTER"):
+sentry = sentry_key or sentry_dsn
+if sentry:
+    found["SENTRY_DSN"] = sentry
+for key in ("CLERK_PUBLISHABLE_KEY", "PUSHER_KEY", "PUSHER_CLUSTER", "SENTRY_DSN"):
     if key in found:
         print(f"export {key}={shlex.quote(found[key])}")
 PY

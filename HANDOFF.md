@@ -118,9 +118,35 @@ Custom domain is postponed; production URLs stay on `*.onrender.com` for now.
 
 The five R2 variables were added on **both** TAKKA-admin (`srv-dagg3nek1f9s73cq6ht0`) and TAKKA-App (`srv-dagiuaid0e5s73cmn9f0`) on 18 Nov 2026. Do not print their values.
 
-`admin/.env.example` also documents optional vars (not all are necessarily set on Render): `MOBILE_APP_*` (in-app update prompt), `SUPPORT_WHATSAPP_NUMBER`, SMTP / join-kitchen alert vars (`SMTP_*`, `JOIN_KITCHEN_ALERT_*`, optional Telegram and webhook), and Firebase (`FIREBASE_SERVICE_ACCOUNT_JSON` or `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`).
+`admin/.env.example` also documents optional vars (not all are necessarily set on Render): `MOBILE_APP_*` (in-app update prompt), `SUPPORT_WHATSAPP_NUMBER`, SMTP / join-kitchen alert vars (`SMTP_*`, `JOIN_KITCHEN_ALERT_*`, optional Telegram and webhook), Firebase (`FIREBASE_SERVICE_ACCOUNT_JSON` or `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`), and Sentry (`Sentry_key` / `SENTRY_DSN`).
 
 The owner enters secrets on the service dashboards, never in chat. Never echo secrets, tokens, or connection strings in logs, PRs, or replies.
+
+### Sentry (error + light performance monitoring)
+
+Minimal free-plan setup. **Never commit a DSN or auth token.**
+
+| Surface | Package | Enable when | Sample rate | PII |
+|---|---|---|---|---|
+| Web + API (`admin/`) | `@sentry/nextjs` | Env DSN present | `tracesSampleRate: 0.1` | Off (`dataCollection.userInfo: false`; SDK v11 equivalent of `sendDefaultPii: false`). No session replay. |
+| Flutter (`takka_mobile/`) | `sentry_flutter` | `--dart-define=SENTRY_DSN=…` non-empty | `0.1` | `sendDefaultPii: false` |
+
+**Web/API env vars (Render TAKKA-admin + TAKKA-App):**
+
+- Primary: `Sentry_key` (exact name; already set by the owner on both services).
+- Fallback: `SENTRY_DSN`.
+- If both are missing, Sentry is **fully disabled** (no init, no errors).
+- **No** `SENTRY_AUTH_TOKEN` and **no** source-map upload. `withSentryConfig` sets `sourcemaps.disable: true` and `release.create: false` so `next build` succeeds without an auth token.
+
+**Client DSN wiring (choice):** `admin/next.config.ts` maps `Sentry_key` / `SENTRY_DSN` → `NEXT_PUBLIC_SENTRY_DSN` at **build time** via the Next.js `env` option. `instrumentation-client.ts` reads `NEXT_PUBLIC_SENTRY_DSN`. Prefer this over a server-rendered prop so the browser SDK can init without an extra round trip. Server/edge configs read `Sentry_key` / `SENTRY_DSN` directly at runtime. API route / RSC errors go through `src/instrumentation.ts` → `onRequestError` (`Sentry.captureRequestError`).
+
+**Mobile APK:**
+
+- Init only when `const String.fromEnvironment('SENTRY_DSN')` is non-empty (`main.dart` wraps `runApp` with `SentryFlutter.init`).
+- Release workflow writes `SENTRY_DSN` into `dart_defines.json` from GitHub secret **`SENTRY_DSN_APP`** (optional). Owner must add that secret in the repo settings; agents must not create it.
+- Empty / missing secret → APK builds with Sentry disabled.
+
+Environment tag on web: `RENDER_SERVICE_NAME` when set, else `NODE_ENV`.
 
 ---
 
@@ -297,7 +323,7 @@ These are **proposals**, not decisions. They do not override §7, §8, or §9. A
 - Clerk production instance (needs the custom domain; see §8 item 5).
 - Privacy policy and terms of use (Google Play requires them).
 - Play Console registration ($25 one-time). New personal accounts need a closed-testing period before a public listing. Check Google's current requirements before fixing a launch date.
-- Error monitoring on web and mobile (for example Sentry, which has a free tier).
+- Error monitoring on web and mobile — **Sentry wiring landed** (see §5 Sentry). Owner still needs GitHub secret `SENTRY_DSN_APP` for the APK; web uses Render `Sentry_key`.
 - Move off the Render free plan before real customers arrive. UptimeRobot keeps the services awake, but free instance hours are shared per workspace and may run out. Acceptable for the pilot, not for launch. At least TAKKA-App should move to Render Starter. Needs a working payment card (§4, §8.2).
 
 **Phase 5: Growth**
