@@ -2,7 +2,7 @@
 
 This file is the onboarding brief for any coding agent (Claude, Cursor, etc.) continuing work on Takka. Read it before changing code. Do **not** ask the owner questions this document already answers. Write code comments and PRs in English. When you talk to the owner, use Egyptian Arabic.
 
-آخر تحديث: 22 نوفمبر 2026 (Africa/Cairo, UTC+2)
+آخر تحديث: 23 نوفمبر 2026 (Africa/Cairo, UTC+2)
 
 ---
 
@@ -49,6 +49,25 @@ There is no root `README.md`. Planning docs live at the repo root (`PRD.MD`, `Te
 Enums include `UserRole`, `ApprovalStatus`, `AvailabilityStatus` (`OPEN`, `BUSY`, `CLOSED`), `KitchenSuspensionLevel` (`LEVEL_1`, `LEVEL_2`), `KitchenResponseKind`, `DeliveryType`, `OrderReadiness`, `OrderStatus`, `PaymentType`, and others in the same schema file. A `DeliveryType` enum already exists; a full courier/delivery feature is **not** built yet (see decisions and Next steps).
 
 Demo kitchens are marked internally with `isDemo` so they can be removed in one command before real customers arrive. Scripts: `npm run seed:demo` and `npm run seed:demo:remove` in `admin/`. See `docs/demo-data.md`. Existing media in the database was test data and may be deleted later.
+
+### Database indexes (common query paths)
+
+Additive `@@index` entries only (safe for `prisma db push`). Postgres does not auto-index FKs.
+
+| Model | Index | Serves |
+|---|---|---|
+| `CustomerAddress` | `[customerId]` | Address list / counts by customer |
+| `Kitchen` | `[approvalStatus, cityName]` | Discovery + admin pending by city |
+| `Kitchen` | `[regionId]` | FK / district merge joins |
+| `MenuItem` | `[kitchenId, isAvailable, approvalStatus]` | Nested kitchen menu lists |
+| `MenuItem` | `[kitchenId, isDishOfTheDay]` | Dish-of-the-day lookups |
+| `Order` | `[customerId, createdAt]` | Customer order history |
+| `Order` | `[kitchenId, createdAt]` | Kitchen inbox + date-range stats |
+| `OrderMessage` | `[orderId, sentAt]` | Chat thread load (API sorts by `sentAt`) |
+| `Review` | `[kitchenId, createdAt]` | Kitchen reviews + audit ranges |
+| `Notification` | `[userId, createdAt]` | In-app notification inbox |
+
+Skipped: `Order[kitchenId, status]` (no hot filter path; `kitchenId` already leads another index). Do not rename/remove columns when adding indexes.
 
 ---
 
