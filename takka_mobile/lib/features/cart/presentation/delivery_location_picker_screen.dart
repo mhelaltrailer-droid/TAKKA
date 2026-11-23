@@ -125,6 +125,13 @@ class _DeliveryLocationPickerScreenState
     }
   }
 
+  void _dragPin(DragUpdateDetails details) {
+    final camera = _mapController.camera;
+    final origin = camera.latLngToScreenOffset(_pin);
+    final next = camera.screenOffsetToLatLng(origin + details.delta);
+    setState(() => _pin = next);
+  }
+
   Future<void> _search() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
@@ -272,12 +279,23 @@ class _DeliveryLocationPickerScreenState
                       markers: [
                         Marker(
                           point: _pin,
-                          width: 48,
-                          height: 48,
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Color(0xFFE67E22),
-                            size: 42,
+                          width: 56,
+                          height: 56,
+                          alignment: Alignment.center,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onPanUpdate: _dragPin,
+                            onPanEnd: (_) {
+                              setState(() {
+                                _status =
+                                    'تم تحديث موقع الدبوس. اضغط «تأكيد الموقع».';
+                              });
+                            },
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Color(0xFFE67E22),
+                              size: 42,
+                            ),
                           ),
                         ),
                       ],

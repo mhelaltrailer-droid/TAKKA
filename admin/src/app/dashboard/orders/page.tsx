@@ -8,6 +8,11 @@ import { UploadField } from "@/components/upload-field";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  PREVIOUS_ORDER_STATUSES,
+  buildOrderCursorArgs,
+  toCursorPage,
+} from "@/lib/order-cursor-pagination";
+import {
   getAllowedNextStatuses,
   getOrderStatusLabel,
 } from "@/lib/order-status";
@@ -24,6 +29,46 @@ import {
   sendKitchenOrderMessage,
   updateOrderStatus,
 } from "./actions";
+
+const HISTORY_PAGE_SIZE = 30;
+
+const kitchenDashboardOrderInclude = {
+  customer: {
+    select: {
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+    },
+  },
+  customerAddress: {
+    include: {
+      region: true,
+    },
+  },
+  depositProofs: {
+    orderBy: {
+      submittedAt: "desc" as const,
+    },
+  },
+  messages: {
+    orderBy: {
+      sentAt: "asc" as const,
+    },
+    take: 10,
+    include: {
+      sender: {
+        select: {
+          fullName: true,
+        },
+      },
+    },
+  },
+  items: {
+    orderBy: {
+      createdAt: "asc" as const,
+    },
+  },
+};
 
 function canSendChat(status: OrderStatus) {
   return (
@@ -42,8 +87,17 @@ function canViewChat(status: OrderStatus) {
   );
 }
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cursor?: string | string[] }>;
+}) {
   const user = await requireAuth();
+  const params = await searchParams;
+  const historyCursor =
+    typeof params.cursor === "string" && params.cursor.trim()
+      ? params.cursor.trim()
+      : undefined;
 
   const kitchen = await db.kitchen.findUnique({
     where: {
@@ -52,48 +106,6 @@ export default async function OrdersPage() {
     select: {
       id: true,
       kitchenName: true,
-      orders: {
-        include: {
-          customer: {
-            select: {
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-            },
-          },
-          customerAddress: {
-            include: {
-              region: true,
-            },
-          },
-          depositProofs: {
-            orderBy: {
-              submittedAt: "desc",
-            },
-          },
-          messages: {
-            orderBy: {
-              sentAt: "asc",
-            },
-            take: 10,
-            include: {
-              sender: {
-                select: {
-                  fullName: true,
-                },
-              },
-            },
-          },
-          items: {
-            orderBy: {
-              createdAt: "asc",
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
     },
   });
 
@@ -116,16 +128,46 @@ export default async function OrdersPage() {
     );
   }
 
+  // Active/in-progress orders: always fully loaded so the kitchen never misses
+  // a live order. Only completed/cancelled/rejected history is cursor-paged.
+  const [activeOrders, historyRows, completedCount] = await Promise.all([
+    db.order.findMany({
+      where: {
+        kitchenId: kitchen.id,
+        status: { notIn: PREVIOUS_ORDER_STATUSES },
+      },
+      include: kitchenDashboardOrderInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+    db.order.findMany({
+      where: {
+        kitchenId: kitchen.id,
+        status: { in: PREVIOUS_ORDER_STATUSES },
+      },
+      include: kitchenDashboardOrderInclude,
+      ...buildOrderCursorArgs(historyCursor, HISTORY_PAGE_SIZE),
+    }),
+    db.order.count({
+      where: {
+        kitchenId: kitchen.id,
+        status: OrderStatus.COMPLETED,
+      },
+    }),
+  ]);
+
+  const historyPage = toCursorPage(historyRows, HISTORY_PAGE_SIZE);
+  const orders = [...activeOrders, ...historyPage.orders];
+
   const ordersSummary = {
-    pending: kitchen.orders.filter(
+    pending: activeOrders.filter(
       (order) => order.status === OrderStatus.PENDING_KITCHEN_APPROVAL,
     ).length,
-    waitingDeposit: kitchen.orders.filter(
+    waitingDeposit: activeOrders.filter(
       (order) =>
         order.status === OrderStatus.ACCEPTED_AWAITING_DEPOSIT ||
         order.status === OrderStatus.DEPOSIT_PROOF_SUBMITTED,
     ).length,
-    active: kitchen.orders.filter((order) =>
+    active: activeOrders.filter((order) =>
       ([
         OrderStatus.DEPOSIT_CONFIRMED,
         OrderStatus.PREPARING,
@@ -136,9 +178,7 @@ export default async function OrdersPage() {
         OrderStatus.COMPLETED_AWAITING_CUSTOMER_CONFIRM,
       ] as OrderStatus[]).includes(order.status),
     ).length,
-    completed: kitchen.orders.filter(
-      (order) => order.status === OrderStatus.COMPLETED,
-    ).length,
+    completed: completedCount,
   };
 
   return (
@@ -203,13 +243,13 @@ export default async function OrdersPage() {
           </div>
 
           <div className="space-y-5">
-            {kitchen.orders.length === 0 ? (
+            {orders.length === 0 ? (
               <div className="rounded-2xl bg-zinc-50 px-4 py-5 text-sm text-zinc-600">
                 لا توجد طلبات بعد. بمجرد استخدام `POST /api/orders` أو ربط
                 تطبيق العميل، ستظهر الطلبات هنا تلقائيًا.
               </div>
             ) : (
-              kitchen.orders.map((order) => {
+              orders.map((order) => {
                 const allowedStatuses = getAllowedNextStatuses(
                   order.status,
                   order.deliveryType,
@@ -548,6 +588,33 @@ export default async function OrdersPage() {
                 );
               })
             )}
+            {historyPage.hasMore && historyPage.nextCursor ? (
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <Link
+                  href={`/dashboard/orders?cursor=${encodeURIComponent(historyPage.nextCursor)}`}
+                  className="rounded-full border border-zinc-300 px-5 py-3 text-sm font-medium"
+                >
+                  تحميل المزيد
+                </Link>
+                {historyCursor ? (
+                  <Link
+                    href="/dashboard/orders"
+                    className="rounded-full border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-600"
+                  >
+                    أحدث الطلبات
+                  </Link>
+                ) : null}
+              </div>
+            ) : historyCursor ? (
+              <div className="flex justify-center pt-2">
+                <Link
+                  href="/dashboard/orders"
+                  className="rounded-full border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-600"
+                >
+                  أحدث الطلبات
+                </Link>
+              </div>
+            ) : null}
           </div>
         </section>
       </div>

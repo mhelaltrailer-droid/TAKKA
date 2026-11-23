@@ -10,12 +10,20 @@ class OrderService {
 
   static const _httpTimeout = Duration(seconds: 25);
 
-  Uri _buildUri(String path) {
+  Uri _buildUri(
+    String path, {
+    Map<String, String>? queryParameters,
+  }) {
     final base = AppConfig.apiBaseUrl.endsWith('/')
         ? AppConfig.apiBaseUrl.substring(0, AppConfig.apiBaseUrl.length - 1)
         : AppConfig.apiBaseUrl;
 
-    return Uri.parse('$base$path');
+    return Uri.parse('$base$path').replace(
+      queryParameters:
+          queryParameters == null || queryParameters.isEmpty
+          ? null
+          : queryParameters,
+    );
   }
 
   Future<http.Response> _send(Future<http.Response> request) {
@@ -23,6 +31,12 @@ class OrderService {
       _httpTimeout,
       onTimeout: () => throw Exception('انتهت مهلة الاتصال بالخادم.'),
     );
+  }
+
+  static String? _pageCursor(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text;
   }
 
   Future<List<CustomerAddress>> loadAddresses({
@@ -75,7 +89,9 @@ class OrderService {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to create address: ${response.body}');
+      throw Exception(
+        _errorText(_decodeMap(response.body), 'تعذر حفظ العنوان.'),
+      );
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -136,11 +152,62 @@ class OrderService {
     );
   }
 
-  Future<List<CustomerOrderSummary>> loadMyOrders({
+  Future<CheckoutQuote> quoteCheckout({
     required String sessionToken,
+    required String kitchenId,
+    required String deliveryType,
+    String? customerAddressId,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
+    required List<CartItem> items,
+  }) async {
+    final response = await _send(http.post(
+      _buildUri('/api/checkout/quote'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $sessionToken',
+      },
+      body: jsonEncode({
+        'kitchenId': kitchenId,
+        'deliveryType': deliveryType,
+        'customerAddressId': customerAddressId,
+        'deliveryLatitude': deliveryLatitude,
+        'deliveryLongitude': deliveryLongitude,
+        'items': items
+            .map(
+              (item) => {
+                'menuItemId': item.menuItemId,
+                'menuItemSizeId': item.menuItemSizeId,
+                'quantity': item.quantity,
+                'customerNote': item.customerNote,
+                'expectedUnitPrice': item.unitPrice,
+                'expectedDepositAmount': item.depositAmount,
+              },
+            )
+            .toList(),
+      }),
+    ));
+
+    final json = _decodeMap(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorText(json, 'تعذر مراجعة أسعار السلة.'));
+    }
+    return CheckoutQuote.fromJson(json);
+  }
+
+  Future<OrderListPage<CustomerOrderSummary>> loadMyOrders({
+    required String sessionToken,
+    String? cursor,
+    int limit = 20,
   }) async {
     final response = await _send(http.get(
-      _buildUri('/api/orders/my'),
+      _buildUri(
+        '/api/orders/my',
+        queryParameters: {
+          'limit': '$limit',
+          if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        },
+      ),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
@@ -151,9 +218,16 @@ class OrderService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return (json['orders'] as List<dynamic>? ?? const [])
-        .map((item) => CustomerOrderSummary.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return OrderListPage(
+      orders: (json['orders'] as List<dynamic>? ?? const [])
+          .map(
+            (item) =>
+                CustomerOrderSummary.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+      nextCursor: _pageCursor(json['nextCursor']),
+      hasMore: json['hasMore'] == true,
+    );
   }
 
   Future<CustomerOrderDetails> loadOrderDetails({
@@ -175,11 +249,19 @@ class OrderService {
     return CustomerOrderDetails.fromJson(json['order'] as Map<String, dynamic>);
   }
 
-  Future<List<KitchenOrderSummary>> loadKitchenOrders({
+  Future<OrderListPage<KitchenOrderSummary>> loadKitchenOrders({
     required String sessionToken,
+    String? cursor,
+    int limit = 20,
   }) async {
     final response = await http.get(
-      _buildUri('/api/kitchen/orders'),
+      _buildUri(
+        '/api/kitchen/orders',
+        queryParameters: {
+          'limit': '$limit',
+          if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        },
+      ),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
@@ -190,9 +272,16 @@ class OrderService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return (json['orders'] as List<dynamic>? ?? const [])
-        .map((item) => KitchenOrderSummary.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return OrderListPage(
+      orders: (json['orders'] as List<dynamic>? ?? const [])
+          .map(
+            (item) =>
+                KitchenOrderSummary.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+      nextCursor: _pageCursor(json['nextCursor']),
+      hasMore: json['hasMore'] == true,
+    );
   }
 
   Future<void> acceptKitchenOrder({
@@ -490,6 +579,18 @@ class OrderService {
   }
 }
 
+class OrderListPage<T> {
+  const OrderListPage({
+    required this.orders,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<T> orders;
+  final String? nextCursor;
+  final bool hasMore;
+}
+
 class CustomerAddress {
   const CustomerAddress({
     required this.id,
@@ -526,6 +627,88 @@ class CustomerAddress {
   final bool isDefault;
   final double? latitude;
   final double? longitude;
+}
+
+class CheckoutQuoteLine {
+  const CheckoutQuoteLine({
+    required this.available,
+    required this.unitPrice,
+    required this.depositAmount,
+    required this.priceChanged,
+    required this.depositChanged,
+  });
+
+  factory CheckoutQuoteLine.fromJson(Map<String, dynamic> json) {
+    return CheckoutQuoteLine(
+      available: json['available'] == true,
+      unitPrice: (json['unitPrice'] as num?)?.toDouble(),
+      depositAmount: (json['depositAmount'] as num?)?.toDouble(),
+      priceChanged: json['priceChanged'] == true,
+      depositChanged: json['depositChanged'] == true,
+    );
+  }
+
+  final bool available;
+  final double? unitPrice;
+  final double? depositAmount;
+  final bool priceChanged;
+  final bool depositChanged;
+}
+
+class CheckoutQuoteChange {
+  const CheckoutQuoteChange({
+    required this.kind,
+    required this.message,
+  });
+
+  factory CheckoutQuoteChange.fromJson(Map<String, dynamic> json) {
+    return CheckoutQuoteChange(
+      kind: json['kind']?.toString() ?? '',
+      message: json['message']?.toString() ?? '',
+    );
+  }
+
+  final String kind;
+  final String message;
+}
+
+class CheckoutQuote {
+  const CheckoutQuote({
+    required this.orderable,
+    required this.blockingError,
+    required this.lines,
+    required this.changes,
+  });
+
+  factory CheckoutQuote.fromJson(Map<String, dynamic> json) {
+    return CheckoutQuote(
+      orderable: json['orderable'] == true,
+      blockingError: json['blockingError']?.toString(),
+      lines: (json['lines'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => CheckoutQuoteLine.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
+      changes: (json['changes'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => CheckoutQuoteChange.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  final bool orderable;
+  final String? blockingError;
+  final List<CheckoutQuoteLine> lines;
+  final List<CheckoutQuoteChange> changes;
+
+  bool get needsReview => !orderable || changes.isNotEmpty;
 }
 
 class OrderCreationResult {

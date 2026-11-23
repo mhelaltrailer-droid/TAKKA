@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { districtSortOrder } from "@/lib/district-order";
+import { storedCoordinatesError } from "@/lib/service-area-store";
 
 type AddressPayload = {
   label?: string;
@@ -31,6 +32,8 @@ export async function PATCH(
       },
       select: {
         id: true,
+        latitude: true,
+        longitude: true,
       },
     });
 
@@ -59,6 +62,26 @@ export async function PATCH(
       });
 
       regionId = region.id;
+    }
+
+    const nextLatitude =
+      payload.latitude !== undefined
+        ? typeof payload.latitude === "number"
+          ? payload.latitude
+          : null
+        : existingAddress.latitude;
+    const nextLongitude =
+      payload.longitude !== undefined
+        ? typeof payload.longitude === "number"
+          ? payload.longitude
+          : null
+        : existingAddress.longitude;
+    const coordinateError = await storedCoordinatesError(
+      nextLatitude,
+      nextLongitude,
+    );
+    if (coordinateError) {
+      return NextResponse.json({ error: coordinateError }, { status: 400 });
     }
 
     if (payload.isDefault) {

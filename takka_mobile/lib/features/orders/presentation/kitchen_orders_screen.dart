@@ -23,29 +23,42 @@ class KitchenOrdersScreen extends StatefulWidget {
 }
 
 class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
+  static const _pageSize = 20;
+
   final _orderService = const OrderService();
   final _kitchenService = const KitchenManagementService();
   final _meService = const MobileMeService();
   final _uploadService = MobileUploadService();
-  Future<_OrdersPageData>? _future;
+  final _scrollController = ScrollController();
+
+  KitchenFeatureAccess? _access;
+  final List<KitchenOrderSummary> _orders = [];
+  String? _nextCursor;
+  var _hasMore = false;
+  var _initialLoading = true;
+  var _loadingMore = false;
+  Object? _error;
   String? _userChannelName;
 
   void _onRealtimeEvent(PusherEvent event) {
-    if (!mounted) {
-      return;
-    }
-    setState(() => _future = _load());
+    if (!mounted) return;
+    // Reset to first page so new active orders land at the top.
+    _loadInitial(quiet: true);
   }
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _scrollController.addListener(_onScroll);
+    _loadInitial();
     _subscribeRealtime();
   }
 
   @override
   void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     final channelName = _userChannelName;
     if (channelName != null) {
       PusherRealtimeService.instance.unsubscribe(
@@ -56,19 +69,14 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
     super.dispose();
   }
 
-  Future<_OrdersPageData> _load() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    final token = await authState.sessionToken();
-    final profile = await _kitchenService.loadProfile(sessionToken: token.jwt);
-    final access = kitchenFeatureAccessFromStatus(profile?.approvalStatus);
-    if (access != KitchenFeatureAccess.ready) {
-      return _OrdersPageData(access: access);
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _initialLoading || _error != null) {
+      return;
     }
-
-    final orders = await _orderService.loadKitchenOrders(
-      sessionToken: token.jwt,
-    );
-    return _OrdersPageData(access: KitchenFeatureAccess.ready, orders: orders);
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 240) {
+      _loadMore();
+    }
   }
 
   Future<void> _subscribeRealtime() async {
@@ -85,223 +93,313 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
     } catch (_) {}
   }
 
+  Future<void> _loadInitial({bool quiet = false}) async {
+    if (!quiet) {
+      setState(() {
+        _initialLoading = true;
+        _error = null;
+      });
+    }
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      final profile = await _kitchenService.loadProfile(sessionToken: token.jwt);
+      final access = kitchenFeatureAccessFromStatus(profile?.approvalStatus);
+      if (access != KitchenFeatureAccess.ready) {
+        if (!mounted) return;
+        setState(() {
+          _access = access;
+          _orders.clear();
+          _nextCursor = null;
+          _hasMore = false;
+          _initialLoading = false;
+          _error = null;
+        });
+        return;
+      }
+
+      final page = await _orderService.loadKitchenOrders(
+        sessionToken: token.jwt,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _access = KitchenFeatureAccess.ready;
+        _orders
+          ..clear()
+          ..addAll(page.orders);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _initialLoading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _initialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    await _loadInitial(quiet: true);
+  }
+
+  Future<void> _loadMore() async {
+    if (!_hasMore || _loadingMore || _nextCursor == null) return;
+    setState(() => _loadingMore = true);
+    try {
+      final authState = ClerkAuth.of(context, listen: false);
+      final token = await authState.sessionToken();
+      final page = await _orderService.loadKitchenOrders(
+        sessionToken: token.jwt,
+        cursor: _nextCursor,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _mergeOrders(page.orders);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+    }
+  }
+
+  void _mergeOrders(List<KitchenOrderSummary> incoming) {
+    final seen = {for (final order in _orders) order.id};
+    for (final order in incoming) {
+      if (seen.add(order.id)) {
+        _orders.add(order);
+      }
+    }
+  }
+
+  Future<void> _reloadAfterAction() => _loadInitial(quiet: true);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('طلبات المطبخ')),
-      body: FutureBuilder<_OrdersPageData>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const ListScreenSkeleton(titleWidth: 140);
-          }
+      body: _buildBody(context),
+    );
+  }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: TakkaErrorRetry(
-                onRetry: () {
-                  setState(() => _future = _load());
-                },
-              ),
-            );
-          }
+  Widget _buildBody(BuildContext context) {
+    if (_initialLoading) {
+      return const ListScreenSkeleton(titleWidth: 140);
+    }
 
-          final page = snapshot.data!;
-          if (page.access != KitchenFeatureAccess.ready) {
-            return KitchenFeatureGate(access: page.access);
-          }
+    if (_error != null && _orders.isEmpty && _access == null) {
+      return Center(
+        child: TakkaErrorRetry(onRetry: _loadInitial),
+      );
+    }
 
-          final orders = page.orders ?? const [];
-          if (orders.isEmpty) {
-            return const Center(
+    final access = _access;
+    if (access != null && access != KitchenFeatureAccess.ready) {
+      return KitchenFeatureGate(access: access);
+    }
+
+    if (_orders.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 180),
+            Center(
               child: Text(
                 'لا توجد طلبات للمطبخ بعد.',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        itemCount: _orders.length + (_loadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= _orders.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             );
           }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              final future = _load();
-              setState(() => _future = future);
-              await future;
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: orders
-                  .map(
-                    (order) => Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    order.orderNumber,
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                _KitchenStatusChip(status: order.status),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Text('العميل: ${order.customerName}'),
-                            Text(
-                              order.customerPhone.isNotEmpty
-                                  ? 'هاتف التسجيل: ${order.customerPhone}'
-                                  : 'هاتف التسجيل: غير متوفر',
-                            ),
-                            if (order.customerContactPhone != null &&
-                                order.customerContactPhone!.isNotEmpty)
-                              Text(
-                                'هاتف تواصل آخر: ${order.customerContactPhone}',
-                              ),
-                            if (order.addressLine != null)
-                              Text('العنوان: ${order.addressLine}'),
-                            if (order.deliveryType == 'DELIVERY' &&
-                                order.deliveryLatitude != null &&
-                                order.deliveryLongitude != null) ...[
-                              const SizedBox(height: 10),
-                              FilledButton.icon(
-                                onPressed: () async {
-                                  final url = googleMapsShareUrl(
-                                    order.deliveryLatitude!,
-                                    order.deliveryLongitude!,
-                                  );
-                                  await Clipboard.setData(
-                                    ClipboardData(text: url),
-                                  );
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'تم نسخ رابط موقع العميل (Google Maps)',
-                                      ),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.copy_all_outlined),
-                                label: const Text('نسخ عنوان الخريطة'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE11D48),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        openExternalLink(
-                                          context,
-                                          Uri.parse(
-                                            googleMapsShareUrl(
-                                              order.deliveryLatitude!,
-                                              order.deliveryLongitude!,
-                                            ),
-                                          ),
-                                          failureMessage:
-                                              mapsLinkFailureMessage,
-                                        );
-                                      },
-                                      icon: const Icon(Icons.map_outlined),
-                                      label: const Text('عرض على الخريطة'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () async {
-                                        final text =
-                                            order.addressLine
-                                                    ?.trim()
-                                                    .isNotEmpty ==
-                                                true
-                                            ? order.addressLine!
-                                            : formatCoords(
-                                                order.deliveryLatitude!,
-                                                order.deliveryLongitude!,
-                                              );
-                                        await Clipboard.setData(
-                                          ClipboardData(text: text),
-                                        );
-                                        if (!context.mounted) return;
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('تم نسخ العنوان'),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.copy_outlined),
-                                      label: const Text('نسخ العنوان'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            if (order.customerNotes != null &&
-                                order.customerNotes!.trim().isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF8E1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'ملاحظات العميل: ${order.customerNotes}',
-                                  style: const TextStyle(height: 1.45),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 10),
-                            ...order.items.map(
-                              (item) => Text(
-                                '${item.itemName}${item.sizeName != null ? ' - ${item.sizeName}' : ''} × ${item.quantity}'
-                                '${item.customerNote != null && item.customerNote!.isNotEmpty ? '\n  ملاحظة: ${item.customerNote}' : ''}',
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'الإجمالي: ${order.totalAmount.toStringAsFixed(0)} ج.م',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (order.latestDepositProof != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'إثبات العربون: ${order.latestDepositProof!.imageUrl}',
-                              ),
-                              if (order
-                                  .latestDepositProof!
-                                  .reviewStatus
-                                  .isNotEmpty)
-                                Text(
-                                  'حالة المراجعة: ${order.latestDepositProof!.reviewStatus}',
-                                ),
-                            ],
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _buildActions(order),
-                            ),
-                          ],
+          final order = _orders[index];
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          order.orderNumber,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
+                      _KitchenStatusChip(status: order.status),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text('العميل: ${order.customerName}'),
+                  Text(
+                    order.customerPhone.isNotEmpty
+                        ? 'هاتف التسجيل: ${order.customerPhone}'
+                        : 'هاتف التسجيل: غير متوفر',
+                  ),
+                  if (order.customerContactPhone != null &&
+                      order.customerContactPhone!.isNotEmpty)
+                    Text(
+                      'هاتف تواصل آخر: ${order.customerContactPhone}',
                     ),
-                  )
-                  .toList(),
+                  if (order.addressLine != null)
+                    Text('العنوان: ${order.addressLine}'),
+                  if (order.deliveryType == 'DELIVERY' &&
+                      order.deliveryLatitude != null &&
+                      order.deliveryLongitude != null) ...[
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        final url = googleMapsShareUrl(
+                          order.deliveryLatitude!,
+                          order.deliveryLongitude!,
+                        );
+                        await Clipboard.setData(ClipboardData(text: url));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'تم نسخ رابط موقع العميل (Google Maps)',
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_all_outlined),
+                      label: const Text('نسخ عنوان الخريطة'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFE11D48),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              openExternalLink(
+                                context,
+                                Uri.parse(
+                                  googleMapsShareUrl(
+                                    order.deliveryLatitude!,
+                                    order.deliveryLongitude!,
+                                  ),
+                                ),
+                                failureMessage: mapsLinkFailureMessage,
+                              );
+                            },
+                            icon: const Icon(Icons.map_outlined),
+                            label: const Text('عرض على الخريطة'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final text =
+                                  order.addressLine?.trim().isNotEmpty == true
+                                  ? order.addressLine!
+                                  : formatCoords(
+                                      order.deliveryLatitude!,
+                                      order.deliveryLongitude!,
+                                    );
+                              await Clipboard.setData(
+                                ClipboardData(text: text),
+                              );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('تم نسخ العنوان'),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.copy_outlined),
+                            label: const Text('نسخ العنوان'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (order.customerNotes != null &&
+                      order.customerNotes!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'ملاحظات العميل: ${order.customerNotes}',
+                        style: const TextStyle(height: 1.45),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  ...order.items.map(
+                    (item) => Text(
+                      '${item.itemName}${item.sizeName != null ? ' - ${item.sizeName}' : ''} × ${item.quantity}'
+                      '${item.customerNote != null && item.customerNote!.isNotEmpty ? '\n  ملاحظة: ${item.customerNote}' : ''}',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'الإجمالي: ${order.totalAmount.toStringAsFixed(0)} ج.م',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  if (order.latestDepositProof != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'إثبات العربون: ${order.latestDepositProof!.imageUrl}',
+                    ),
+                    if (order.latestDepositProof!.reviewStatus.isNotEmpty)
+                      Text(
+                        'حالة المراجعة: ${order.latestDepositProof!.reviewStatus}',
+                      ),
+                  ],
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _buildActions(order),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -355,7 +453,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                 orderId: order.id,
                 deliveryFee: deliveryFee,
               );
-              setState(() => _future = _load());
+              await _reloadAfterAction();
             } catch (error) {
               _showError(error);
             }
@@ -378,7 +476,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                 orderId: order.id,
                 reason: reason,
               );
-              setState(() => _future = _load());
+              await _reloadAfterAction();
             } catch (error) {
               _showError(error);
             }
@@ -396,7 +494,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                 sessionToken: token.jwt,
                 orderId: order.id,
               );
-              setState(() => _future = _load());
+              await _reloadAfterAction();
             } catch (error) {
               _showError(error);
             }
@@ -414,7 +512,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                 sessionToken: token.jwt,
                 orderId: order.id,
               );
-              setState(() => _future = _load());
+              await _reloadAfterAction();
             } catch (error) {
               _showError(error);
             }
@@ -434,7 +532,7 @@ class _KitchenOrdersScreenState extends State<KitchenOrdersScreen> {
                   orderId: order.id,
                   nextStatus: nextStatus,
                 );
-                setState(() => _future = _load());
+                await _reloadAfterAction();
               } catch (error) {
                 _showError(error);
               }
@@ -843,11 +941,4 @@ class _KitchenChatSheetState extends State<_KitchenChatSheet> {
       ),
     );
   }
-}
-
-class _OrdersPageData {
-  const _OrdersPageData({required this.access, this.orders});
-
-  final KitchenFeatureAccess access;
-  final List<KitchenOrderSummary>? orders;
 }
