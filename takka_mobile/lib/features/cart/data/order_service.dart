@@ -75,7 +75,9 @@ class OrderService {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to create address: ${response.body}');
+      throw Exception(
+        _errorText(_decodeMap(response.body), 'تعذر حفظ العنوان.'),
+      );
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -134,6 +136,49 @@ class OrderService {
       orderNumber: json['orderNumber']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
     );
+  }
+
+  Future<CheckoutQuote> quoteCheckout({
+    required String sessionToken,
+    required String kitchenId,
+    required String deliveryType,
+    String? customerAddressId,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
+    required List<CartItem> items,
+  }) async {
+    final response = await _send(http.post(
+      _buildUri('/api/checkout/quote'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $sessionToken',
+      },
+      body: jsonEncode({
+        'kitchenId': kitchenId,
+        'deliveryType': deliveryType,
+        'customerAddressId': customerAddressId,
+        'deliveryLatitude': deliveryLatitude,
+        'deliveryLongitude': deliveryLongitude,
+        'items': items
+            .map(
+              (item) => {
+                'menuItemId': item.menuItemId,
+                'menuItemSizeId': item.menuItemSizeId,
+                'quantity': item.quantity,
+                'customerNote': item.customerNote,
+                'expectedUnitPrice': item.unitPrice,
+                'expectedDepositAmount': item.depositAmount,
+              },
+            )
+            .toList(),
+      }),
+    ));
+
+    final json = _decodeMap(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorText(json, 'تعذر مراجعة أسعار السلة.'));
+    }
+    return CheckoutQuote.fromJson(json);
   }
 
   Future<List<CustomerOrderSummary>> loadMyOrders({
@@ -526,6 +571,88 @@ class CustomerAddress {
   final bool isDefault;
   final double? latitude;
   final double? longitude;
+}
+
+class CheckoutQuoteLine {
+  const CheckoutQuoteLine({
+    required this.available,
+    required this.unitPrice,
+    required this.depositAmount,
+    required this.priceChanged,
+    required this.depositChanged,
+  });
+
+  factory CheckoutQuoteLine.fromJson(Map<String, dynamic> json) {
+    return CheckoutQuoteLine(
+      available: json['available'] == true,
+      unitPrice: (json['unitPrice'] as num?)?.toDouble(),
+      depositAmount: (json['depositAmount'] as num?)?.toDouble(),
+      priceChanged: json['priceChanged'] == true,
+      depositChanged: json['depositChanged'] == true,
+    );
+  }
+
+  final bool available;
+  final double? unitPrice;
+  final double? depositAmount;
+  final bool priceChanged;
+  final bool depositChanged;
+}
+
+class CheckoutQuoteChange {
+  const CheckoutQuoteChange({
+    required this.kind,
+    required this.message,
+  });
+
+  factory CheckoutQuoteChange.fromJson(Map<String, dynamic> json) {
+    return CheckoutQuoteChange(
+      kind: json['kind']?.toString() ?? '',
+      message: json['message']?.toString() ?? '',
+    );
+  }
+
+  final String kind;
+  final String message;
+}
+
+class CheckoutQuote {
+  const CheckoutQuote({
+    required this.orderable,
+    required this.blockingError,
+    required this.lines,
+    required this.changes,
+  });
+
+  factory CheckoutQuote.fromJson(Map<String, dynamic> json) {
+    return CheckoutQuote(
+      orderable: json['orderable'] == true,
+      blockingError: json['blockingError']?.toString(),
+      lines: (json['lines'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => CheckoutQuoteLine.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
+      changes: (json['changes'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => CheckoutQuoteChange.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  final bool orderable;
+  final String? blockingError;
+  final List<CheckoutQuoteLine> lines;
+  final List<CheckoutQuoteChange> changes;
+
+  bool get needsReview => !orderable || changes.isNotEmpty;
 }
 
 class OrderCreationResult {
