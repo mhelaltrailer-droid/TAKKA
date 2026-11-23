@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { districtSortOrder } from "@/lib/district-order";
 import { assertObourLocation } from "@/lib/districts";
 import { OBOUR_CITY_NAME } from "@/lib/obour-areas";
+import { storedCoordinatesError } from "@/lib/service-area-store";
 
 type AddressPayload = {
   label: string;
@@ -59,6 +60,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: locationError }, { status: 400 });
     }
 
+    const latitude =
+      typeof payload.latitude === "number" ? payload.latitude : null;
+    const longitude =
+      typeof payload.longitude === "number" ? payload.longitude : null;
+    const coordinateError = await storedCoordinatesError(latitude, longitude);
+    if (coordinateError) {
+      return NextResponse.json({ error: coordinateError }, { status: 400 });
+    }
+
     const region = await db.region.upsert({
       where: {
         cityName_regionName: {
@@ -95,10 +105,8 @@ export async function POST(request: Request) {
         regionId: region.id,
         addressLine: payload.addressLine.trim(),
         landmark: payload.landmark?.trim() || null,
-        latitude:
-          typeof payload.latitude === "number" ? payload.latitude : null,
-        longitude:
-          typeof payload.longitude === "number" ? payload.longitude : null,
+        latitude,
+        longitude,
         isDefault: Boolean(payload.isDefault),
       },
       include: {

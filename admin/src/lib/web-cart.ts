@@ -225,6 +225,58 @@ export function updateWebCartQuantity(itemId: string, quantity: number) {
   });
 }
 
+export function applyWebCartQuote(
+  lines: Array<{
+    available?: boolean;
+    unitPrice?: number | null;
+    depositAmount?: number | null;
+  }>,
+) {
+  const current = readStorage();
+  if (lines.length !== current.items.length) {
+    return false;
+  }
+
+  let changed = false;
+  const items: WebCartItem[] = [];
+  current.items.forEach((item, index) => {
+    const line = lines[index];
+    if (!line?.available || typeof line.unitPrice !== "number") {
+      changed = true;
+      return;
+    }
+    const deposit =
+      typeof line.depositAmount === "number"
+        ? line.depositAmount
+        : item.depositAmount;
+    if (item.unitPrice !== line.unitPrice || item.depositAmount !== deposit) {
+      changed = true;
+    }
+    items.push({
+      ...item,
+      unitPrice: line.unitPrice,
+      depositAmount: deposit,
+    });
+  });
+
+  if (!changed) {
+    return false;
+  }
+
+  const keepKitchen = items.length > 0;
+  writeStorage({
+    kitchenId: keepKitchen ? current.kitchenId : null,
+    kitchenName: keepKitchen ? current.kitchenName : null,
+    kitchenSlug: keepKitchen ? current.kitchenSlug : null,
+    kitchenLatitude: keepKitchen ? current.kitchenLatitude : null,
+    kitchenLongitude: keepKitchen ? current.kitchenLongitude : null,
+    kitchenAddressLine: keepKitchen ? current.kitchenAddressLine : null,
+    kitchenRegionLabel: keepKitchen ? current.kitchenRegionLabel : null,
+    items,
+  });
+  return true;
+}
+
 export function webCartTotals(items: WebCartItem[]) {
   return items.reduce(
     (acc, item) => {

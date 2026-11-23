@@ -44,11 +44,30 @@ There is no root `README.md`. Planning docs live at the repo root (`PRD.MD`, `Te
 
 ### Prisma models (current)
 
-`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`.
+`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`, `ServiceArea`.
 
 Enums include `UserRole`, `ApprovalStatus`, `AvailabilityStatus` (`OPEN`, `BUSY`, `CLOSED`), `KitchenSuspensionLevel` (`LEVEL_1`, `LEVEL_2`), `KitchenResponseKind`, `DeliveryType`, `OrderReadiness`, `OrderStatus`, `PaymentType`, and others in the same schema file. A `DeliveryType` enum already exists; a full courier/delivery feature is **not** built yet (see decisions and Next steps).
 
 Demo kitchens are marked internally with `isDemo` so they can be removed in one command before real customers arrive. Scripts: `npm run seed:demo` and `npm run seed:demo:remove` in `admin/`. See `docs/demo-data.md`. Existing media in the database was test data and may be deleted later.
+
+### Database indexes (common query paths)
+
+Additive `@@index` entries only (safe for `prisma db push`). Postgres does not auto-index FKs.
+
+| Model | Index | Serves |
+|---|---|---|
+| `CustomerAddress` | `[customerId]` | Address list / counts by customer |
+| `Kitchen` | `[approvalStatus, cityName]` | Discovery + admin pending by city |
+| `Kitchen` | `[regionId]` | FK / district merge joins |
+| `MenuItem` | `[kitchenId, isAvailable, approvalStatus]` | Nested kitchen menu lists |
+| `MenuItem` | `[kitchenId, isDishOfTheDay]` | Dish-of-the-day lookups |
+| `Order` | `[customerId, createdAt]` | Customer order history |
+| `Order` | `[kitchenId, createdAt]` | Kitchen inbox + date-range stats |
+| `OrderMessage` | `[orderId, sentAt]` | Chat thread load (API sorts by `sentAt`) |
+| `Review` | `[kitchenId, createdAt]` | Kitchen reviews + audit ranges |
+| `Notification` | `[userId, createdAt]` | In-app notification inbox |
+
+Skipped: `Order[kitchenId, status]` (no hot filter path; `kitchenId` already leads another index). Do not rename/remove columns when adding indexes.
 
 ---
 
@@ -67,7 +86,7 @@ Both services: Node, `rootDir` = `admin`, branch `main`, region Oregon, **free**
 
 On 18 Nov 2026 afternoon, a TAKKA-admin deploy failed with a Turbopack error resolving the Cairo Google font (`@vercel/turbopack-next/internal/font/google/font`). A plain retry was not enough. A deploy with **`clearCache=true`** went live at **3:35 PM Africa/Cairo (UTC+2)**. If that font error appears again, retry with a cache-clearing deploy rather than only rebuilding.
 
-Free Render services sleep. UptimeRobot pings about every 5 minutes. Do not assume a paid Render plan.
+UptimeRobot pings `/api/health` about every 5 minutes, which keeps the free services awake. That is fine for the pilot. Free instance hours are shared per Render workspace and may run out mid-month; do not assume a paid plan. See §8.2 for what should be paid before public launch.
 
 There is **no** `NEXT_PUBLIC_TAKKA_SURFACE` env var on these services. Do not add it unless the owner asks.
 
@@ -156,7 +175,7 @@ What the merged R2 work does:
 - Domain purchase is postponed.
 - Kitchen optional signup papers (logo / ID / InstaPay) are intentionally optional at first.
 - Demo kitchens: one per neighborhood, three full items each, look real to users, flagged `isDemo` internally.
-- Prefers Cursor Auto for coding agents when credits allow. If Auto is unavailable, use Grok 4.7. Warn the owner before any request that would consume a lot of usage.
+- Cursor cloud agents must use the Auto model only. If Auto is unavailable, do not fall back to another model — stop and tell the owner. Give a usage estimate and get approval before any heavy work. Prefer small single-purpose PRs (see §9).
 - Merges need the owner's approval. Do not merge PRs yourself.
 - **Deposits are not a conflict with the 22 Nov 2026 competitor notes.** Takka already records transfer deposits on `DepositProof`. In those notes, «cash outside the app» means delivery/courier money only, not the deposit. See `docs/replica/summary.md`.
 
@@ -180,9 +199,45 @@ Decided and in this PR (do not treat it as an open proposal). Values below are t
 
 ---
 
-## 7.2 Order history cursor pagination (2026-11-23)
+## 7.2 Checkout quote, delivery geofence, and persistent cart (2026-11-22)
+
+Decided and in this PR. Do not hardcode a replacement for the service-area numbers or the out-of-area sentence.
+
+- **`POST /api/checkout/quote`** takes the same body as `POST /api/orders` (`kitchenId`, `deliveryType`, `customerAddressId`, delivery coordinates, `items[]` of `menuItemId`, `menuItemSizeId`, `quantity`). Each line may also send `expectedUnitPrice` and `expectedDepositAmount` for comparison only. Those fields are never the charged price. The quote uses `pricing.ts` and `selectDealUnitPrice` in `deals.ts` (the same choice as order creation, without decrementing flash or dish-of-the-day stock). Response: per-line `unitPrice`, `depositAmount`, `availability` (`available` / `unavailable` / `inactive`), `subtotal`, `deposit`, `changes[]`, and `kitchen` (`availabilityStatus` `OPEN` / `BUSY` / `CLOSED`, `suspended`, `orderable`). Busy, Closed, suspended, and unapproved kitchens are not orderable, and so is a cart with an unavailable or inactive line. A price or deposit change alone leaves `orderable` true; the client still must confirm again.
+- **Confirm flow.** Flutter cart (`cart_screen.dart`, `CartStore`, `order_service.dart`) and the web cart (`web-cart-checkout.tsx`) call the quote before creating the order. If anything changed or the kitchen/location is not orderable, they show an Arabic dialog, update the cart from the quote, and require another confirm. Opening the cart also revalidates a restored cart (pickup quote, so a missing pin is not an error yet).
+- **Service area.** New singleton table `ServiceArea` (id `default`): `label`, `centerLatitude`, `centerLongitude`, `radiusKm`, `outOfAreaMessage`. No column defaults. The first coordinate check seeds مدينة العبور at about `30.226988, 31.483791` with radius **10 km** (covers the city outline) and the Arabic rejection sentence. Edit at `/dashboard/admin/service-area`. Order create, the quote, and address save/update reject coordinates outside that circle with the saved sentence. Pickup skips the check. Missing delivery pins still use the existing “pin required” error.
+- **Persistent app cart.** `CartStore` writes `takka_cart_v1` in `shared_preferences` and reloads it at startup. App version was not bumped. Web cart was already in `localStorage`.
+- **Map pin.** The Flutter delivery picker marker drags (drag updates the pin; tap-to-move stays). The web Leaflet marker was already draggable.
+- **Deploy.** TAKKA-admin’s `prisma db push` creates `ServiceArea`. Do not add `db push` to TAKKA-App.
+
+---
+
+## 7.3 Checkout/cart audit (read-only, 2026-11-22)
+
+Read-only review of cart and checkout as they stood on 22 Nov 2026. PR #11 covers the pre-confirm quote, service-area geofence, draggable pin, and persistent cart (§7.2). The gaps below are **not in PR #11 and are not approved**.
+
+**What exists today**
+
+- The server recomputes prices from the live menu; it does not charge client-sent prices. Unavailable items are rejected.
+- The app cart was in-memory (lost when the app closed) until PR #11; it is now persisted.
+- There is no checkout session. The order is created directly with `POST /api/orders`.
+- Saved addresses exist: a returning user picks one, a first-time user enters a new address (Obour district + details).
+- The delivery fee is entered manually by the kitchen at accept, with no cap. It is not calculated automatically.
+- The review screen shows subtotal + deposit only (no discount line — the discount is already in the item price; no delivery line or final total).
+
+**Still open (not in PR #11, not approved)**
+
+- `Idempotency-Key` on `POST /api/orders`, so a retry after a dropped response does not create a duplicate order.
+- `customerAddressId` ownership check (the server does not verify the address belongs to the current customer).
+- Duplicate `menuItemId` lines with different sizes are wrongly rejected.
+- An invalid or inactive `menuItemSizeId` silently falls back to the base price.
+- The 60% deposit cap is hardcoded; it should be admin-editable.
+- Delivery-fee calculation by distance (with the delivery project).
+
+## 7.4 Order history cursor pagination (2026-11-23)
 
 `GET /api/orders/my` and `GET /api/kitchen/orders` accept optional `cursor` (order id) and `limit` (default 20, max 50). Response is always `{ orders, nextCursor, hasMore }` — the same `orders` key Flutter already reads, so old builds stay compatible; without `cursor`/`limit` a safety cap of 50 applies. Kitchen lists always include **all active** orders on the first page and paginate only completed/cancelled/rejected history. Helper: `admin/src/lib/order-cursor-pagination.ts`. Web `/dashboard/orders` and Flutter `my_orders_screen` / `kitchen_orders_screen` follow the same rule.
+
 
 ---
 
@@ -195,12 +250,12 @@ Do not start the heavy build items without the owner. Warn before any high-usage
 3. **Facebook group** for Obour / kitchen recruitment (content only with owner approval; agents must not post).
 4. **Real release keystore** (see `docs/release-apk.md`). Current distribution is a temporary APK.
 5. **Custom domain + Clerk production** instance. Also plan how kitchens that signed up on the Clerk development instance are preserved.
-6. **Google Play** launch (customers). Play Console signup fee is a later owner step.
+6. **Google Play** launch (customers). Play Console is $25 one-time; new personal accounts also need a closed-testing period. See §8.2.
 7. Owner should fix or delete vault entry `5270388` (Takka admin login has the wrong password). Admin login currently works via Clerk email code.
 8. Package «قِدرة الحي» (weekly menu, limited portions + cutoff, pickup windows, group cook) — discussion only, not implemented. If the owner writes that phrase, bring up the four proposals. Details are in the launch log.
 9. Still open product questions: commission vs subscription, cancellation / deposit **refund** policy, hygiene requirements before activating a kitchen. Taking a deposit is not itself a conflict with the 22 Nov 2026 notes: Takka already stores `DepositProof` deposits, and «cash outside the app» in those notes means delivery/courier money only (`docs/replica/summary.md`).
 10. Gmail 2-Step Verification / App Password for join-kitchen alert email was still locked as of 2026-11-16; do not assume SMTP is live.
-11. Firebase project registration for `com.takka.app`, `google-services.json`, and `FIREBASE_SERVICE_ACCOUNT_JSON` on Render — after Google account unlock. FCM scaffolding is already in APK 1.0.1. See `docs/fcm-setup.md` and `docs/release-apk.md`.
+11. Firebase project registration for `com.takka.app`, `google-services.json`, and `FIREBASE_SERVICE_ACCOUNT_JSON` on Render — after Google account unlock. FCM scaffolding is already in APK 1.0.1. Approved in principle with the kitchen alert, but **postponed** until the domain is bought and the release keystore is created (see §8.2). See `docs/fcm-setup.md` and `docs/release-apk.md`.
 
 ---
 
@@ -213,7 +268,7 @@ These are **proposals**, not decisions. They do not override §7, §8, or §9. A
 1. **R2 rollout — done (18 Nov 2026).** Env vars are on both services, PR #7 is merged (`6c7dd1c`), and the image migration finished (2 copied, 2 database links updated, 0 failed). Keep `UPLOADTHING_TOKEN` until a few new uploads have been tested (see §6).
 2. **Real release keystore** before distributing any new APK to kitchens. Changing the signing key later forces kitchens to uninstall and reinstall. Back up the keystore in the owner's vault; if it is lost, the app cannot be updated. See `docs/release-apk.md`.
 3. **Join-kitchen alerts without waiting on Gmail:** the Gmail App Password is still locked (§8 item 10). Use the Telegram or webhook option already documented in `admin/.env.example`, or another email provider.
-4. **FCM push notifications** (§8 item 11): scaffolding is already in APK 1.0.1; what remains is the Firebase project, `google-services.json`, and Render vars so kitchens hear about new orders even when the app is closed. Pusher alone does not cover that. See `docs/fcm-setup.md`.
+4. **FCM push notifications** (§8 item 11): scaffolding is already in APK 1.0.1; what remains is the Firebase project, `google-services.json`, and Render vars so kitchens hear about new orders even when the app is closed. Pusher alone does not cover that. Approved in principle with the repeating kitchen alert, but **postponed** until the domain is bought and the release keystore is created (see §8.2). See `docs/fcm-setup.md`.
 
 **Phase 2: Product decisions before the first real order**
 
@@ -232,9 +287,9 @@ These are **proposals**, not decisions. They do not override §7, §8, or §9. A
 
 - Clerk production instance (needs the custom domain; see §8 item 5).
 - Privacy policy and terms of use (Google Play requires them).
-- Play Console registration. Check Google's current testing requirements for new developer accounts before fixing a launch date.
+- Play Console registration ($25 one-time). New personal accounts need a closed-testing period before a public listing. Check Google's current requirements before fixing a launch date.
 - Error monitoring on web and mobile (for example Sentry, which has a free tier).
-- Move off the Render free plan before real customers arrive: free services sleep, so the first request after idle is slow. Acceptable for the pilot, not for launch. Needs a working payment card (§4, §7).
+- Move off the Render free plan before real customers arrive. UptimeRobot keeps the services awake, but free instance hours are shared per workspace and may run out. Acceptable for the pilot, not for launch. At least TAKKA-App should move to Render Starter. Needs a working payment card (§4, §8.2).
 
 **Phase 5: Growth**
 
@@ -303,9 +358,9 @@ One account with multiple roles (proposal, needs a decision before the user base
 
 For kitchens:
 
-- **Loud, repeating sound alert** for new orders. Home kitchens are busy, and a missed order damages trust.
-- **Open/closed toggle, working hours, and temporary pause**, so nobody orders when the kitchen is unavailable.
-- **Preparation time per item** and a **daily cap on orders**, to prevent overload. This also supports the «قِدرة الحي» package.
+- **Loud, repeating sound alert** for new orders. Home kitchens are busy, and a missed order damages trust. Approved in principle with FCM (admin on/off and repeat duration), but **postponed** until the domain and release keystore are done (see §8.2).
+- **Open/Busy/Closed — done (PR #10, see §7.1).** Working hours are still open.
+- **Preparation time per item** does not exist. A **daily cap** exists only as `dishOfTheDayQty` for dish of the day, not for regular items or for a kitchen-wide daily order cap. Discuss with «قِدرة الحي».
 - **Quick-reply buttons** in order chat (for example "ready", "running 15 minutes late").
 
 For customers:
@@ -322,7 +377,23 @@ Trust and payment:
 - **No-show tracking:** after repeated no-shows, require a deposit from that customer.
 - **A stated time limit for resolving complaints** (for example 24 hours) and a written refund policy. The complaint flow itself is already in APK 1.0.1.
 
-Suggested priority if only five are chosen: (1) sound alert plus open/closed and working hours, (2) delivery confirmation code, (3) selective deposits, (4) one account with multiple roles, (5) scheduled orders.
+Suggested priority if only five are chosen: (1) sound alert plus working hours, (2) delivery confirmation code, (3) selective deposits, (4) one account with multiple roles, (5) scheduled orders.
+
+---
+
+## 8.2 Deferred decisions and paid-launch notes (2026-11-22)
+
+**FCM and the kitchen alert — postponed.** FCM push plus a loud, repeating kitchen alert for new orders (admin on/off and repeat duration) is approved in principle but **postponed** until the domain is bought and the release keystore is created. Do not start this build until then.
+
+**In-app update — discussed, not approved.** Proposed shape: a new-version banner, an update button that opens a direct APK link (GitHub Releases or R2; a Drive link is not suitable), and an admin-controlled forced update with a kill switch. Remove the self-download path when moving to Play Store (Play will not allow the app to install its own APK). This depends on the release keystore and is **not approved**.
+
+**Paid services before public launch** (estimates — verify current prices before paying; needs a working payment card, see §4):
+
+- **Render Starter** for TAKKA-App at least (about $7 per service per month). UptimeRobot already keeps the services awake, but free instance hours are shared per workspace and may run out mid-month. Fine for the pilot, not for public launch.
+- **Google Play Console:** $25 one-time. New personal accounts need a closed-testing period (about two weeks) before a public listing.
+- **Domain** (about $10–20 per year). Needed for Clerk production and a production R2 hostname.
+
+Free tiers are enough at first for Clerk, Cloudflare R2, Pusher, FCM, and Sentry. Neon paid (about $19/month) is optional, for longer backups.
 
 ---
 
@@ -336,7 +407,7 @@ Suggested priority if only five are chosen: (1) sound alert plus open/closed and
 - Do not run further production media migrations without approval. Dry-run / preview first.
 - Do not open WhatsApp, post to Facebook, email third parties, or publish anything without a fresh explicit approval naming the destination and the text.
 - Do not put `prisma db push` back into the TAKKA-App build command.
-- Batch work into one agent/PR when possible. Prefer the Auto model on Cursor when it is available. Warn before high-usage work.
+- Cursor cloud agents must use the Auto model only. If Auto is unavailable, do not fall back — stop and tell the owner. Give a usage estimate and get approval before any heavy work. Prefer small single-purpose PRs (PR #11 used about 8% of weekly usage).
 - Deliver APKs as Drive links when asked.
 
 ---
@@ -345,6 +416,9 @@ Suggested priority if only five are chosen: (1) sound alert plus open/closed and
 
 - Competitor notes summary (22 Nov 2026): `docs/replica/summary.md`
 - Kitchen order policy and audit (decided 22 Nov 2026, in PR): §7.1
+- Checkout quote / geofence / cart (in PR #11): §7.2; read-only audit and remaining gaps: §7.3
+- Order history cursor pagination (PR #13): §7.4
+- Deferred FCM/alert, in-app update, and paid-launch notes (22 Nov 2026): §8.2
 - Clerk sessions: `docs/clerk-session.md`
 - Demo data: `docs/demo-data.md`
 - FCM: `docs/fcm-setup.md`

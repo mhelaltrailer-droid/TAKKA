@@ -1,134 +1,39 @@
-import {
-  ApprovalStatus,
-  DeliveryType,
-  NotificationType,
-  Prisma,
-} from "@prisma/client";
+import { DeliveryType, NotificationType } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
+import { buildCheckoutQuote } from "@/lib/checkout-quote";
+import { parseCheckoutPayload } from "@/lib/checkout-quote-model";
 import { db } from "@/lib/db";
 import { sweepOverdueKitchenOrders } from "@/lib/kitchen-acceptance-sweep";
-import {
-  kitchenAcceptsOrders,
-  unavailableOrderError,
-} from "@/lib/kitchen-order-rules";
-import { resolveDealUnitPrice } from "@/lib/deals";
-import { effectiveCatalogPriceDecimal } from "@/lib/pricing";
 import { createNotification } from "@/lib/notifications";
 import {
   isValidEgyptianPhone,
   normalizeEgyptianPhone,
 } from "@/lib/phone";
-import { isValidLatLng } from "@/lib/maps";
 
-type CreateOrderItemInput = {
-  menuItemId: string;
-  quantity: number;
-  menuItemSizeId?: string;
-  customerNote?: string;
-};
-
-type CreateOrderPayload = {
-  kitchenId: string;
-  deliveryType: "pickup" | "delivery";
-  customerAddressId?: string;
-  customerNotes?: string;
-  customerContactPhone?: string;
-  deliveryLatitude?: number;
-  deliveryLongitude?: number;
-  items: CreateOrderItemInput[];
-};
-
-function toMoney(value: Prisma.Decimal | number) {
-  return new Prisma.Decimal(value).toDecimalPlaces(2);
+function readOptionalText(raw: unknown, key: string) {
+  if (!raw || typeof raw !== "object") return "";
+  const value = (raw as Record<string, unknown>)[key];
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuth();
     await sweepOverdueKitchenOrders();
-    const payload = (await request.json()) as CreateOrderPayload;
+    const raw = await request.json();
+    const parsed = parseCheckoutPayload(raw);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
 
-    if (!payload.kitchenId || !Array.isArray(payload.items) || !payload.items.length) {
+    const preview = await buildCheckoutQuote(parsed.value);
+    if (!preview.orderable) {
       return NextResponse.json(
-        { error: "بيانات الطلب غير مكتملة." },
-        { status: 400 },
+        { error: preview.blockingError },
+        { status: preview.httpStatus },
       );
-    }
-
-    const deliveryType =
-      payload.deliveryType === "delivery"
-        ? DeliveryType.DELIVERY
-        : DeliveryType.PICKUP;
-
-    const kitchen = await db.kitchen.findUnique({
-      where: {
-        id: payload.kitchenId,
-      },
-      select: {
-        id: true,
-        ownerUserId: true,
-        regionId: true,
-        availabilityStatus: true,
-        approvalStatus: true,
-        suspendedAt: true,
-      },
-    });
-
-    if (!kitchen) {
-      return NextResponse.json({ error: "المطبخ غير موجود." }, { status: 404 });
-    }
-
-    if (kitchen.approvalStatus !== ApprovalStatus.APPROVED) {
-      return NextResponse.json(
-        { error: "هذا المطبخ غير متاح للطلبات حاليًا." },
-        { status: 400 },
-      );
-    }
-
-    if (
-      !kitchenAcceptsOrders({
-        approvalStatus: kitchen.approvalStatus,
-        availabilityStatus: kitchen.availabilityStatus,
-        suspended: kitchen.suspendedAt != null,
-      })
-    ) {
-      return NextResponse.json(
-        {
-          error: unavailableOrderError({
-            availabilityStatus: kitchen.availabilityStatus,
-            suspended: kitchen.suspendedAt != null,
-          }),
-        },
-        { status: 400 },
-      );
-    }
-
-    if (deliveryType === DeliveryType.DELIVERY && !payload.customerAddressId) {
-      return NextResponse.json(
-        { error: "عنوان التوصيل مطلوب." },
-        { status: 400 },
-      );
-    }
-
-    let deliveryLatitude: number | null = null;
-    let deliveryLongitude: number | null = null;
-
-    if (deliveryType === DeliveryType.DELIVERY) {
-      if (
-        !isValidLatLng(payload.deliveryLatitude, payload.deliveryLongitude)
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "موقع التوصيل مطلوب. فعّل الموقع أو حدّد نقطة على الخريطة ثم أكّدها قبل إرسال الطلب.",
-          },
-          { status: 400 },
-        );
-      }
-      deliveryLatitude = Number(payload.deliveryLatitude);
-      deliveryLongitude = Number(payload.deliveryLongitude);
     }
 
     const customer = await db.user.findUnique({
@@ -147,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     let customerContactPhone: string | null = null;
-    const rawAlt = payload.customerContactPhone?.trim() ?? "";
+    const rawAlt = readOptionalText(raw, "customerContactPhone");
     if (rawAlt) {
       const normalized = normalizeEgyptianPhone(rawAlt);
       if (!isValidEgyptianPhone(normalized)) {
@@ -162,124 +67,17 @@ export async function POST(request: Request) {
       customerContactPhone = normalized;
     }
 
-    const requestedItemIds = payload.items.map((item) => item.menuItemId);
-
-    const menuItems = await db.menuItem.findMany({
-      where: {
-        id: {
-          in: requestedItemIds,
-        },
-        kitchenId: kitchen.id,
-        approvalStatus: "APPROVED",
-        OR: [
-          { isAvailable: true },
-          { isDishOfTheDay: true },
-          {
-            flashOffers: {
-              some: {
-                status: "ACTIVE",
-                endsAt: { gt: new Date() },
-                quantityLeft: { gt: 0 },
-              },
-            },
-          },
-        ],
-      },
-      include: {
-        sizes: {
-          where: {
-            isActive: true,
-          },
-        },
-      },
-    });
-
-    if (menuItems.length !== requestedItemIds.length) {
+    const quote = await buildCheckoutQuote(parsed.value, { commitDeals: true });
+    if (
+      !quote.orderable ||
+      !quote.kitchenId ||
+      !quote.regionId ||
+      !quote.kitchenOwnerUserId ||
+      quote.orderItems.length === 0
+    ) {
       return NextResponse.json(
-        { error: "بعض الأصناف غير متاحة أو لا تتبع هذا المطبخ." },
-        { status: 400 },
-      );
-    }
-
-    const orderItemsData: Array<{
-      menuItemId: string;
-      menuItemSizeId: string | null;
-      itemNameSnapshot: string;
-      sizeNameSnapshot: string | null;
-      unitPrice: Prisma.Decimal;
-      depositAmount: Prisma.Decimal;
-      quantity: number;
-      lineTotal: Prisma.Decimal;
-      customerNote: string | null;
-    }> = [];
-
-    for (const requestedItem of payload.items) {
-      const menuItem = menuItems.find((item) => item.id === requestedItem.menuItemId);
-
-      if (!menuItem) {
-        throw new Error("الصنف المطلوب غير موجود.");
-      }
-
-      const selectedSize = requestedItem.menuItemSizeId
-        ? menuItem.sizes.find((size) => size.id === requestedItem.menuItemSizeId)
-        : null;
-
-      const regularUnitPrice = selectedSize
-        ? effectiveCatalogPriceDecimal(
-            selectedSize.price,
-            selectedSize.discountedPrice,
-          )
-        : effectiveCatalogPriceDecimal(
-            menuItem.basePrice,
-            menuItem.discountedPrice,
-          );
-      const depositAmount = selectedSize?.depositAmount ?? menuItem.depositAmount;
-      const quantity = requestedItem.quantity;
-
-      if (!Number.isInteger(quantity) || quantity <= 0) {
-        throw new Error(`الكمية غير صحيحة للصنف "${menuItem.name}".`);
-      }
-
-      // Flash / dish-of-the-day apply to base item (no size); strikethrough remains basePrice.
-      const { unitPrice } = selectedSize
-        ? { unitPrice: regularUnitPrice }
-        : await resolveDealUnitPrice({
-            kitchenId: kitchen.id,
-            menuItemId: menuItem.id,
-            quantity,
-            regularUnitPrice,
-            isDishOfTheDay: menuItem.isDishOfTheDay,
-            dishOfTheDayPrice: menuItem.dishOfTheDayPrice,
-            dishOfTheDayQty: menuItem.dishOfTheDayQty,
-          });
-
-      orderItemsData.push({
-        menuItemId: menuItem.id,
-        menuItemSizeId: selectedSize?.id ?? null,
-        itemNameSnapshot: menuItem.name,
-        sizeNameSnapshot: selectedSize?.sizeName ?? null,
-        unitPrice,
-        depositAmount,
-        quantity,
-        lineTotal: unitPrice.mul(quantity),
-        customerNote: requestedItem.customerNote?.trim() || null,
-      });
-    }
-
-    const subtotalAmount = orderItemsData.reduce(
-      (sum, item) => sum.add(item.lineTotal),
-      new Prisma.Decimal(0),
-    );
-
-    const depositAmount = orderItemsData.reduce(
-      (sum, item) => sum.add(item.depositAmount.mul(item.quantity)),
-      new Prisma.Decimal(0),
-    );
-
-    if (depositAmount.gt(subtotalAmount.mul(0.6))) {
-      return NextResponse.json(
-        { error: "إجمالي العربون لا يجب أن يتجاوز 60% من قيمة الطلب." },
-        { status: 400 },
+        { error: quote.blockingError ?? "تعذر إنشاء الطلب." },
+        { status: quote.orderable ? 400 : quote.httpStatus },
       );
     }
 
@@ -287,38 +85,38 @@ export async function POST(request: Request) {
       data: {
         orderNumber: `TK-${Date.now()}`,
         customerId: user.appUserId,
-        kitchenId: kitchen.id,
-        deliveryType,
-        customerAddressId: payload.customerAddressId ?? null,
-        regionId: kitchen.regionId,
-        subtotalAmount: toMoney(subtotalAmount),
-        totalAmount: toMoney(subtotalAmount),
-        depositAmount: toMoney(depositAmount),
-        customerNotes: payload.customerNotes?.trim() || null,
+        kitchenId: quote.kitchenId,
+        deliveryType: quote.deliveryType,
+        customerAddressId:
+          quote.deliveryType === DeliveryType.DELIVERY
+            ? quote.customerAddressId
+            : null,
+        regionId: quote.regionId,
+        subtotalAmount: quote.subtotalAmount,
+        totalAmount: quote.subtotalAmount,
+        depositAmount: quote.depositAmount,
+        customerNotes: readOptionalText(raw, "customerNotes") || null,
         customerContactPhone,
-        deliveryLatitude,
-        deliveryLongitude,
+        deliveryLatitude: quote.deliveryLatitude,
+        deliveryLongitude: quote.deliveryLongitude,
         items: {
-          create: orderItemsData.map((item) => ({
+          create: quote.orderItems.map((item) => ({
             menuItemId: item.menuItemId,
             menuItemSizeId: item.menuItemSizeId,
             itemNameSnapshot: item.itemNameSnapshot,
             sizeNameSnapshot: item.sizeNameSnapshot,
-            unitPrice: toMoney(item.unitPrice),
-            depositAmount: toMoney(item.depositAmount),
+            unitPrice: item.unitPrice,
+            depositAmount: item.depositAmount,
             quantity: item.quantity,
-            lineTotal: toMoney(item.lineTotal),
+            lineTotal: item.lineTotal,
             customerNote: item.customerNote,
           })),
         },
       },
-      include: {
-        items: true,
-      },
     });
 
     await createNotification({
-      userId: kitchen.ownerUserId,
+      userId: quote.kitchenOwnerUserId,
       orderId: order.id,
       type: NotificationType.ORDER,
       title: "طلب جديد",

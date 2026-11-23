@@ -32,12 +32,20 @@ class _CartScreenState extends State<CartScreen> {
   Future<String?>? _registeredPhoneFuture;
   String? _selectedAddressId;
   DeliveryCoords? _deliveryCoords;
+  Future<void>? _restoreQuote;
+  var _pendingRestoreReview = false;
 
   @override
   void initState() {
     super.initState();
     _addressesFuture = _loadAddresses();
     _registeredPhoneFuture = _loadRegisteredPhone();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _restoreQuote = _revalidateRestoredCart();
+    });
   }
 
   @override
@@ -578,8 +586,98 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
+  Future<CheckoutQuote> _loadQuote({
+    required bool confirmDelivery,
+    required List<CartItem> items,
+  }) async {
+    final authState = ClerkAuth.of(context, listen: false);
+    final token = await authState.sessionToken();
+    return _orderService.quoteCheckout(
+      sessionToken: token.jwt,
+      kitchenId: _cart.kitchenId!,
+      deliveryType: confirmDelivery ? _deliveryType : 'pickup',
+      customerAddressId: confirmDelivery && _deliveryType == 'delivery'
+          ? _selectedAddressId
+          : null,
+      deliveryLatitude: confirmDelivery && _deliveryType == 'delivery'
+          ? _deliveryCoords?.latitude
+          : null,
+      deliveryLongitude: confirmDelivery && _deliveryType == 'delivery'
+          ? _deliveryCoords?.longitude
+          : null,
+      items: items,
+    );
+  }
+
+  bool _applyQuote(List<CartItem> snapshot, CheckoutQuote quote) {
+    if (quote.lines.length != snapshot.length) {
+      return false;
+    }
+    return _cart.applyQuoteLines(
+      itemIds: snapshot.map((item) => item.id).toList(),
+      lines: [
+        for (final line in quote.lines)
+          CartQuoteLineUpdate(
+            available: line.available,
+            unitPrice: line.unitPrice,
+            depositAmount: line.depositAmount,
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showQuoteDialog(CheckoutQuote quote) {
+    final lines = <String>[
+      if ((quote.blockingError ?? '').trim().isNotEmpty)
+        quote.blockingError!.trim(),
+      for (final change in quote.changes)
+        if (change.message.trim().isNotEmpty) change.message.trim(),
+      if (quote.changes.isNotEmpty)
+        'السلة اتحدثت. راجعها ثم أكّد الطلب مرة تانية.',
+    ];
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(quote.orderable ? 'مراجعة السلة' : 'مراجعة الطلب'),
+          content: SingleChildScrollView(
+            child: Text(lines.join('\n')),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('حسنًا'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _revalidateRestoredCart() async {
+    await _cart.ensureLoaded();
+    if (!mounted || _cart.kitchenId == null || _cart.items.isEmpty) {
+      return;
+    }
+    try {
+      final snapshot = List<CartItem>.from(_cart.items);
+      final quote = await _loadQuote(confirmDelivery: false, items: snapshot);
+      if (!mounted) {
+        return;
+      }
+      _applyQuote(snapshot, quote);
+      if (!quote.needsReview) {
+        return;
+      }
+      _pendingRestoreReview = true;
+      await _showQuoteDialog(quote);
+    } catch (_) {
+      // Confirm quotes again and surfaces the error there.
+    }
+  }
+
   Future<void> _submitOrder() async {
-    if (_cart.kitchenId == null || _cart.items.isEmpty) {
+    if (_isSubmitting || _cart.kitchenId == null || _cart.items.isEmpty) {
       return;
     }
 
@@ -638,8 +736,27 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      if (_restoreQuote != null) {
+        await _restoreQuote;
+        _restoreQuote = null;
+      }
+      if (_pendingRestoreReview) {
+        _pendingRestoreReview = false;
+        return;
+      }
+
       final authState = ClerkAuth.of(context, listen: false);
       final token = await authState.sessionToken();
+      final snapshot = List<CartItem>.from(_cart.items);
+      final quote = await _loadQuote(confirmDelivery: true, items: snapshot);
+      if (!mounted) {
+        return;
+      }
+      _applyQuote(snapshot, quote);
+      if (quote.needsReview) {
+        await _showQuoteDialog(quote);
+        return;
+      }
 
       final result = await _orderService.createOrder(
         sessionToken: token.jwt,
