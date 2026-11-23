@@ -425,6 +425,7 @@ class _KitchenMenuManagementScreenState
       final url = await _uploadService.pickAndUploadImage(
         sessionToken: token.jwt,
         purpose: 'menuItemImage',
+        context: context,
       );
 
       if (url != null && mounted) {

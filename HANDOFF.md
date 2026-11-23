@@ -44,7 +44,8 @@ There is no root `README.md`. Planning docs live at the repo root (`PRD.MD`, `Te
 
 ### Prisma models (current)
 
-`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`, `ServiceArea`.
+`User`, `Region`, `CustomerAddress`, `Kitchen`, `KitchenViewEvent`, `KitchenDocument`, `KitchenGalleryImage`, `KitchenPaymentMethod`, `MenuItem`, `FlashOffer`, `MenuItemSize`, `Order`, `OrderItem`, `DepositProof`, `OrderMessage`, `OrderIssue`, `Review`, `AdminAction`, `Notification`, `DevicePushToken`, `PromoBanner`, `FoodCategory`, `KitchenJoinLead`, `KitchenOrderPolicy`, `KitchenSuspensionRecord`, `ServiceArea`, `ImageDisplaySettings`.
+
 
 Enums include `UserRole`, `ApprovalStatus`, `AvailabilityStatus` (`OPEN`, `BUSY`, `CLOSED`), `KitchenSuspensionLevel` (`LEVEL_1`, `LEVEL_2`), `KitchenResponseKind`, `DeliveryType`, `OrderReadiness`, `OrderStatus`, `PaymentType`, and others in the same schema file. A `DeliveryType` enum already exists; a full courier/delivery feature is **not** built yet (see decisions and Next steps).
 
@@ -149,6 +150,14 @@ What the merged R2 work does:
 - Admin migration page: `/dashboard/admin/media` — Preview, then Execute batch (20 images per batch). Originals are not deleted. Non-UploadThing URLs (including demo) are left alone.
 
 **Image migration (done, 18 Nov 2026 afternoon):** 2 images copied, 2 database links updated, 0 failed, 0 remaining. The existing images were test data and will be deleted later. Keep `UPLOADTHING_TOKEN` until a few **new** uploads have been tested.
+
+### Images: compression, crop, enhance, watermark (2026-11-23)
+
+- **Compression:** all uploads resize to max long edge **1280px**, quality **~75**. Flutter (`image` package in an isolate + picker caps), web `upload-field` (canvas/`createImageBitmap` before presign), legacy Sharp path (`.resize({ fit: 'inside', withoutEnlargement: true })` + WebP q75).
+- **Uniform crop ratios:** menu items **4:3**, kitchen cover **16:9**, logo **1:1**. Documents / national ID / deposit proofs / chat: **resize only** (no crop, no enhance).
+- **Light enhance (Flutter food photos only):** mild brightness/contrast + slight sharpen; no hue/saturation shifts. Preview toggle «الصورة الأصلية / المحسّنة» before upload. Web skips enhance (resize+crop only).
+- **Watermark at display time only** (not burned into R2): Flutter `WatermarkedNetworkImage` + web `WatermarkedImage` — small semi-transparent «تكة» + kitchen name in a corner over menu/cover images.
+- **Admin settings** (singleton `ImageDisplaySettings`, `/dashboard/admin/image-settings`): `watermarkEnabled` (default true), `enhancementEnabled` (default true), `watermarkPosition` (`bottomLeft` default). Public: `GET /api/discovery/image-settings`.
 
 ---
 
@@ -418,6 +427,7 @@ Free tiers are enough at first for Clerk, Cloudflare R2, Pusher, FCM, and Sentry
 - Kitchen order policy and audit (decided 22 Nov 2026, in PR): §7.1
 - Checkout quote / geofence / cart (in PR #11): §7.2; read-only audit and remaining gaps: §7.3
 - Order history cursor pagination (PR #13): §7.4
+- Image compression, enhancement, and display watermark (PR #14): see “Images: compression, crop, enhance, watermark” under stack/models notes
 - Deferred FCM/alert, in-app update, and paid-launch notes (22 Nov 2026): §8.2
 - Clerk sessions: `docs/clerk-session.md`
 - Demo data: `docs/demo-data.md`

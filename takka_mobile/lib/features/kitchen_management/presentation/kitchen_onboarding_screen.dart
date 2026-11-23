@@ -953,6 +953,7 @@ class _KitchenOnboardingScreenState extends State<KitchenOnboardingScreen> {
       final url = await _uploadService.pickAndUploadImage(
         sessionToken: token.jwt,
         purpose: purpose,
+        context: context,
       );
 
       if (url != null && mounted) {
