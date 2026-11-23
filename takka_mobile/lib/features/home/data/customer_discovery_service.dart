@@ -110,20 +110,110 @@ class CustomerDiscoveryService {
       await _wakeApi();
     }
 
-    final kitchens = await loadNearbyKitchens(
-      sessionToken: token.isEmpty ? null : token,
-      regionName: regionName,
-      query: query,
-    );
-
-    return CustomerBootstrapData(
-      user: user,
-      kitchens: kitchens,
-    );
+    // Prefer lean feed; fall back to legacy city list for older backends.
+    try {
+      final page = await loadKitchenFeed(
+        sessionToken: token.isEmpty ? null : token,
+        regionName: regionName,
+        query: query,
+        limit: 50,
+      );
+      return CustomerBootstrapData(
+        user: user,
+        kitchens: page.items,
+      );
+    } catch (_) {
+      final kitchens = await loadNearbyKitchensLegacy(
+        sessionToken: token.isEmpty ? null : token,
+        regionName: regionName,
+        query: query,
+      );
+      return CustomerBootstrapData(
+        user: user,
+        kitchens: kitchens,
+      );
+    }
   }
 
-  /// Nearby kitchens = kitchens that registered in the customer's selected district.
+  /// Lean paginated discovery feed (server-side filters + top dishes).
+  Future<KitchenFeedPage> loadKitchenFeed({
+    String? sessionToken,
+    String? regionId,
+    String? regionName,
+    List<String>? regionNames,
+    String? category,
+    String? query,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{
+      'cityName': 'مدينة العبور',
+      'limit': '$limit',
+    };
+    if (regionId != null && regionId.trim().isNotEmpty) {
+      params['regionId'] = regionId.trim();
+    }
+    if (regionName != null && regionName.trim().isNotEmpty) {
+      params['regionName'] = regionName.trim();
+    }
+    final names = regionNames
+            ?.map((name) => name.trim())
+            .where((name) => name.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (names.isNotEmpty) {
+      params['regionNames'] = names.join(',');
+    }
+    if (category != null && category.trim().isNotEmpty) {
+      params['category'] = category.trim();
+    }
+    if (query != null && query.trim().isNotEmpty) {
+      params['q'] = query.trim();
+    }
+    if (cursor != null && cursor.trim().isNotEmpty) {
+      params['cursor'] = cursor.trim();
+    }
+
+    final headers = <String, String>{};
+    final token = sessionToken?.trim() ?? '';
+    if (token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await _getWithRetry(
+      _buildUri('/api/discovery/kitchens/feed').replace(queryParameters: params),
+      headers: headers,
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'تعذر تحميل المطابخ الآن. أعد المحاولة بعد لحظات.',
+      );
+    }
+
+    if (_looksLikeHtml(response.body)) {
+      throw Exception(
+        'تعذر تحميل المطابخ (استجابة غير صالحة من الخادم). تحقق من رابط الـ API.',
+      );
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return KitchenFeedPage.fromJson(json);
+  }
+
+  /// Legacy full list — kept for older APKs / feed fallback.
   Future<List<KitchenSummary>> loadNearbyKitchens({
+    String? sessionToken,
+    String? regionName,
+    String? query,
+  }) =>
+      loadNearbyKitchensLegacy(
+        sessionToken: sessionToken,
+        regionName: regionName,
+        query: query,
+      );
+
+  Future<List<KitchenSummary>> loadNearbyKitchensLegacy({
     String? sessionToken,
     String? regionName,
     String? query,
@@ -248,6 +338,28 @@ class CustomerBootstrapData {
   final List<KitchenSummary> kitchens;
 }
 
+class KitchenFeedPage {
+  const KitchenFeedPage({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  factory KitchenFeedPage.fromJson(Map<String, dynamic> json) {
+    return KitchenFeedPage(
+      items: (json['items'] as List<dynamic>? ?? const [])
+          .map((item) => KitchenSummary.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      nextCursor: json['nextCursor']?.toString(),
+      hasMore: json['hasMore'] == true,
+    );
+  }
+
+  final List<KitchenSummary> items;
+  final String? nextCursor;
+  final bool hasMore;
+}
+
 class MobileAppUser {
   const MobileAppUser({
     required this.userId,
@@ -309,6 +421,18 @@ class KitchenSummary {
             .map((item) => item.toString())
             .where((id) => id.isNotEmpty)
             .toList();
+    final matchingDishes =
+        (json['matchingDishes'] as List<dynamic>? ?? const [])
+            .map((item) {
+              if (item is Map<String, dynamic>) {
+                return item['name']?.toString() ?? '';
+              }
+              return '';
+            })
+            .where((name) => name.isNotEmpty)
+            .toList();
+    final displayNames =
+        matchingDishes.isNotEmpty ? matchingDishes : menuItemNames;
 
     return KitchenSummary(
       id: json['id']?.toString() ?? '',
@@ -324,7 +448,7 @@ class KitchenSummary {
       averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0,
       reviewsCount: (json['reviewsCount'] as num?)?.toInt() ?? 0,
       menuItemsCount: (json['menuItemsCount'] as num?)?.toInt() ?? 0,
-      menuItemNames: menuItemNames,
+      menuItemNames: displayNames,
       menuItemCategoryIds: menuItemCategoryIds,
       availabilityStatus: json['availabilityStatus']?.toString() ?? 'OPEN',
     );

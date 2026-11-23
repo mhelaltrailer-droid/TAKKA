@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/session_token.dart';
@@ -39,21 +41,41 @@ class CustomerHomeScreen extends StatefulWidget {
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+  static const _pageSize = 20;
+  static const _searchDebounce = Duration(milliseconds: 400);
+
   final _service = const CustomerDiscoveryService();
   final _searchController = TextEditingController();
-  Future<CustomerBootstrapData>? _bootstrapFuture;
-  Future<List<PromoSlide>>? _promosFuture;
+  final _scrollController = ScrollController();
+
+  MobileAppUser? _user;
   List<FoodCategory> _foodCategories = defaultFoodCategories;
   String _selectedDistrict = '';
   String _selectedCategory = '';
   String _searchQuery = '';
+  String _debouncedSearch = '';
+  Timer? _searchDebounceTimer;
+
+  List<KitchenSummary> _discoveryKitchens = const [];
+  List<KitchenSummary> _browseKitchens = const [];
+  String? _browseNextCursor;
+  var _browseHasMore = false;
+
+  var _initialLoading = true;
+  var _discoveryLoading = false;
+  var _browseLoading = false;
+  var _browseLoadingMore = false;
+  var _refreshing = false;
+  Object? _error;
+  Future<List<PromoSlide>>? _promosFuture;
 
   @override
   void initState() {
     super.initState();
-    _bootstrapFuture = _loadBootstrap();
+    _scrollController.addListener(_onScroll);
     _promosFuture = loadPromoSlides();
     _loadFoodCategories();
+    _bootstrap();
   }
 
   Future<void> _loadFoodCategories() async {
@@ -66,20 +88,232 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
   }
 
-  Future<CustomerBootstrapData> _loadBootstrap() async {
-    if (widget.isGuest) {
-      return _service.loadBootstrap(regionName: null);
+  void _onScroll() {
+    if (!_browseHasMore ||
+        _browseLoadingMore ||
+        _browseLoading ||
+        _initialLoading ||
+        _error != null) {
+      return;
     }
-    final jwt = await requireSessionJwt(context);
-    // Load city-wide kitchens once; nearby list is filtered locally by district.
-    return _service.loadBootstrap(
-      sessionToken: jwt,
-      regionName: null,
-    );
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 240) {
+      _loadMoreBrowse();
+    }
+  }
+
+  Future<String?> _sessionToken() async {
+    if (widget.isGuest) {
+      return null;
+    }
+    return requireSessionJwt(context);
+  }
+
+  String? _selectedCategoryId() {
+    if (_selectedCategory.isEmpty) {
+      return null;
+    }
+    for (final item in _foodCategories) {
+      if (item.label == _selectedCategory) {
+        return item.id;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _bootstrap() async {
+    setState(() {
+      _initialLoading = true;
+      _error = null;
+    });
+    try {
+      final token = await _sessionToken();
+      MobileAppUser user = MobileAppUser(
+        userId: '',
+        appUserId: '',
+        fullName: widget.displayName.isNotEmpty ? widget.displayName : 'مستخدم تكة',
+        role: 'customer',
+        email: null,
+        phoneNumber: null,
+      );
+      if (token != null && token.isNotEmpty) {
+        try {
+          user = await _service.loadMe(sessionToken: token);
+        } catch (_) {
+          // Keep browsing even if profile sync fails.
+        }
+      }
+
+      if (!mounted) return;
+      setState(() => _user = user);
+
+      await Future.wait([
+        _reloadDiscovery(token: token, rethrowErrors: true),
+        _reloadBrowse(token: token, rethrowErrors: true),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _initialLoading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _initialLoading = false;
+      });
+    }
+  }
+
+  /// Nearby list: district → adjacent districts → city-wide (server-side).
+  Future<void> _reloadDiscovery({
+    String? token,
+    bool rethrowErrors = false,
+  }) async {
+    if (mounted) {
+      setState(() => _discoveryLoading = true);
+    }
+    try {
+      final jwt = token ?? await _sessionToken();
+      final category = _selectedCategoryId();
+      List<KitchenSummary> items = const [];
+
+      if (_selectedDistrict.isNotEmpty) {
+        final inDistrict = await _service.loadKitchenFeed(
+          sessionToken: jwt,
+          regionName: _selectedDistrict,
+          category: category,
+          limit: _pageSize,
+        );
+        items = inDistrict.items;
+
+        if (items.isEmpty) {
+          final adjacent = getNearbyDistrictNames(_selectedDistrict);
+          if (adjacent.isNotEmpty) {
+            final nearby = await _service.loadKitchenFeed(
+              sessionToken: jwt,
+              regionNames: [_selectedDistrict, ...adjacent],
+              category: category,
+              limit: _pageSize,
+            );
+            items = nearby.items;
+          }
+        }
+      }
+
+      if (items.isEmpty) {
+        final city = await _service.loadKitchenFeed(
+          sessionToken: jwt,
+          category: category,
+          limit: _pageSize,
+        );
+        items = city.items;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _discoveryKitchens = items;
+        _discoveryLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _discoveryLoading = false);
+      if (rethrowErrors) {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _reloadBrowse({
+    String? token,
+    bool rethrowErrors = false,
+  }) async {
+    if (mounted) {
+      setState(() => _browseLoading = true);
+    }
+    try {
+      final jwt = token ?? await _sessionToken();
+      final page = await _service.loadKitchenFeed(
+        sessionToken: jwt,
+        query: _debouncedSearch.isEmpty ? null : _debouncedSearch,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _browseKitchens = page.items;
+        _browseNextCursor = page.nextCursor;
+        _browseHasMore = page.hasMore;
+        _browseLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _browseLoading = false);
+      if (rethrowErrors) {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _loadMoreBrowse() async {
+    if (!_browseHasMore || _browseLoadingMore) {
+      return;
+    }
+    final cursor = _browseNextCursor;
+    if (cursor == null || cursor.isEmpty) {
+      return;
+    }
+
+    setState(() => _browseLoadingMore = true);
+    try {
+      final jwt = await _sessionToken();
+      final page = await _service.loadKitchenFeed(
+        sessionToken: jwt,
+        query: _debouncedSearch.isEmpty ? null : _debouncedSearch,
+        cursor: cursor,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _browseKitchens = [..._browseKitchens, ...page.items];
+        _browseNextCursor = page.nextCursor;
+        _browseHasMore = page.hasMore;
+        _browseLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _browseLoadingMore = false);
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    final promos = loadPromoSlides();
+    setState(() => _promosFuture = promos);
+    try {
+      final token = await _sessionToken();
+      await Future.wait([
+        _reloadDiscovery(token: token),
+        _reloadBrowse(token: token),
+        promos,
+      ]);
+      if (!mounted) return;
+      setState(() => _error = null);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   Future<void> _requireRegistered(VoidCallback action) async {
@@ -95,111 +329,37 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       return;
     }
     setState(() => _selectedDistrict = district);
-  }
-
-  List<KitchenSummary> _nearbyKitchens(List<KitchenSummary> kitchens) {
-    var result = kitchens;
-
-    if (_selectedDistrict.isNotEmpty) {
-      result = kitchens
-          .where(
-            (kitchen) => kitchenMatchesDistrict(
-              kitchen.regionName,
-              _selectedDistrict,
-            ),
-          )
-          .toList();
-    }
-
-    return _filterByCategory(result);
-  }
-
-  List<KitchenSummary> _adjacentKitchens(List<KitchenSummary> kitchens) {
-    if (_selectedDistrict.isEmpty) {
-      return const [];
-    }
-
-    final adjacentNames = getNearbyDistrictNames(_selectedDistrict);
-    if (adjacentNames.isEmpty) {
-      return const [];
-    }
-
-    final adjacent = kitchens
-        .where(
-          (kitchen) => kitchenMatchesAnyDistrict(
-            kitchen.regionName,
-            adjacentNames,
-          ),
-        )
-        .toList();
-
-    return _filterByCategory(adjacent);
-  }
-
-  /// Cascade: district → adjacent → city-wide. No explanatory UI.
-  List<KitchenSummary> _discoveryKitchens(List<KitchenSummary> kitchens) {
-    if (_selectedDistrict.isEmpty) {
-      return _filterByCategory(kitchens);
-    }
-
-    final inDistrict = _nearbyKitchens(kitchens);
-    if (inDistrict.isNotEmpty) {
-      return inDistrict;
-    }
-
-    final adjacent = _adjacentKitchens(kitchens);
-    if (adjacent.isNotEmpty) {
-      return adjacent;
-    }
-
-    return _filterByCategory(kitchens);
-  }
-
-  List<KitchenSummary> _filterByCategory(List<KitchenSummary> kitchens) {
-    if (_selectedCategory.isEmpty) {
-      return kitchens;
-    }
-
-    FoodCategory? category;
-    for (final item in _foodCategories) {
-      if (item.label == _selectedCategory) {
-        category = item;
-        break;
-      }
-    }
-    if (category == null) {
-      return kitchens;
-    }
-
-    return kitchens
-        .where((kitchen) => kitchen.menuItemCategoryIds.contains(category!.id))
-        .toList();
-  }
-
-  List<KitchenSummary> _allKitchens(List<KitchenSummary> kitchens) {
-    final query = _searchQuery.trim();
-    if (query.isEmpty) {
-      return kitchens;
-    }
-
-    final needle = query.toLowerCase();
-    return kitchens.where((kitchen) {
-      if (kitchen.kitchenName.toLowerCase().contains(needle)) {
-        return true;
-      }
-      if ((kitchen.description ?? '').toLowerCase().contains(needle)) {
-        return true;
-      }
-      return kitchen.menuItemNames.any(
-        (name) => name.toLowerCase().contains(needle),
-      );
-    }).toList();
+    _reloadDiscovery();
   }
 
   void _onCategorySelected(String label) {
     setState(() {
       _selectedCategory = _selectedCategory == label ? '' : label;
     });
+    _reloadDiscovery();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(_searchDebounce, () {
+      final next = value.trim();
+      if (next == _debouncedSearch) {
+        return;
+      }
+      setState(() => _debouncedSearch = next);
+      _reloadBrowse();
+    });
+  }
+
+  void _clearSearch() {
+    _searchDebounceTimer?.cancel();
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _debouncedSearch = '';
+    });
+    _reloadBrowse();
   }
 
   @override
@@ -272,288 +432,286 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<CustomerBootstrapData>(
-              future: _bootstrapFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const CustomerHomeSkeleton(
-                    includeLocationPlaceholder: false,
-                  );
-                }
+            child: _buildBody(),
+          ),
+        ],
+      ),
+    );
+  }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: TakkaErrorRetry(
-                      message: widget.isGuest
-                          ? 'تعذر عرض المطابخ - اعد المحاولة'
-                          : '(حدث خطأ)',
-                      onRetry: () {
-                        setState(() {
-                          _bootstrapFuture = _loadBootstrap();
-                        });
-                      },
-                    ),
-                  );
-                }
+  Widget _buildBody() {
+    if (_initialLoading) {
+      return const CustomerHomeSkeleton(
+        includeLocationPlaceholder: false,
+      );
+    }
 
-                final data = snapshot.data!;
-                final discovery = _discoveryKitchens(data.kitchens);
-                final allKitchens = _allKitchens(data.kitchens);
+    if (_error != null &&
+        _discoveryKitchens.isEmpty &&
+        _browseKitchens.isEmpty) {
+      return Center(
+        child: TakkaErrorRetry(
+          message: widget.isGuest
+              ? 'تعذر عرض المطابخ - اعد المحاولة'
+              : '(حدث خطأ)',
+          onRetry: _bootstrap,
+        ),
+      );
+    }
 
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    final future = _loadBootstrap();
-                    final promos = loadPromoSlides();
-                    setState(() {
-                      _bootstrapFuture = future;
-                      _promosFuture = promos;
-                    });
-                    await Future.wait([future, promos]);
-                  },
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      FutureBuilder<List<PromoSlide>>(
-                        future: _promosFuture,
-                        builder: (context, promoSnapshot) {
-                          final slides =
-                              promoSnapshot.data ?? defaultPromoSlides;
-                          return PromoCarousel(slides: slides);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const DealsBrowseScreen(),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(18),
-                          child: Ink(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: const Color(0xFFFFB86B),
-                                width: 2,
-                              ),
-                              gradient: const LinearGradient(
-                                begin: Alignment.centerRight,
-                                end: Alignment.centerLeft,
-                                colors: [
-                                  Color(0xFFFFF7ED),
-                                  Color(0xFFECFDF5),
-                                ],
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '🔥 العروض',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        'كل العروض وأطباق اليوم في مدينة العبور',
-                                        style: TextStyle(
-                                          color: TakkaColors.muted,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.chevron_left_rounded,
-                                  color: Color(0xFFE67E22),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      NearbyDealsStrip(regionName: _selectedDistrict),
-                      FoodCategoriesStrip(
-                        categories: _foodCategories,
-                        selectedLabel: _foodCategories.any(
-                          (item) => item.label == _selectedCategory,
-                        )
-                            ? _selectedCategory
-                            : null,
-                        onSelect: _onCategorySelected,
-                      ),
-                      const SizedBox(height: 16),
-                      _WelcomeCard(
-                        title: widget.isGuest
-                            ? 'أهلًا بك كزائر'
-                            : 'أهلًا ${data.user.fullName}',
-                        description: widget.isGuest
-                            ? 'يمكنك استعراض المطابخ والأصناف والأسعار. للطلب أو أي خطوة أخرى سجّل كعميل.'
-                            : 'تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة.',
-                      ),
-                      if (!widget.embeddedInShell && !widget.isGuest) ...[
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const MyOrdersScreen(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.receipt_long_outlined),
-                          label: const Text('طلباتي'),
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const AddressesScreen(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.location_on_outlined),
-                          label: const Text('عناوين التوصيل'),
-                        ),
-                      ],
-                      if (widget.isGuest) ...[
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: () => showGuestSignUpPrompt(context),
-                          child: const Text('سجل الآن للمتابعة'),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Text(
-                        _selectedDistrict.isEmpty
-                            ? _selectedCategory.isEmpty
-                                ? 'المطابخ المتاحة'
-                                : 'المطابخ المتاحة · $_selectedCategory'
-                            : _selectedCategory.isEmpty
-                                ? 'مطابخ قريبة منك · $_selectedDistrict'
-                                : 'مطابخ قريبة · $_selectedDistrict · $_selectedCategory',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_selectedDistrict.isEmpty) ...[
-                        const _SelectDistrictHint(),
-                        const SizedBox(height: 12),
-                        if (discovery.isEmpty)
-                          const _EmptyAllKitchensState()
-                        else
-                          ...discovery.map(
-                            (kitchen) => _KitchenCard(
-                              kitchen: kitchen,
-                              isGuest: widget.isGuest,
-                            ),
-                          ),
-                      ] else if (discovery.isEmpty)
-                        const _EmptyAllKitchensState()
-                      else
-                        ...discovery.map(
-                          (kitchen) => _KitchenCard(
-                            kitchen: kitchen,
-                            isGuest: widget.isGuest,
-                          ),
-                        ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'استعراض المطابخ',
-                        style:
-                            Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'كل المطابخ المتاحة في العبور',
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _searchController,
-                        onChanged: (value) {
-                          setState(() => _searchQuery = value);
-                        },
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: 'ابحث في كل المطابخ',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: _searchQuery.isEmpty
-                              ? null
-                              : IconButton(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                  icon: const Icon(Icons.close_rounded),
-                                ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(999),
-                            borderSide: const BorderSide(
-                              color: TakkaColors.softLine,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(999),
-                            borderSide: const BorderSide(
-                              color: TakkaColors.softLine,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(999),
-                            borderSide: const BorderSide(
-                              color: TakkaColors.primary,
-                              width: 1.4,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (allKitchens.isEmpty)
-                        _EmptyAllKitchensState(searchQuery: _searchQuery)
-                      else
-                        ...allKitchens.map(
-                          (kitchen) => _KitchenCard(
-                            kitchen: kitchen,
-                            isGuest: widget.isGuest,
-                          ),
-                        ),
-                    ],
+    final displayName = _user?.fullName ?? widget.displayName;
+    final discovery = _discoveryKitchens;
+    final allKitchens = _browseKitchens;
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          FutureBuilder<List<PromoSlide>>(
+            future: _promosFuture,
+            builder: (context, promoSnapshot) {
+              final slides = promoSnapshot.data ?? defaultPromoSlides;
+              return PromoCarousel(slides: slides);
+            },
+          ),
+          const SizedBox(height: 16),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DealsBrowseScreen(),
                   ),
                 );
               },
+              borderRadius: BorderRadius.circular(18),
+              child: Ink(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFFFB86B),
+                    width: 2,
+                  ),
+                  gradient: const LinearGradient(
+                    begin: Alignment.centerRight,
+                    end: Alignment.centerLeft,
+                    colors: [
+                      Color(0xFFFFF7ED),
+                      Color(0xFFECFDF5),
+                    ],
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '🔥 العروض',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'كل العروض وأطباق اليوم في مدينة العبور',
+                            style: TextStyle(
+                              color: TakkaColors.muted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_left_rounded,
+                      color: Color(0xFFE67E22),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 16),
+          NearbyDealsStrip(regionName: _selectedDistrict),
+          FoodCategoriesStrip(
+            categories: _foodCategories,
+            selectedLabel: _foodCategories.any(
+              (item) => item.label == _selectedCategory,
+            )
+                ? _selectedCategory
+                : null,
+            onSelect: _onCategorySelected,
+          ),
+          const SizedBox(height: 16),
+          _WelcomeCard(
+            title: widget.isGuest
+                ? 'أهلًا بك كزائر'
+                : 'أهلًا $displayName',
+            description: widget.isGuest
+                ? 'يمكنك استعراض المطابخ والأصناف والأسعار. للطلب أو أي خطوة أخرى سجّل كعميل.'
+                : 'تاكل ايه؟ للمطابخ القريبة حسب حيك، واستعراض المطابخ لكل المطابخ المتاحة.',
+          ),
+          if (!widget.embeddedInShell && !widget.isGuest) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const MyOrdersScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('طلباتي'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AddressesScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.location_on_outlined),
+              label: const Text('عناوين التوصيل'),
+            ),
+          ],
+          if (widget.isGuest) ...[
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => showGuestSignUpPrompt(context),
+              child: const Text('سجل الآن للمتابعة'),
+            ),
+          ],
+          const SizedBox(height: 16),
+          Text(
+            _selectedDistrict.isEmpty
+                ? _selectedCategory.isEmpty
+                    ? 'المطابخ المتاحة'
+                    : 'المطابخ المتاحة · $_selectedCategory'
+                : _selectedCategory.isEmpty
+                    ? 'مطابخ قريبة منك · $_selectedDistrict'
+                    : 'مطابخ قريبة · $_selectedDistrict · $_selectedCategory',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 12),
+          if (_discoveryLoading && discovery.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_selectedDistrict.isEmpty) ...[
+            const _SelectDistrictHint(),
+            const SizedBox(height: 12),
+            if (discovery.isEmpty)
+              const _EmptyAllKitchensState()
+            else
+              ...discovery.map(
+                (kitchen) => _KitchenCard(
+                  kitchen: kitchen,
+                  isGuest: widget.isGuest,
+                ),
+              ),
+          ] else if (discovery.isEmpty)
+            const _EmptyAllKitchensState()
+          else
+            ...discovery.map(
+              (kitchen) => _KitchenCard(
+                kitchen: kitchen,
+                isGuest: widget.isGuest,
+              ),
+            ),
+          const SizedBox(height: 24),
+          Text(
+            'استعراض المطابخ',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'كل المطابخ المتاحة في العبور',
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            onChanged: _onSearchChanged,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'ابحث في كل المطابخ',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _searchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: _clearSearch,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(999),
+                borderSide: const BorderSide(
+                  color: TakkaColors.softLine,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(999),
+                borderSide: const BorderSide(
+                  color: TakkaColors.softLine,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(999),
+                borderSide: const BorderSide(
+                  color: TakkaColors.primary,
+                  width: 1.4,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_browseLoading && allKitchens.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (allKitchens.isEmpty)
+            _EmptyAllKitchensState(searchQuery: _debouncedSearch)
+          else ...[
+            ...allKitchens.map(
+              (kitchen) => _KitchenCard(
+                kitchen: kitchen,
+                isGuest: widget.isGuest,
+              ),
+            ),
+            if (_browseLoadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
         ],
       ),
     );
@@ -661,7 +819,8 @@ class _KitchenCard extends StatelessWidget {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => KitchenDetailsScreen(
-                kitchenIdOrSlug: kitchen.slug.isNotEmpty ? kitchen.slug : kitchen.id,
+                kitchenIdOrSlug:
+                    kitchen.slug.isNotEmpty ? kitchen.slug : kitchen.id,
                 title: kitchen.kitchenName,
                 isGuest: isGuest,
               ),
@@ -679,8 +838,9 @@ class _KitchenCard extends StatelessWidget {
                     radius: 24,
                     backgroundColor:
                         theme.colorScheme.primary.withValues(alpha: 0.12),
-                    backgroundImage:
-                        kitchen.logoUrl != null ? NetworkImage(kitchen.logoUrl!) : null,
+                    backgroundImage: kitchen.logoUrl != null
+                        ? NetworkImage(kitchen.logoUrl!)
+                        : null,
                     child: kitchen.logoUrl == null
                         ? Icon(
                             Icons.storefront_outlined,

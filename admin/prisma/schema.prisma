@@ -357,6 +357,8 @@ model MenuItem {
   @@index([kitchenId, isAvailable, approvalStatus])
   /// Dish-of-the-day lookups under a kitchen (or kitchenId IN …).
   @@index([kitchenId, isDishOfTheDay])
+  /// Discovery category filter: menuItems.some({ categoryId, available, approved }).
+  @@index([categoryId, isAvailable, approvalStatus])
 }
 
 /// Time-limited flash deal on a menu item (1–2 hours, limited qty).
@@ -470,6 +472,9 @@ model OrderItem {
   order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem         MenuItem      @relation(fields: [menuItemId], references: [id])
   menuItemSize     MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
+
+  /// Most-ordered dish ranking on the lean discovery feed.
+  @@index([menuItemId])
 }
 
 model DepositProof {
@@ -680,6 +685,18 @@ model ServiceArea {
   radiusKm         Float
   outOfAreaMessage String
   updatedAt        DateTime @updatedAt
+}
+
+/// Singleton row id = "default". Edited at /dashboard/admin/discovery-cache.
+/// In-memory TTL for GET /api/discovery/kitchens/feed (no Redis).
+/// Seeded from discovery-cache-settings.ts on first read; admin is source of truth after that.
+model DiscoveryCacheSettings {
+  id           String   @id
+  /// When false, every feed request hits the database.
+  cacheEnabled Boolean
+  /// Seconds to keep a feed page in the process memory map (1–600).
+  ttlSeconds   Int
+  updatedAt    DateTime @updatedAt
 }
 
 /// Durable suspension history. Closing a suspension sets endedAt; the row stays.
