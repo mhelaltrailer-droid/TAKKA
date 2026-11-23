@@ -135,26 +135,26 @@ enum KitchenJoinLeadStatus {
 }
 
 model User {
-  id                String            @id @default(cuid())
-  clerkUserId       String?           @unique
+  id                String                    @id @default(cuid())
+  clerkUserId       String?                   @unique
   role              UserRole
   fullName          String
-  email             String?           @unique
-  phoneNumber       String?           @unique
+  email             String?                   @unique
+  phoneNumber       String?                   @unique
   passwordHash      String?
-  isActive          Boolean           @default(true)
+  isActive          Boolean                   @default(true)
   /// Placeholder marketplace accounts. Hidden from customers. No Clerk login.
-  isDemo            Boolean           @default(false)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  isDemo            Boolean                   @default(false)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
   customerAddresses CustomerAddress[]
-  customerOrders    Order[]           @relation("CustomerOrders")
-  kitchens          Kitchen[]         @relation("KitchenOwners")
+  customerOrders    Order[]                   @relation("CustomerOrders")
+  kitchens          Kitchen[]                 @relation("KitchenOwners")
   reviews           Review[]
-  orderIssues       OrderIssue[]      @relation("CustomerOrderIssues")
+  orderIssues       OrderIssue[]              @relation("CustomerOrderIssues")
   messages          OrderMessage[]
-  uploadedDeposits  DepositProof[]    @relation("DepositUploadedBy")
-  reviewedDeposits  DepositProof[]    @relation("DepositReviewedBy")
+  uploadedDeposits  DepositProof[]            @relation("DepositUploadedBy")
+  reviewedDeposits  DepositProof[]            @relation("DepositReviewedBy")
   adminActions      AdminAction[]
   suspensionEnds    KitchenSuspensionRecord[] @relation("SuspensionEndedBy")
   notifications     Notification[]
@@ -198,55 +198,61 @@ model CustomerAddress {
   customer    User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   region      Region   @relation(fields: [regionId], references: [id])
   orders      Order[]
+
+  @@index([customerId])
 }
 
 model Kitchen {
-  id                 String                @id @default(cuid())
-  ownerUserId        String                @unique
-  kitchenName        String
-  slug               String                @unique
-  description        String?
-  logoUrl            String?
-  coverImageUrl      String?
-  phoneNumber        String
-  cityName           String
-  regionId           String
-  addressLine        String
-  latitude           Float?
-  longitude          Float?
-  approvalStatus     ApprovalStatus        @default(PENDING)
-  availabilityStatus AvailabilityStatus    @default(CLOSED)
+  id                       String                    @id @default(cuid())
+  ownerUserId              String                    @unique
+  kitchenName              String
+  slug                     String                    @unique
+  description              String?
+  logoUrl                  String?
+  coverImageUrl            String?
+  phoneNumber              String
+  cityName                 String
+  regionId                 String
+  addressLine              String
+  latitude                 Float?
+  longitude                Float?
+  approvalStatus           ApprovalStatus            @default(PENDING)
+  availabilityStatus       AvailabilityStatus        @default(CLOSED)
   /// Set while a no-response suspension is active. Customers see BUSY.
   /// LEVEL_1 lifts when the owner taps «فهمت». LEVEL_2 lifts only from admin Reactivate.
-  suspendedAt        DateTime?
-  suspensionLevel    KitchenSuspensionLevel?
-  suspensionReason   String?
+  suspendedAt              DateTime?
+  suspensionLevel          KitchenSuspensionLevel?
+  suspensionReason         String?
   /// Warning notification for the active suspension.
   suspensionNotificationId String?
   /// Internal marker so demo kitchens can be removed without touching real rows.
-  isDemo             Boolean               @default(false)
+  isDemo                   Boolean                   @default(false)
   /// Admin rejection note shown in-app to the kitchen owner.
-  rejectionReason    String?
-  reviewedAt         DateTime?
-  averageRating      Float                 @default(0)
-  reviewsCount       Int                   @default(0)
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-  owner              User                  @relation("KitchenOwners", fields: [ownerUserId], references: [id], onDelete: Cascade)
-  region             Region                @relation(fields: [regionId], references: [id])
-  documents          KitchenDocument[]
-  gallery            KitchenGalleryImage[]
-  paymentMethods     KitchenPaymentMethod[]
-  menuItems          MenuItem[]
-  flashOffers        FlashOffer[]
-  orders             Order[]
-  reviews            Review[]
-  orderIssues        OrderIssue[]
-  viewEvents         KitchenViewEvent[]
-  suspensions        KitchenSuspensionRecord[]
+  rejectionReason          String?
+  reviewedAt               DateTime?
+  averageRating            Float                     @default(0)
+  reviewsCount             Int                       @default(0)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  owner                    User                      @relation("KitchenOwners", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  region                   Region                    @relation(fields: [regionId], references: [id])
+  documents                KitchenDocument[]
+  gallery                  KitchenGalleryImage[]
+  paymentMethods           KitchenPaymentMethod[]
+  menuItems                MenuItem[]
+  flashOffers              FlashOffer[]
+  orders                   Order[]
+  reviews                  Review[]
+  orderIssues              OrderIssue[]
+  viewEvents               KitchenViewEvent[]
+  suspensions              KitchenSuspensionRecord[]
 
   @@index([isDemo])
   @@index([suspendedAt])
+  /// Discovery + admin pending: filter approved/pending kitchens by city.
+  @@index([approvalStatus, cityName])
+  /// FK lookups (district merge / region joins). Postgres does not index FKs automatically.
+  @@index([regionId])
 }
 
 /// One browse visit per kitchen + session + calendar day (for stats / conversion).
@@ -302,69 +308,73 @@ model KitchenPaymentMethod {
 }
 
 model MenuItem {
-  id            String         @id @default(cuid())
-  kitchenId     String
-  name          String
-  description   String?
-  imageUrl      String?
+  id                     String          @id @default(cuid())
+  kitchenId              String
+  name                   String
+  description            String?
+  imageUrl               String?
   /// Matches FOOD_CATEGORIES.id (e.g. bakery, poultry) for "تاكل ايه؟" + search.
-  categoryId    String         @default("meals")
-  basePrice     Decimal        @db.Decimal(10, 2)
+  categoryId             String          @default("meals")
+  basePrice              Decimal         @db.Decimal(10, 2)
   /// Optional sale price; when set, customers pay this (strikethrough shows basePrice).
-  discountedPrice Decimal?     @db.Decimal(10, 2)
-  depositAmount Decimal        @db.Decimal(10, 2)
+  discountedPrice        Decimal?        @db.Decimal(10, 2)
+  depositAmount          Decimal         @db.Decimal(10, 2)
   /// Kitchen-set: متاح الآن / حجز مسبق / اسأل المطبخ — shown to customers.
-  orderReadiness OrderReadiness @default(AVAILABLE_NOW)
-  isAvailable   Boolean        @default(true)
-  sortOrder     Int            @default(0)
+  orderReadiness         OrderReadiness  @default(AVAILABLE_NOW)
+  isAvailable            Boolean         @default(true)
+  sortOrder              Int             @default(0)
   /// Unified ready meal at a lower price; shown to nearby customers.
-  isDishOfTheDay      Boolean  @default(false)
-  dishOfTheDayPrice   Decimal? @db.Decimal(10, 2)
+  isDishOfTheDay         Boolean         @default(false)
+  dishOfTheDayPrice      Decimal?        @db.Decimal(10, 2)
   /// Remaining servings for dish of the day; null = unlimited.
-  dishOfTheDayQty     Int?
+  dishOfTheDayQty        Int?
   /// New items start PENDING; existing rows default APPROVED via db push default.
-  approvalStatus ApprovalStatus @default(APPROVED)
+  approvalStatus         ApprovalStatus  @default(APPROVED)
   /// Internal marker. Only the demo seed sets this; removal deletes these rows only.
-  isDemo         Boolean        @default(false)
-  rejectionReason String?
+  isDemo                 Boolean         @default(false)
+  rejectionReason        String?
   /// When an approved item is edited, live fields stay; pending* holds the draft.
-  draftStatus ApprovalStatus?
-  draftRejectionReason String?
-  pendingName String?
-  pendingDescription String?
-  pendingImageUrl String?
-  pendingCategoryId String?
-  pendingBasePrice Decimal? @db.Decimal(10, 2)
-  pendingDiscountedPrice Decimal? @db.Decimal(10, 2)
-  pendingDepositAmount Decimal? @db.Decimal(10, 2)
+  draftStatus            ApprovalStatus?
+  draftRejectionReason   String?
+  pendingName            String?
+  pendingDescription     String?
+  pendingImageUrl        String?
+  pendingCategoryId      String?
+  pendingBasePrice       Decimal?        @db.Decimal(10, 2)
+  pendingDiscountedPrice Decimal?        @db.Decimal(10, 2)
+  pendingDepositAmount   Decimal?        @db.Decimal(10, 2)
   /// JSON array of {sizeName, price, discountedPrice?, depositAmount?} for draft sizes.
-  pendingSizesJson String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  kitchen       Kitchen        @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
-  sizes         MenuItemSize[]
-  orderItems    OrderItem[]
-  flashOffers   FlashOffer[]
+  pendingSizesJson       String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  kitchen                Kitchen         @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  sizes                  MenuItemSize[]
+  orderItems             OrderItem[]
+  flashOffers            FlashOffer[]
 
   @@index([isDemo])
+  /// Nested kitchen menu lists: available + approved items.
+  @@index([kitchenId, isAvailable, approvalStatus])
+  /// Dish-of-the-day lookups under a kitchen (or kitchenId IN …).
+  @@index([kitchenId, isDishOfTheDay])
 }
 
 /// Time-limited flash deal on a menu item (1–2 hours, limited qty).
 model FlashOffer {
-  id            String           @id @default(cuid())
-  kitchenId     String
-  menuItemId    String
-  offerPrice    Decimal          @db.Decimal(10, 2)
-  quantityLeft  Int
-  startsAt      DateTime
-  endsAt        DateTime
-  status        FlashOfferStatus @default(ACTIVE)
+  id           String           @id @default(cuid())
+  kitchenId    String
+  menuItemId   String
+  offerPrice   Decimal          @db.Decimal(10, 2)
+  quantityLeft Int
+  startsAt     DateTime
+  endsAt       DateTime
+  status       FlashOfferStatus @default(ACTIVE)
   /// EXPIRED | SOLD_OUT | MANUAL
-  endedReason   String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  kitchen       Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
-  menuItem      MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  endedReason  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  kitchen      Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  menuItem     MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@index([kitchenId, status])
   @@index([menuItemId, status])
@@ -372,89 +382,93 @@ model FlashOffer {
 }
 
 model MenuItemSize {
-  id            String    @id @default(cuid())
-  menuItemId    String
-  sizeName      String
-  price         Decimal   @db.Decimal(10, 2)
+  id              String      @id @default(cuid())
+  menuItemId      String
+  sizeName        String
+  price           Decimal     @db.Decimal(10, 2)
   /// Optional sale price for this size; must be < price when set.
-  discountedPrice Decimal? @db.Decimal(10, 2)
-  depositAmount Decimal?  @db.Decimal(10, 2)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  menuItem      MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  orderItems    OrderItem[]
+  discountedPrice Decimal?    @db.Decimal(10, 2)
+  depositAmount   Decimal?    @db.Decimal(10, 2)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  menuItem        MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
 }
 
 model Order {
-  id                     String            @id @default(cuid())
-  orderNumber            String            @unique
-  customerId             String
-  kitchenId              String
-  deliveryType           DeliveryType
-  customerAddressId      String?
-  regionId               String
-  subtotalAmount         Decimal           @db.Decimal(10, 2)
-  deliveryFee            Decimal           @default(0) @db.Decimal(10, 2)
-  totalAmount            Decimal           @db.Decimal(10, 2)
-  depositAmount          Decimal           @db.Decimal(10, 2)
-  currencyCode           String            @default("EGP")
-  status                 OrderStatus       @default(PENDING_KITCHEN_APPROVAL)
-  customerNotes          String?
+  id                    String               @id @default(cuid())
+  orderNumber           String               @unique
+  customerId            String
+  kitchenId             String
+  deliveryType          DeliveryType
+  customerAddressId     String?
+  regionId              String
+  subtotalAmount        Decimal              @db.Decimal(10, 2)
+  deliveryFee           Decimal              @default(0) @db.Decimal(10, 2)
+  totalAmount           Decimal              @db.Decimal(10, 2)
+  depositAmount         Decimal              @db.Decimal(10, 2)
+  currencyCode          String               @default("EGP")
+  status                OrderStatus          @default(PENDING_KITCHEN_APPROVAL)
+  customerNotes         String?
   /// Optional alternate contact phone for this order (in addition to account phone).
-  customerContactPhone   String?
+  customerContactPhone  String?
   /// Confirmed delivery pin for this order (required when deliveryType=DELIVERY).
-  deliveryLatitude       Float?
-  deliveryLongitude      Float?
-  kitchenNotes           String?
-  cancelledBy            UserRole?
+  deliveryLatitude      Float?
+  deliveryLongitude     Float?
+  kitchenNotes          String?
+  cancelledBy           UserRole?
   /// Machine or human reason. KITCHEN_NO_RESPONSE is an auto-cancel, not a reject.
-  cancelReason           String?
+  cancelReason          String?
   /// Snapshot of the customer message used when the order was auto-cancelled.
-  cancelCustomerMessage  String?
+  cancelCustomerMessage String?
   /// Durable kitchen decision. Not cleared when the order moves to a later status.
-  kitchenRespondedAt     DateTime?
-  kitchenResponse        KitchenResponseKind?
-  kitchenRejectReason    String?
-  placedAt               DateTime          @default(now())
-  acceptedAt             DateTime?
-  depositSubmittedAt     DateTime?
-  depositConfirmedAt     DateTime?
-  deliveredAt            DateTime?
-  completedAt            DateTime?
-  cancelledAt            DateTime?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  customer               User              @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
-  kitchen                Kitchen           @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
-  customerAddress        CustomerAddress?  @relation(fields: [customerAddressId], references: [id])
-  region                 Region            @relation(fields: [regionId], references: [id])
-  items                  OrderItem[]
-  depositProofs          DepositProof[]
-  messages               OrderMessage[]
-  review                 Review?
-  issues                 OrderIssue[]
-  notifications          Notification[]
+  kitchenRespondedAt    DateTime?
+  kitchenResponse       KitchenResponseKind?
+  kitchenRejectReason   String?
+  placedAt              DateTime             @default(now())
+  acceptedAt            DateTime?
+  depositSubmittedAt    DateTime?
+  depositConfirmedAt    DateTime?
+  deliveredAt           DateTime?
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  customer              User                 @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  kitchen               Kitchen              @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  customerAddress       CustomerAddress?     @relation(fields: [customerAddressId], references: [id])
+  region                Region               @relation(fields: [regionId], references: [id])
+  items                 OrderItem[]
+  depositProofs         DepositProof[]
+  messages              OrderMessage[]
+  review                Review?
+  issues                OrderIssue[]
+  notifications         Notification[]
 
   @@index([status, placedAt])
   @@index([kitchenId, cancelReason, cancelledAt])
+  /// Customer order history (my orders) sorted by newest.
+  @@index([customerId, createdAt])
+  /// Kitchen order inbox + date-range stats.
+  @@index([kitchenId, createdAt])
 }
 
 model OrderItem {
-  id               String       @id @default(cuid())
+  id               String        @id @default(cuid())
   orderId          String
   menuItemId       String
   menuItemSizeId   String?
   itemNameSnapshot String
   sizeNameSnapshot String?
-  unitPrice        Decimal      @db.Decimal(10, 2)
-  depositAmount    Decimal      @db.Decimal(10, 2)
+  unitPrice        Decimal       @db.Decimal(10, 2)
+  depositAmount    Decimal       @db.Decimal(10, 2)
   quantity         Int
-  lineTotal        Decimal      @db.Decimal(10, 2)
+  lineTotal        Decimal       @db.Decimal(10, 2)
   customerNote     String?
-  createdAt        DateTime     @default(now())
-  order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem         MenuItem     @relation(fields: [menuItemId], references: [id])
+  createdAt        DateTime      @default(now())
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem         MenuItem      @relation(fields: [menuItemId], references: [id])
   menuItemSize     MenuItemSize? @relation(fields: [menuItemSizeId], references: [id])
 }
 
@@ -486,6 +500,9 @@ model OrderMessage {
   createdAt    DateTime    @default(now())
   order        Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   sender       User        @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  /// Chat thread load: filter by order, sort by send time (API uses sentAt, not createdAt).
+  @@index([orderId, sentAt])
 }
 
 /// Customer complaint logged when they tap support on an order.
@@ -512,18 +529,21 @@ model OrderIssue {
 }
 
 model Review {
-  id         String           @id @default(cuid())
-  orderId    String           @unique
-  customerId String
-  kitchenId  String
+  id          String           @id @default(cuid())
+  orderId     String           @unique
+  customerId  String
+  kitchenId   String
   ratingValue Int
-  comment    String?
-  visibility ReviewVisibility @default(VISIBLE)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  order      Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  customer   User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  kitchen    Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  comment     String?
+  visibility  ReviewVisibility @default(VISIBLE)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer    User             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  kitchen     Kitchen          @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  /// Kitchen page reviews + audit date ranges.
+  @@index([kitchenId, createdAt])
 }
 
 model AdminAction {
@@ -549,6 +569,9 @@ model Notification {
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   order     Order?           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// In-app notification inbox (newest first).
+  @@index([userId, createdAt])
 }
 
 /// FCM device token. Additive table only — safe for `prisma db push` on a live DB.
@@ -636,16 +659,16 @@ model KitchenOrderPolicy {
 
 /// Durable suspension history. Closing a suspension sets endedAt; the row stays.
 model KitchenSuspensionRecord {
-  id            String                  @id @default(cuid())
+  id            String                 @id @default(cuid())
   kitchenId     String
   level         KitchenSuspensionLevel
   reason        String
-  startedAt     DateTime                @default(now())
+  startedAt     DateTime               @default(now())
   endedAt       DateTime?
   endKind       KitchenSuspensionEnd?
   endedByUserId String?
-  kitchen       Kitchen                 @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
-  endedBy       User?                   @relation("SuspensionEndedBy", fields: [endedByUserId], references: [id])
+  kitchen       Kitchen                @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  endedBy       User?                  @relation("SuspensionEndedBy", fields: [endedByUserId], references: [id])
 
   @@index([kitchenId, startedAt])
   @@index([startedAt])
