@@ -76,6 +76,12 @@ export default async function AdminOperationsPage() {
               إعدادات الصور
             </Link>
             <Link
+              href="/dashboard/admin/discovery-cache"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
+            >
+              تخزين الاكتشاف
+            </Link>
+            <Link
               href="/dashboard/admin/service-area"
               className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium"
             >
