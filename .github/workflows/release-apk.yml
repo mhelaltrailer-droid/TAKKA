@@ -60,6 +60,9 @@ jobs:
           TAKKA_API_BASE_URL: ${{ secrets.TAKKA_API_BASE_URL }}
           PUSHER_KEY: ${{ secrets.PUSHER_KEY }}
           PUSHER_CLUSTER: ${{ secrets.PUSHER_CLUSTER }}
+          # Optional. Owner must add repo secret SENTRY_DSN_APP (do not commit).
+          # Empty keeps mobile Sentry disabled.
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_APP }}
         run: |
           python3 scripts/write_dart_defines.py dart_defines.json
           python3 scripts/check_dart_defines.py dart_defines.json

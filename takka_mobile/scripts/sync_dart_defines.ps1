@@ -24,14 +24,20 @@ if (-not $pk) { throw "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY missing in admin/.env" 
 $pusher = $envMap["NEXT_PUBLIC_PUSHER_KEY"]
 if (-not $pusher) { throw "NEXT_PUBLIC_PUSHER_KEY missing in admin/.env" }
 
+$sentry = ""
+if ($envMap["Sentry_key"]) { $sentry = $envMap["Sentry_key"] }
+elseif ($envMap["SENTRY_DSN"]) { $sentry = $envMap["SENTRY_DSN"] }
+
 $defines = [ordered]@{
   CLERK_PUBLISHABLE_KEY = $pk
   TAKKA_API_BASE_URL    = "https://takka-app.onrender.com"
   PUSHER_KEY            = $pusher
   PUSHER_CLUSTER        = $(if ($envMap["NEXT_PUBLIC_PUSHER_CLUSTER"]) { $envMap["NEXT_PUBLIC_PUSHER_CLUSTER"] } else { "eu" })
+  SENTRY_DSN            = $sentry
 }
 
 $defines | ConvertTo-Json | Set-Content -Encoding utf8 $outFile
 Write-Host "Wrote $outFile"
 Write-Host ("CLERK key length: " + $pk.Length)
 Write-Host ("API: " + $defines.TAKKA_API_BASE_URL)
+Write-Host ("Sentry DSN set: " + (-not [string]::IsNullOrWhiteSpace($sentry)))

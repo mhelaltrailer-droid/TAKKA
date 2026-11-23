@@ -27,6 +27,7 @@ iOS is unchanged in this work. Its bundle id is still `com.example.takkaMobile`.
 | `KEY_ALIAS` | With the keystore | Alias you passed to `keytool` (example: `takka`). |
 | `KEY_PASSWORD` | With the keystore | Key password. |
 | `GOOGLE_SERVICES_JSON` | No | Base64 of `google-services.json` for package `com.takka.app`. Empty means the APK still builds and FCM stays off. See `docs/fcm-setup.md`. |
+| `SENTRY_DSN_APP` | No | Sentry DSN for the Flutter app. Written into `dart_defines.json` as `SENTRY_DSN` and passed via `--dart-define-from-file`. Empty (or unset) keeps mobile Sentry fully disabled. Do not create this from the agent — the owner adds it in GitHub secrets. |
 
 The workflow fails if the Clerk or Pusher values are missing or still placeholders (`replace_me`, and similar). It also fails if only some of the four keystore secrets are set. If **none** of the keystore secrets are set, the build continues with the debug key and a warning.
 
@@ -210,6 +211,7 @@ Unset variables look like `{"configured":false,"reason":"Mobile app update env v
 | `KEY_ALIAS` | مع المفتاح | الاسم اللي ادى لـ `keytool` (مثال: `takka`). |
 | `KEY_PASSWORD` | مع المفتاح | كلمة سر المفتاح. |
 | `GOOGLE_SERVICES_JSON` | لا | ملف `google-services.json` بعد تحويله لـ Base64، واسم الحزمة فيه لازم يكون `com.takka.app`. لو السر فاضي، الـ APK يتبني وإشعارات Firebase تفضل مقفولة. التفاصيل في `docs/fcm-setup.md`. |
+| `SENTRY_DSN_APP` | لا | DSN بتاع Sentry للموبايل. بيتكتب في `dart_defines.json` كمفتاح `SENTRY_DSN`. لو فاضي أو مش موجود، Sentry في الـ APK يفضل مقفول. صاحب المشروع يضيف السر في GitHub؛ الـ agent مش بينشئه. |
 
 البناء يفشل لو مفتاح Clerk أو Pusher ناقص أو لسه قيمة تجريبية زي `replace_me`. ويفشل كمان لو بعض أسرار المفتاح موجودة والباقي لأ. لو **الأربعة فاضيين**، البناء يكمل بمفتاح التجريب مع تحذير واضح.
 
