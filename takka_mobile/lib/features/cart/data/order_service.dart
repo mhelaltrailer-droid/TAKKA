@@ -10,12 +10,20 @@ class OrderService {
 
   static const _httpTimeout = Duration(seconds: 25);
 
-  Uri _buildUri(String path) {
+  Uri _buildUri(
+    String path, {
+    Map<String, String>? queryParameters,
+  }) {
     final base = AppConfig.apiBaseUrl.endsWith('/')
         ? AppConfig.apiBaseUrl.substring(0, AppConfig.apiBaseUrl.length - 1)
         : AppConfig.apiBaseUrl;
 
-    return Uri.parse('$base$path');
+    return Uri.parse('$base$path').replace(
+      queryParameters:
+          queryParameters == null || queryParameters.isEmpty
+          ? null
+          : queryParameters,
+    );
   }
 
   Future<http.Response> _send(Future<http.Response> request) {
@@ -23,6 +31,12 @@ class OrderService {
       _httpTimeout,
       onTimeout: () => throw Exception('انتهت مهلة الاتصال بالخادم.'),
     );
+  }
+
+  static String? _pageCursor(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text;
   }
 
   Future<List<CustomerAddress>> loadAddresses({
@@ -136,11 +150,19 @@ class OrderService {
     );
   }
 
-  Future<List<CustomerOrderSummary>> loadMyOrders({
+  Future<OrderListPage<CustomerOrderSummary>> loadMyOrders({
     required String sessionToken,
+    String? cursor,
+    int limit = 20,
   }) async {
     final response = await _send(http.get(
-      _buildUri('/api/orders/my'),
+      _buildUri(
+        '/api/orders/my',
+        queryParameters: {
+          'limit': '$limit',
+          if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        },
+      ),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
@@ -151,9 +173,16 @@ class OrderService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return (json['orders'] as List<dynamic>? ?? const [])
-        .map((item) => CustomerOrderSummary.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return OrderListPage(
+      orders: (json['orders'] as List<dynamic>? ?? const [])
+          .map(
+            (item) =>
+                CustomerOrderSummary.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+      nextCursor: _pageCursor(json['nextCursor']),
+      hasMore: json['hasMore'] == true,
+    );
   }
 
   Future<CustomerOrderDetails> loadOrderDetails({
@@ -175,11 +204,19 @@ class OrderService {
     return CustomerOrderDetails.fromJson(json['order'] as Map<String, dynamic>);
   }
 
-  Future<List<KitchenOrderSummary>> loadKitchenOrders({
+  Future<OrderListPage<KitchenOrderSummary>> loadKitchenOrders({
     required String sessionToken,
+    String? cursor,
+    int limit = 20,
   }) async {
     final response = await http.get(
-      _buildUri('/api/kitchen/orders'),
+      _buildUri(
+        '/api/kitchen/orders',
+        queryParameters: {
+          'limit': '$limit',
+          if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        },
+      ),
       headers: {
         'Authorization': 'Bearer $sessionToken',
       },
@@ -190,9 +227,16 @@ class OrderService {
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return (json['orders'] as List<dynamic>? ?? const [])
-        .map((item) => KitchenOrderSummary.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return OrderListPage(
+      orders: (json['orders'] as List<dynamic>? ?? const [])
+          .map(
+            (item) =>
+                KitchenOrderSummary.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+      nextCursor: _pageCursor(json['nextCursor']),
+      hasMore: json['hasMore'] == true,
+    );
   }
 
   Future<void> acceptKitchenOrder({
@@ -488,6 +532,18 @@ class OrderService {
       throw Exception('Failed to submit review: ${response.body}');
     }
   }
+}
+
+class OrderListPage<T> {
+  const OrderListPage({
+    required this.orders,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<T> orders;
+  final String? nextCursor;
+  final bool hasMore;
 }
 
 class CustomerAddress {

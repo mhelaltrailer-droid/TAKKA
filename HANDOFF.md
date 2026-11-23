@@ -2,7 +2,7 @@
 
 This file is the onboarding brief for any coding agent (Claude, Cursor, etc.) continuing work on Takka. Read it before changing code. Do **not** ask the owner questions this document already answers. Write code comments and PRs in English. When you talk to the owner, use Egyptian Arabic.
 
-آخر تحديث: 22 نوفمبر 2026 (Africa/Cairo, UTC+2)
+آخر تحديث: 23 نوفمبر 2026 (Africa/Cairo, UTC+2)
 
 ---
 
@@ -177,6 +177,12 @@ Decided and in this PR (do not treat it as an open proposal). Values below are t
 - Accept/reject writes durable `kitchenRespondedAt` and `kitchenResponse` so later status changes do not erase the decision. Admin audit: `/dashboard/admin/kitchen-performance` (sortable overview) and `/dashboard/admin/kitchens/[id]/audit` (date range, counts, acceptance rate, average response, ratings, complaints, suspension history).
 
 **How the timeout runs on Render.** No extra service and no required env var. `GET /api/health` awaits the sweep. UptimeRobot already pings that about every 5 minutes, which also keeps the free web service awake, so a timed-out order is cancelled on the next ping after the deadline (worst case about timeout + 5 minutes). The same sweep runs when a kitchen opens its profile or orders, when a customer opens orders, and when an order is created. Optional `GET` or `POST /api/cron/kitchen-acceptance` runs it too. If `CRON_SECRET` is set, that route requires header `x-cron-secret` or `Authorization: Bearer <secret>`. The health sweep does not use the secret. TAKKA-admin still owns `prisma db push`; do not add it back to TAKKA-App. The schema change is additive for `db push`: new enum values are not used as column defaults in the same change, new order/kitchen columns are nullable, and `KitchenOrderPolicy` / `KitchenSuspensionRecord` are new tables.
+
+---
+
+## 7.2 Order history cursor pagination (2026-11-23)
+
+`GET /api/orders/my` and `GET /api/kitchen/orders` accept optional `cursor` (order id) and `limit` (default 20, max 50). Response is always `{ orders, nextCursor, hasMore }` — the same `orders` key Flutter already reads, so old builds stay compatible; without `cursor`/`limit` a safety cap of 50 applies. Kitchen lists always include **all active** orders on the first page and paginate only completed/cancelled/rejected history. Helper: `admin/src/lib/order-cursor-pagination.ts`. Web `/dashboard/orders` and Flutter `my_orders_screen` / `kitchen_orders_screen` follow the same rule.
 
 ---
 
