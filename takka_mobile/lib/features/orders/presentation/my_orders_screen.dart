@@ -25,131 +25,239 @@ class MyOrdersScreen extends StatefulWidget {
 }
 
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
+  static const _pageSize = 20;
+
   final _orderService = const OrderService();
-  Future<List<CustomerOrderSummary>>? _ordersFuture;
+  final _scrollController = ScrollController();
+
+  final List<CustomerOrderSummary> _orders = [];
+  String? _nextCursor;
+  var _hasMore = false;
+  var _initialLoading = true;
+  var _loadingMore = false;
+  var _refreshing = false;
+  Object? _error;
   var _showActive = true;
 
   @override
   void initState() {
     super.initState();
-    _ordersFuture = _loadOrders();
+    _scrollController.addListener(_onScroll);
+    _loadInitial();
   }
 
-  Future<List<CustomerOrderSummary>> _loadOrders() async {
-    final jwt = await requireSessionJwt(context);
-    return _orderService.loadMyOrders(sessionToken: jwt);
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _initialLoading || _error != null) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 240) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadInitial() async {
+    setState(() {
+      _initialLoading = true;
+      _error = null;
+    });
+    try {
+      final jwt = await requireSessionJwt(context);
+      final page = await _orderService.loadMyOrders(
+        sessionToken: jwt,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _orders
+          ..clear()
+          ..addAll(page.orders);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _initialLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _initialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final jwt = await requireSessionJwt(context);
+      final page = await _orderService.loadMyOrders(
+        sessionToken: jwt,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _orders
+          ..clear()
+          ..addAll(page.orders);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (!_hasMore || _loadingMore || _nextCursor == null) return;
+    setState(() => _loadingMore = true);
+    try {
+      final jwt = await requireSessionJwt(context);
+      final page = await _orderService.loadMyOrders(
+        sessionToken: jwt,
+        cursor: _nextCursor,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _mergeOrders(page.orders);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+    }
+  }
+
+  void _mergeOrders(List<CustomerOrderSummary> incoming) {
+    final seen = {for (final order in _orders) order.id};
+    for (final order in incoming) {
+      if (seen.add(order.id)) {
+        _orders.add(order);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final body = FutureBuilder<List<CustomerOrderSummary>>(
-      future: _ordersFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const ListScreenSkeleton(titleWidth: 110);
-        }
+    final Widget body;
+    if (_initialLoading) {
+      body = const ListScreenSkeleton(titleWidth: 110);
+    } else if (_error != null && _orders.isEmpty) {
+      body = Center(
+        child: TakkaErrorRetry(onRetry: _loadInitial),
+      );
+    } else {
+      final visible = _orders
+          .where(
+            (order) => _showActive
+                ? isActiveOrderStatus(order.status)
+                : isPreviousOrderStatus(order.status),
+          )
+          .toList();
+      final groups = groupOrdersNewestFirst(
+        visible,
+        createdAt: (order) => order.createdAt,
+      );
 
-        if (snapshot.hasError) {
-          return Center(
-            child: TakkaErrorRetry(
-              onRetry: () {
-                setState(() {
-                  _ordersFuture = _loadOrders();
-                });
-              },
-            ),
-          );
-        }
-
-        final all = snapshot.data ?? const [];
-        final orders = all
-            .where(
-              (order) => _showActive
-                  ? isActiveOrderStatus(order.status)
-                  : isPreviousOrderStatus(order.status),
-            )
-            .toList();
-        final groups = groupOrdersNewestFirst(
-          orders,
-          createdAt: (order) => order.createdAt,
-        );
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text(
-                widget.embeddedInShell ? 'طلباتك' : 'طلباتي',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            child: Text(
+              widget.embeddedInShell ? 'طلباتك' : 'طلباتي',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _OrdersTabBar(
-                showActive: _showActive,
-                onChanged: (active) => setState(() => _showActive = active),
-              ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _OrdersTabBar(
+              showActive: _showActive,
+              onChanged: (active) => setState(() => _showActive = active),
             ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  final future = _loadOrders();
-                  setState(() => _ordersFuture = future);
-                  await future;
-                },
-                child: orders.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          SizedBox(
-                            height: MediaQuery.sizeOf(context).height * 0.35,
-                            child: Center(
-                              child: Text(
-                                _showActive
-                                    ? 'لا توجد طلبات نشطة حالياً'
-                                    : 'لا توجد طلبات سابقة',
-                                style: const TextStyle(
-                                  color: TakkaColors.muted,
-                                  fontSize: 15,
-                                ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: visible.isEmpty
+                  ? ListView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.sizeOf(context).height * 0.35,
+                          child: Center(
+                            child: Text(
+                              _showActive
+                                  ? 'لا توجد طلبات نشطة حالياً'
+                                  : 'لا توجد طلبات سابقة',
+                              style: const TextStyle(
+                                color: TakkaColors.muted,
+                                fontSize: 15,
                               ),
                             ),
                           ),
-                        ],
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                        children: [
-                          for (final group in groups) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8, top: 8),
-                              child: Text(
-                                group.label,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: TakkaColors.muted,
-                                ),
+                        ),
+                      ],
+                    )
+                  : ListView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                      children: [
+                        for (final group in groups) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8, top: 8),
+                            child: Text(
+                              group.label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: TakkaColors.muted,
                               ),
                             ),
-                            for (final order in group.orders) ...[
-                              _OrderCard(order: order, dayLabel: group.label),
-                              const SizedBox(height: 12),
-                            ],
+                          ),
+                          for (final order in group.orders) ...[
+                            _OrderCard(order: order, dayLabel: group.label),
+                            const SizedBox(height: 12),
                           ],
                         ],
-                      ),
-              ),
+                        if (_loadingMore)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
             ),
-          ],
-        );
-      },
-    );
+          ),
+        ],
+      );
+    }
 
     if (widget.embeddedInShell) {
       return Scaffold(

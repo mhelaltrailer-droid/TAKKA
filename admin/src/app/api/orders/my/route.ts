@@ -1,15 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { sweepOverdueKitchenOrders } from "@/lib/kitchen-acceptance-sweep";
+import {
+  buildOrderCursorArgs,
+  parseOrderPageParams,
+  toCursorPage,
+} from "@/lib/order-cursor-pagination";
 
-export async function GET() {
+/**
+ * Response shape: always `{ orders, nextCursor, hasMore }`.
+ *
+ * Backward compatibility: Flutter (and web) already read `json['orders']`.
+ * Extra keys are ignored by old clients. When neither `cursor` nor `limit` is
+ * sent, we still return the object (never a bare array) and apply a safety
+ * cap of 50 rows instead of loading the unbounded history.
+ */
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
     await sweepOverdueKitchenOrders();
 
-    const orders = await db.order.findMany({
+    const { cursor, limit } = parseOrderPageParams(request.nextUrl.searchParams);
+
+    const rows = await db.order.findMany({
       where: {
         customerId: user.appUserId,
       },
@@ -32,12 +47,11 @@ export async function GET() {
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      ...buildOrderCursorArgs(cursor, limit),
     });
 
-    return NextResponse.json({ orders });
+    const page = toCursorPage(rows, limit);
+    return NextResponse.json(page);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "تعذر تحميل الطلبات.";

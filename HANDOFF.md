@@ -234,6 +234,11 @@ Read-only review of cart and checkout as they stood on 22 Nov 2026. PR #11 cover
 - The 60% deposit cap is hardcoded; it should be admin-editable.
 - Delivery-fee calculation by distance (with the delivery project).
 
+## 7.4 Order history cursor pagination (2026-11-23)
+
+`GET /api/orders/my` and `GET /api/kitchen/orders` accept optional `cursor` (order id) and `limit` (default 20, max 50). Response is always `{ orders, nextCursor, hasMore }` — the same `orders` key Flutter already reads, so old builds stay compatible; without `cursor`/`limit` a safety cap of 50 applies. Kitchen lists always include **all active** orders on the first page and paginate only completed/cancelled/rejected history. Helper: `admin/src/lib/order-cursor-pagination.ts`. Web `/dashboard/orders` and Flutter `my_orders_screen` / `kitchen_orders_screen` follow the same rule.
+
+
 ---
 
 ## 8. Next steps
@@ -412,6 +417,7 @@ Free tiers are enough at first for Clerk, Cloudflare R2, Pusher, FCM, and Sentry
 - Competitor notes summary (22 Nov 2026): `docs/replica/summary.md`
 - Kitchen order policy and audit (decided 22 Nov 2026, in PR): §7.1
 - Checkout quote / geofence / cart (in PR #11): §7.2; read-only audit and remaining gaps: §7.3
+- Order history cursor pagination (PR #13): §7.4
 - Deferred FCM/alert, in-app update, and paid-launch notes (22 Nov 2026): §8.2
 - Clerk sessions: `docs/clerk-session.md`
 - Demo data: `docs/demo-data.md`
