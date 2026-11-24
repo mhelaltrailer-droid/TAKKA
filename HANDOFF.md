@@ -2,7 +2,7 @@
 
 This file is the onboarding brief for any coding agent (Claude, Cursor, etc.) continuing work on Takka. Read it before changing code. Do **not** ask the owner questions this document already answers. Write code comments and PRs in English. When you talk to the owner, use Egyptian Arabic.
 
-آخر تحديث: 23 نوفمبر 2026 (Africa/Cairo, UTC+2)
+آخر تحديث: 24 نوفمبر 2026 (Africa/Cairo, UTC+2)
 
 ---
 
@@ -10,7 +10,7 @@ This file is the onboarding brief for any coding agent (Claude, Cursor, etc.) co
 
 Takka (تكة) is a marketplace for homemade food in **Obour City (مدينة العبور), Egypt**. Home kitchens sell to neighbors. Brand colors: orange `#E8742A`, terracotta `#B3541E`, cream `#F6EDE0`.
 
-Current phase: recruit **10–20 home kitchens**. Customers get the app from Google Play later. Kitchens currently use a temporary APK (`com.takka.app`, version `1.0.1+2`). That APK already includes reorder («اطلب تاني»), FCM scaffolding, and the complaint flow. Marketing is organic only (no paid ads).
+Current phase: recruit **10–20 home kitchens**. Customers get the app from Google Play later. Kitchens currently use a temporary APK (`com.takka.app`, latest build `1.0.1+4`, still signed with the debug/test keystore). That APK already includes reorder («اطلب تاني»), FCM scaffolding, and the complaint flow. Marketing is organic only (no paid ads).
 
 Repo: https://github.com/mhelaltrailer-droid/TAKKA  
 The repo is **public** for launch and kitchen recruitment; it may go private later.
@@ -274,6 +274,13 @@ Read-only review of cart and checkout as they stood on 22 Nov 2026. PR #11 cover
 `GET /api/orders/my` and `GET /api/kitchen/orders` accept optional `cursor` (order id) and `limit` (default 20, max 50). Response is always `{ orders, nextCursor, hasMore }` — the same `orders` key Flutter already reads, so old builds stay compatible; without `cursor`/`limit` a safety cap of 50 applies. Kitchen lists always include **all active** orders on the first page and paginate only completed/cancelled/rejected history. Helper: `admin/src/lib/order-cursor-pagination.ts`. Web `/dashboard/orders` and Flutter `my_orders_screen` / `kitchen_orders_screen` follow the same rule.
 
 
+## 7.5 Mobile builds and location header (2026-11-24)
+
+- PR #17 (`e25d662`) bumped the app to `1.0.1+3`; first APK with Sentry enabled via GitHub secret `SENTRY_DSN_APP` (run 45379336728).
+- PR #18 (`d9da9f0`): delivery location header keeps the polygon/geofence district detection unchanged, then reverse-geocodes on device (`geocoding: ^4.0.0`, ~3 s timeout, locale ar/en) and shows `street (district)`, e.g. «بلبيس (الحي الثالث)». Failure or a manually picked district shows the district only. Helper: `takka_mobile/lib/core/location/street_label.dart` (unit tests in `test/street_label_test.dart`).
+- PR #19 (`c4d59b1`) bumped to `1.0.1+4`; universal APK built (run 45387326433) and shared on Drive: https://drive.google.com/file/d/1MtMa8IemLFcJG62IABzdkblTHjp_l2mL/view?usp=drivesdk
+- Pending owner check on device: the compact home feed, server search and cache from PR #16 (no `flutter analyze` was run on #13, #14, #16), and the new street label.
+
 ---
 
 ## 8. Next steps
@@ -462,7 +469,8 @@ Free tiers are enough at first for Clerk, Cloudflare R2, Pusher, FCM, and Sentry
 - Env names: `admin/.env.example`
 - R2 switch PR (merged, `6c7dd1c`): https://github.com/mhelaltrailer-droid/TAKKA/pull/7
 - Initial HANDOFF PR (merged, `07fb862`): https://github.com/mhelaltrailer-droid/TAKKA/pull/8
-- Latest distributed APK (v1.0.1 arm64) Drive file: https://drive.google.com/file/d/134nclV5mKZnXPygrvR49nvNbqQTLBjYf/view?usp=drivesdk
+- Latest distributed APK (`1.0.1+4` universal) Drive file: https://drive.google.com/file/d/1MtMa8IemLFcJG62IABzdkblTHjp_l2mL/view?usp=drivesdk
+- Mobile builds and street label (PRs #17–#19): §7.5
 
 ---
 
