@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -6,12 +9,23 @@ import '../theme/app_theme.dart';
 import '../ui/takka_skeletons.dart';
 import 'obour_areas.dart';
 import 'obour_geofence.dart';
+import 'street_label.dart';
 
 const _selectedDistrictKey = 'takka.selectedObourDistrict';
 const _currentDistrictKey = 'takka.currentObourDistrict';
 const _locationModeKey = 'takka.deliveryLocationMode';
+const _streetNameKey = 'takka.currentStreetName';
 
 enum _LocationMode { current, other }
+
+typedef _ApplyLocation = void Function(
+  String selected,
+  String current,
+  _LocationMode mode, {
+  double? latitude,
+  double? longitude,
+  bool preserveStreet,
+});
 
 class DeliveryLocationHeader extends StatefulWidget {
   const DeliveryLocationHeader({
@@ -30,21 +44,38 @@ class _SavedLocation {
     required this.selected,
     required this.current,
     required this.mode,
+    required this.street,
   });
 
   final String selected;
   final String current;
   final _LocationMode mode;
+  final String street;
+}
+
+class _DetectedDistrict {
+  const _DetectedDistrict({
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String name;
+  final double latitude;
+  final double longitude;
 }
 
 class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
   static const _gpsTimeout = Duration(seconds: 10);
+  static const _geocodeTimeout = Duration(seconds: 3);
 
   String _selectedDistrict = '';
   String _currentDistrict = '';
+  String _streetName = '';
   _LocationMode _mode = _LocationMode.current;
   var _resolvingLocation = true;
   var _bootstrapping = false;
+  int _streetResolveGen = 0;
 
   @override
   void initState() {
@@ -59,11 +90,22 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
     final modeRaw = prefs.getString(_locationModeKey);
     final mode =
         modeRaw == 'other' ? _LocationMode.other : _LocationMode.current;
+    final street = mode == _LocationMode.other
+        ? ''
+        : (prefs.getString(_streetNameKey) ?? '');
     return _SavedLocation(
       selected: selected,
       current: current.isNotEmpty ? current : selected,
       mode: mode,
+      street: street,
     );
+  }
+
+  /// Device language → `en` or `ar` for on-device reverse geocoding.
+  String _geocodingLocaleIdentifier() {
+    final code =
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    return code.toLowerCase().startsWith('en') ? 'en' : 'ar';
   }
 
   /// Districts + polygons → GPS first → fallback to saved → «اختر الحي».
@@ -77,16 +119,24 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
     try {
       final districts = await loadObourDistricts();
       final saved = await _readSaved();
-      final detectedName = await _tryDetectDistrict(districts);
+      final detected = await _tryDetectDistrict(districts);
 
       if (!mounted) return;
 
-      if (detectedName != null) {
+      if (detected != null) {
         await _persist(
-          selected: detectedName,
-          current: detectedName,
+          selected: detected.name,
+          current: detected.name,
           mode: _LocationMode.current,
+          street: '',
           resolving: false,
+        );
+        // Never block district UI on reverse geocoding.
+        unawaited(
+          _resolveStreet(
+            latitude: detected.latitude,
+            longitude: detected.longitude,
+          ),
         );
         return;
       }
@@ -96,6 +146,7 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
           selected: saved.selected,
           current: saved.current,
           mode: saved.mode,
+          street: saved.street,
           resolving: false,
         );
         return;
@@ -104,6 +155,7 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
       setState(() {
         _selectedDistrict = '';
         _currentDistrict = '';
+        _streetName = '';
         _mode = _LocationMode.current;
         _resolvingLocation = false;
       });
@@ -116,7 +168,7 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
     }
   }
 
-  Future<String?> _tryDetectDistrict(List<String> districts) async {
+  Future<_DetectedDistrict?> _tryDetectDistrict(List<String> districts) async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return null;
@@ -147,18 +199,64 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
       if (!districts.contains(name)) {
         return null;
       }
-      return name;
+      return _DetectedDistrict(
+        name: name,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> _reverseGeocodeStreet({
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      await setLocaleIdentifier(_geocodingLocaleIdentifier());
+      final placemarks = await placemarkFromCoordinates(latitude, longitude)
+          .timeout(_geocodeTimeout);
+      if (placemarks.isEmpty) return null;
+      final mark = placemarks.first;
+      return streetFromPlacemarkFields(
+        street: mark.street,
+        thoroughfare: mark.thoroughfare,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _resolveStreet({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final gen = ++_streetResolveGen;
+    final street = await _reverseGeocodeStreet(
+      latitude: latitude,
+      longitude: longitude,
+    );
+    if (!mounted || gen != _streetResolveGen) return;
+    if (_mode != _LocationMode.current) return;
+    if (street == null || street.isEmpty) return;
+
+    await _persist(
+      selected: _selectedDistrict,
+      current: _currentDistrict,
+      mode: _LocationMode.current,
+      street: street,
+    );
   }
 
   Future<void> _persist({
     required String selected,
     required String current,
     required _LocationMode mode,
+    String street = '',
     bool resolving = false,
   }) async {
+    final streetToSave = mode == _LocationMode.other ? '' : street;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_selectedDistrictKey, selected);
     await prefs.setString(_currentDistrictKey, current);
@@ -166,14 +264,42 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
       _locationModeKey,
       mode == _LocationMode.other ? 'other' : 'current',
     );
+    await prefs.setString(_streetNameKey, streetToSave);
     if (!mounted) return;
     setState(() {
       _selectedDistrict = selected;
       _currentDistrict = current;
+      _streetName = streetToSave;
       _mode = mode;
       _resolvingLocation = resolving;
     });
     widget.onDistrictChanged(selected);
+  }
+
+  Future<void> _applyFromSheet(
+    String selected,
+    String current,
+    _LocationMode mode, {
+    double? latitude,
+    double? longitude,
+    bool preserveStreet = false,
+  }) async {
+    final street = mode == _LocationMode.other
+        ? ''
+        : (preserveStreet ? _streetName : '');
+    await _persist(
+      selected: selected,
+      current: current,
+      mode: mode,
+      street: street,
+    );
+    if (latitude != null &&
+        longitude != null &&
+        mode == _LocationMode.current) {
+      unawaited(
+        _resolveStreet(latitude: latitude, longitude: longitude),
+      );
+    }
   }
 
   Future<void> _openSheet() async {
@@ -190,12 +316,19 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
           selectedDistrict: _selectedDistrict,
           currentDistrict: _currentDistrict,
           mode: _mode,
-          onApply: (selected, current, mode) async {
+          onApply: (selected, current, mode, {
+            latitude,
+            longitude,
+            preserveStreet = false,
+          }) async {
             Navigator.of(context).pop();
-            await _persist(
-              selected: selected,
-              current: current,
-              mode: mode,
+            await _applyFromSheet(
+              selected,
+              current,
+              mode,
+              latitude: latitude,
+              longitude: longitude,
+              preserveStreet: preserveStreet,
             );
           },
         );
@@ -207,7 +340,12 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
   Widget build(BuildContext context) {
     final title = _resolvingLocation
         ? 'جاري تحديد موقعك...'
-        : (_selectedDistrict.isEmpty ? 'اختر الحي' : _selectedDistrict);
+        : (_selectedDistrict.isEmpty
+            ? 'اختر الحي'
+            : formatDeliveryLocationTitle(
+                district: _selectedDistrict,
+                street: _mode == _LocationMode.current ? _streetName : null,
+              ));
 
     return InkWell(
       onTap: _resolvingLocation ? null : _openSheet,
@@ -230,6 +368,8 @@ class _DeliveryLocationHeaderState extends State<DeliveryLocationHeader> {
                 Expanded(
                   child: Text(
                     title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -274,8 +414,7 @@ class _DeliveryLocationSheet extends StatefulWidget {
   final String selectedDistrict;
   final String currentDistrict;
   final _LocationMode mode;
-  final void Function(String selected, String current, _LocationMode mode)
-      onApply;
+  final _ApplyLocation onApply;
 
   @override
   State<_DeliveryLocationSheet> createState() => _DeliveryLocationSheetState();
@@ -327,7 +466,12 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
       });
       return;
     }
-    widget.onApply(_currentDistrict, _currentDistrict, _LocationMode.current);
+    widget.onApply(
+      _currentDistrict,
+      _currentDistrict,
+      _LocationMode.current,
+      preserveStreet: true,
+    );
   }
 
   void _openOtherPicker() {
@@ -341,6 +485,7 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
 
   void _pickDistrict(String district) {
     if (_pickingCurrent) {
+      // Manual district pick — no GPS street.
       widget.onApply(district, district, _LocationMode.current);
       return;
     }
@@ -390,7 +535,13 @@ class _DeliveryLocationSheetState extends State<_DeliveryLocationSheet> {
         case ObourDetectStatus.district:
           final name = detected.districtName!;
           if (_districts.contains(name)) {
-            widget.onApply(name, name, _LocationMode.current);
+            widget.onApply(
+              name,
+              name,
+              _LocationMode.current,
+              latitude: position.latitude,
+              longitude: position.longitude,
+            );
             return;
           }
           setState(() {
